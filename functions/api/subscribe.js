@@ -67,7 +67,10 @@ export async function onRequestPost({ request, env }) {
     return isJson
       ? jsonResponse({ ok: true, message: 'Check your inbox to confirm your subscription.' })
       : redirect('/check-inbox');
-  } catch {
+  } catch (err) {
+    // Detailed error stays server-side (visible via `wrangler pages deployment tail`);
+    // the client only ever sees a generic message.
+    console.error('subscribe failed:', (err && err.message) || err);
     return isJson ? jsonResponse({ ok: false, error: 'Something went wrong. Try again later.' }, 500) : redirect('/subscribe-error');
   }
 }
