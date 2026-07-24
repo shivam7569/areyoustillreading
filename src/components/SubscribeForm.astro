@@ -1,0 +1,76 @@
+---
+// Email subscribe form. Posts to the /api/subscribe Cloudflare Pages Function.
+// Progressive enhancement: works as a plain form POST (redirects) or via fetch (JS).
+---
+
+<section class="subscribe">
+  <h2>Subscribe</h2>
+  <p>New posts by email. Double opt-in, one-click unsubscribe, no spam.</p>
+  <form id="subscribe-form" method="POST" action="/api/subscribe">
+    <input
+      type="email"
+      name="email"
+      required
+      placeholder="you@example.com"
+      aria-label="Email address"
+    />
+    <!-- honeypot: hidden from humans; bots fill it and get silently dropped -->
+    <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true" />
+    <button type="submit">Subscribe</button>
+    <p class="form-msg" role="status" aria-live="polite"></p>
+  </form>
+</section>
+
+<style>
+  .subscribe {
+    margin: 2rem 0;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .subscribe h2 { margin-top: 0; }
+  .subscribe form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .subscribe input[type='email'] {
+    flex: 1 1 220px;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  .subscribe button {
+    padding: 0.55rem 1rem;
+    border: 0;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .subscribe .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+  .form-msg { flex-basis: 100%; margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; min-height: 1.2em; }
+</style>
+
+<script is:inline>
+  (function () {
+    var form = document.getElementById('subscribe-form');
+    if (!form) return;
+    var msg = form.querySelector('.form-msg');
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      msg.textContent = 'Submitting…';
+      try {
+        var res = await fetch('/api/subscribe', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: form.email.value, website: form.website.value }),
+        });
+        var data = await res.json().catch(function () { return {}; });
+        msg.textContent = data.message || data.error || (res.ok ? 'Check your inbox to confirm.' : 'Something went wrong.');
+        if (res.ok) form.reset();
+      } catch (err) {
+        msg.textContent = 'Network error. Please try again.';
+      }
+    });
+  })();
+</script>
