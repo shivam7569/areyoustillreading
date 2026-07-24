@@ -74,8 +74,22 @@ lazily: static by default, server routes added phase by phase.
   admin only). All per-reader data → all require login.
 
 ### Phase 3 — Payments (knob flips on)
-- **Per-post, one-time, unlock-for-life.** Entitlement model: store `(reader, post,
-  purchased)` rows. Stripe one-time checkout. Reuses phase-2 auth.
+- **Per-post, one-time, unlock-for-life.** Entitlement model: store `(reader, post)`
+  rows, written only by a signature-verified payment webhook. Reuses phase-2 auth.
+- **Payment provider — NOT Stripe.** Stripe general availability has not resumed in
+  India (as of 2026), and the audience is *global*. Prefer a **Merchant of Record**
+  (Paddle / Lemon Squeezy→Stripe Managed Payments / Dodo Payments): MoR is the seller of
+  record, handles global VAT/sales-tax/GST, pays out to India; ~5% + $0.50/txn buys away
+  all tax compliance. Alternative: **Razorpay International** (RBI PA-CB licensed, ~3%+GST,
+  auto eFIRC) if India-first. Architecture is provider-agnostic (hosted checkout + webhook
+  + entitlements). *Provider TBD — verify onboarding/eligibility first.*
+- **Admin live paywall toggle.** Each post has an admin-only (`is_admin()`) **Add to
+  paywall / Remove from paywall** control; status stored in Supabase, not frontmatter.
+  Consequence: a monetizable post must be **preview-only in static HTML from day one**
+  (once full content is public/indexed it can't be retroactively gated). Authoring marks
+  posts `gateable: true` → content served via an entitlement-checking Function, never in
+  static HTML; the live toggle flips whether a gateable post currently requires purchase.
+  Non-gateable posts stay fully static (SEO). Already-public posts can't become paid.
 - The free list built in phase 1 is the conversion funnel here (founding-member pricing).
 
 ### Launch task — social publishing pipeline (later phase, backend feature)
