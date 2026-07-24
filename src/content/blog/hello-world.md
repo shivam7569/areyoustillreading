@@ -25,6 +25,16 @@ $$
 \int_0^\infty e^{-x}\,dx = 1
 $$
 
+## Diagram
+
+Rendered to inline SVG at build time (no client-side JavaScript):
+
+```mermaid
+graph LR
+  A[Prompt] --> B[LLM]
+  B --> C[Response]
+```
+
 ## Code
 
 A fenced code block (syntax-highlighted at build time by Shiki):

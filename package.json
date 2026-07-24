@@ -22,6 +22,8 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "playwright": "^1.61.1",
+    "rehype-mermaid": "^3.0.0",
     "vitest": "^4.1.10"
   }
 }
