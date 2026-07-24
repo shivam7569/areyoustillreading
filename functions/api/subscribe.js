@@ -3,6 +3,7 @@ import {
   normalizeEmail,
   jsonResponse,
   redirect,
+  verifyTurnstile,
   getByEmail,
   insertPending,
   setPendingToken,
@@ -19,15 +20,18 @@ export async function onRequestPost({ request, env }) {
 
   let email;
   let honeypot;
+  let turnstileToken;
   try {
     if (isJson) {
       const b = await request.json();
       email = b.email;
       honeypot = b.website;
+      turnstileToken = b.turnstileToken;
     } else {
       const f = await request.formData();
       email = f.get('email');
       honeypot = f.get('website');
+      turnstileToken = f.get('cf-turnstile-response');
     }
   } catch {
     return isJson ? jsonResponse({ ok: false, error: 'Bad request.' }, 400) : redirect('/subscribe-error');
@@ -42,6 +46,14 @@ export async function onRequestPost({ request, env }) {
     return isJson ? jsonResponse({ ok: false, error: 'Please enter a valid email.' }, 400) : redirect('/subscribe-error');
   }
   const normalized = normalizeEmail(email);
+
+  // Bot verification (no-op until TURNSTILE_SECRET_KEY is configured).
+  const ip = request.headers.get('cf-connecting-ip') || undefined;
+  if (!(await verifyTurnstile(env, turnstileToken, ip))) {
+    return isJson
+      ? jsonResponse({ ok: false, error: 'Verification failed. Please refresh and try again.' }, 400)
+      : redirect('/subscribe-error');
+  }
 
   try {
     const nowMs = Date.now();
@@ -68,8 +80,7 @@ export async function onRequestPost({ request, env }) {
       ? jsonResponse({ ok: true, message: 'Check your inbox to confirm your subscription.' })
       : redirect('/check-inbox');
   } catch (err) {
-    // Detailed error stays server-side (visible via `wrangler pages deployment tail`);
-    // the client only ever sees a generic message.
+    // Detailed error stays server-side (via `wrangler pages deployment tail`).
     console.error('subscribe failed:', (err && err.message) || err);
     return isJson ? jsonResponse({ ok: false, error: 'Something went wrong. Try again later.' }, 500) : redirect('/subscribe-error');
   }

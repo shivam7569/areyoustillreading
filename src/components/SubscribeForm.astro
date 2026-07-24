@@ -1,6 +1,7 @@
 ---
 // Email subscribe form. Posts to the /api/subscribe Cloudflare Pages Function.
-// Progressive enhancement: works as a plain form POST (redirects) or via fetch (JS).
+// The Turnstile widget renders only when PUBLIC_TURNSTILE_SITE_KEY is set at build.
+const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
 ---
 
 <section class="subscribe">
@@ -16,10 +17,13 @@
     />
     <!-- honeypot: hidden from humans; bots fill it and get silently dropped -->
     <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true" />
+    {siteKey && <div class="cf-turnstile" data-sitekey={siteKey}></div>}
     <button type="submit">Subscribe</button>
     <p class="form-msg" role="status" aria-live="polite"></p>
   </form>
 </section>
+
+{siteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
 
 <style>
   .subscribe {
@@ -47,6 +51,7 @@
     font-weight: 600;
     cursor: pointer;
   }
+  .subscribe .cf-turnstile { flex-basis: 100%; }
   .subscribe .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
   .form-msg { flex-basis: 100%; margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; min-height: 1.2em; }
 </style>
@@ -59,15 +64,23 @@
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
       msg.textContent = 'Submitting…';
+      var tokenEl = form.querySelector('[name="cf-turnstile-response"]');
       try {
         var res = await fetch('/api/subscribe', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ email: form.email.value, website: form.website.value }),
+          body: JSON.stringify({
+            email: form.email.value,
+            website: form.website.value,
+            turnstileToken: tokenEl ? tokenEl.value : undefined,
+          }),
         });
         var data = await res.json().catch(function () { return {}; });
         msg.textContent = data.message || data.error || (res.ok ? 'Check your inbox to confirm.' : 'Something went wrong.');
-        if (res.ok) form.reset();
+        if (res.ok) {
+          form.reset();
+          if (window.turnstile) { try { window.turnstile.reset(); } catch (e) {} }
+        }
       } catch (err) {
         msg.textContent = 'Network error. Please try again.';
       }

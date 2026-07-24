@@ -25,3 +25,9 @@ pnpm-debug.log*
 
 # Claude Code machine-local settings (never commit)
 .claude/settings.local.json
+
+# Personal reference material (CV etc.) — never commit to the public repo
+reference_files/
+
+# Local env (Turnstile site key etc.)
+.env
