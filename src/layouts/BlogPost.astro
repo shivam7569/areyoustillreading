@@ -6,7 +6,7 @@ import 'katex/dist/katex.min.css';
 type Props = { post: CollectionEntry<'blog'> };
 
 const { post } = Astro.props;
-const { title, description, pubDate, updatedDate } = post.data;
+const { title, description, pubDate, updatedDate, tags } = post.data;
 
 const fmt = (d: Date) =>
   d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -23,6 +23,11 @@ const minutes = Math.max(1, Math.round(words / 200));
       <span> &middot; {minutes} min read</span>
       {updatedDate && <span> &middot; updated {fmt(updatedDate)}</span>}
     </p>
+    {tags.length > 0 && (
+      <p class="tags">
+        {tags.map((t) => (<a class="tag" href={`/blog/tags/${t}`}>#{t}</a>))}
+      </p>
+    )}
     <slot />
   </article>
   <p><a href="/blog">&larr; All posts</a></p>

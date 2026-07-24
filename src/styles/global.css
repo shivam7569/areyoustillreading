@@ -118,3 +118,8 @@ article time { color: var(--muted); font-size: 0.95rem; }
     background-color: var(--shiki-dark-bg) !important;
   }
 }
+
+/* Tags */
+.tags { margin-top: -0.5rem; }
+.tag { display: inline-block; margin-right: 0.6rem; font-size: 0.9rem; }
+.count { color: var(--muted); }
