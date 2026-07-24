@@ -1,99 +1,143 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+
+const experience = [
+  {
+    role: 'Sr. Data Scientist',
+    company: 'Aviso AI',
+    dates: "May '25 – Present",
+    points: [
+      'Architected a multi-agent LLM system processing 100K+ deals daily across 15 enterprise clients, replacing rule-based logic with insight generation from CRM and engagement data, governed by evaluation and safety guardrails.',
+      'Replaced correlation-based explainability with a causal-inference backbone (Double Machine Learning, Causal Forests) to surface actionable recommendations — driving a ~12% increase in sales-rep engagement.',
+      'Built and scaled the LLM engineering function: defined the technical hiring bar and grew the team from 1 to 5 engineers for end-to-end development and production deployment.',
+    ],
+  },
+  {
+    role: 'Sr. Computer Vision Engineer',
+    company: 'Bosch Global Software Technologies',
+    dates: "Aug '22 – Apr '25",
+    points: [
+      'Published a research paper and filed a patent on enhancing foundation models (EVA-02), leveraging 90%+ unlabeled Bosch data to boost performance by ~5%; collaborated with Bosch Romania to further improve EVA by ~4.31% via cluster analysis and hypothesis testing on DINOv2 embeddings.',
+      'Built a Vision Assignment Marketplace, training SWin, DeiT, and DeTr with ~6.72% average performance deviation; designed a ConvNeXt segmentation pipeline on fisheye images (~57% F1).',
+      'Deployed an object detector and motion analyzer on a Jetson Nano edge test-bed at ~30 FPS; refactored legacy code for newer vision-transformer architectures, improving adaptability/efficiency by 14%.',
+    ],
+  },
+  {
+    role: 'Data Scientist II',
+    company: 'HiLabs Inc.',
+    dates: "Oct '20 – Jul '22",
+    points: [
+      'Engineered a multi-million-dollar data pipeline moving anomalies from large-scale SQL/RDBMS sources to HBase and Solr for ticket-based remediation, improving Data Quality Index from ~78 to ~86; projected to prevent $200M+ in annual losses for a leading U.S. health insurer.',
+      'Deployed an enterprise-grade OCR solution (NLP + custom algorithms) on contracts after GAN-based image enhancement, generating $100K+ in business value.',
+    ],
+  },
+  {
+    role: 'Machine Learning Engineer Intern',
+    company: 'GMO Research (Japan)',
+    dates: "Jan '20 – Mar '20",
+    points: [
+      'Forecast 6-hour survey response likelihood with time-aware Random Forests, Decision Trees, and DNNs; addressed class imbalance via SMOTE and custom metrics, achieving 91% efficacy on responsive marketing panels.',
+    ],
+  },
+];
+
+const skills = [
+  { group: 'Languages & Libraries', items: 'Python, SQL, Scala, Pandas, NumPy, Scikit-Learn' },
+  { group: 'Big Data & MLOps', items: 'Spark, Hadoop, HBase, Solr, AWS, Docker, Git, CI/CD, GPU/HPC' },
+  { group: 'ML / DL / LLM', items: 'PyTorch, TensorFlow, Transformers, LangChain, LangGraph, RAG, Agentic AI, MCP' },
+  { group: 'Models & Paradigms', items: 'Time-Series Forecasting, Recommendation, Causal Inference, Anomaly Detection, Computer Vision' },
+];
+
+const publications = [
+  'Patent (co-authored): dimensionality-reduction techniques to detect and localize failure regions in segmentation outputs from foundation models, improving interpretability and reliability.',
+  'Research: a two-stage fine-tuning approach improving foundation-model segmentation performance by 5%+ mIoU using unlabeled data (semi-supervised learning).',
+];
 ---
 
 <BaseLayout
-  title="Resume — areyoustillreading"
-  description="Resume for areyoustillreading — placeholder content pending the owner's final copy."
+  title="Resume — Shivam Chaudhary"
+  description="Senior Data Scientist — production LLM/Agentic AI, ML/DL, causal inference, and computer vision."
 >
-  <article class="resume">
-    <h1>Resume</h1>
-    <p class="lede">
-      Placeholder content — to be replaced with the owner's real resume.
-    </p>
-    <p><a class="download" href="/resume.pdf" download>Download PDF</a></p>
+  <div class="resume">
+    <header class="resume-head">
+      <h1>Shivam Chaudhary</h1>
+      <p class="contact">
+        <a href="mailto:shivam.iitmandi@gmail.com">shivam.iitmandi@gmail.com</a>
+        <span aria-hidden="true"> · </span>
+        <a href="https://github.com/shivam7569">GitHub</a>
+      </p>
+      <p><a class="cta" href="/resume.pdf" download>Download PDF &darr;</a></p>
+    </header>
 
-    <section class="resume-section">
+    <section>
       <h2>Summary</h2>
       <p>
-        LLM engineer and writer focused on building reliable applications on top
-        of large language models. Comfortable across the stack, from prompt and
-        evaluation design to shipping static sites and small services.
-        (Placeholder — replace with a real summary.)
+        Senior Data Scientist with 6+ years applying scientific methods to high-stakes business
+        problems, building production-grade ML/DL and end-to-end LLM/Agentic AI systems at scale.
+        Hands-on across time-series forecasting, causal inference, recommendation, and large-scale
+        data, with a product-oriented mindset and a habit of turning research into real-world impact.
       </p>
     </section>
 
-    <section class="resume-section">
+    <section>
       <h2>Experience</h2>
-
-      <div class="entry">
-        <h3>Senior LLM Engineer &mdash; Example Labs</h3>
-        <p class="meta">Jan 2023 &ndash; Present</p>
-        <ul>
-          <li>Designed evaluation harnesses that cut regression escapes by a placeholder amount.</li>
-          <li>Built retrieval pipelines serving placeholder-scale request volumes.</li>
-          <li>Mentored engineers on prompt design and structured output patterns.</li>
-        </ul>
-      </div>
-
-      <div class="entry">
-        <h3>Software Engineer &mdash; Placeholder Co.</h3>
-        <p class="meta">Jun 2020 &ndash; Dec 2022</p>
-        <ul>
-          <li>Shipped internal tools used by placeholder teams across the company.</li>
-          <li>Owned CI and release automation for a static publishing platform.</li>
-          <li>Collaborated with design to improve accessibility and performance.</li>
-        </ul>
-      </div>
+      {experience.map((job) => (
+        <div class="entry">
+          <div class="entry-head">
+            <strong>{job.role} — {job.company}</strong>
+            <span class="dates">{job.dates}</span>
+          </div>
+          <ul>
+            {job.points.map((p) => <li>{p}</li>)}
+          </ul>
+        </div>
+      ))}
     </section>
 
-    <section class="resume-section">
+    <section>
       <h2>Skills</h2>
       <ul class="skills">
-        <li>TypeScript &amp; JavaScript</li>
-        <li>Astro &amp; static site tooling</li>
-        <li>LLM prompting &amp; evaluation</li>
-        <li>Python</li>
-        <li>Testing (Vitest)</li>
+        {skills.map((s) => (
+          <li><strong>{s.group}:</strong> {s.items}</li>
+        ))}
       </ul>
     </section>
 
-    <section class="resume-section">
+    <section>
+      <h2>Publications & Patents</h2>
+      <ul>
+        {publications.map((p) => <li>{p}</li>)}
+      </ul>
+    </section>
+
+    <section>
       <h2>Education</h2>
       <div class="entry">
-        <h3>B.S. in Computer Science &mdash; Placeholder University</h3>
-        <p class="meta">Graduated 2020</p>
+        <div class="entry-head">
+          <strong>Indian Institute of Technology, Mandi</strong>
+          <span class="dates">Aug '16 – Jul '20</span>
+        </div>
+        <p>B.Tech in Mechanical Engineering, Minor in Intelligent Systems.</p>
       </div>
     </section>
-  </article>
+  </div>
 </BaseLayout>
 
 <style>
-  .resume-section {
-    margin-top: 2.5rem;
+  .resume-head { margin-bottom: 1.5rem; }
+  .resume-head h1 { margin-bottom: 0.25rem; }
+  .contact { color: var(--muted); margin: 0 0 0.75rem; }
+  .entry { margin-bottom: 1.25rem; }
+  .entry-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.25rem 1rem;
+    align-items: baseline;
   }
-
-  .entry {
-    margin-top: 1.5rem;
-  }
-
-  .entry h3 {
-    margin-bottom: 0.25rem;
-  }
-
-  .meta {
-    margin-top: 0;
-    opacity: 0.75;
-    font-size: 0.9rem;
-  }
-
-  .skills {
-    columns: 2;
-  }
-
-  .download {
-    display: inline-block;
-    margin-top: 0.5rem;
-    font-weight: 600;
-  }
+  .dates { color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
+  .resume ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .resume li { margin-bottom: 0.35rem; }
+  .skills { list-style: none; padding-left: 0; }
+  .skills li { margin-bottom: 0.4rem; }
 </style>

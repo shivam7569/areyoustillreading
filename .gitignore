@@ -29,5 +29,8 @@ pnpm-debug.log*
 # Personal reference material (CV etc.) — never commit to the public repo
 reference_files/
 
+# Served resume PDF — deployed via local build, but kept out of the public repo
+public/resume.pdf
+
 # Local env (Turnstile site key etc.)
 .env

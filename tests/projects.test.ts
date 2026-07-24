@@ -9,10 +9,9 @@ describe('projects page', () => {
     expect(existsSync(file)).toBe(true);
   });
 
-  it('renders a projects heading and at least one project card', () => {
+  it('renders the real project', () => {
     const html = readFileSync(file, 'utf-8');
     expect(html).toMatch(/Projects/);
-    // at least one project name from the placeholder array should appear
-    expect(html).toContain('Context Ledger');
+    expect(html).toContain('Deep-Learning Architectures from Scratch');
   });
 });

@@ -10,69 +10,44 @@ interface Project {
 
 const projects: Project[] = [
   {
-    name: 'Context Ledger',
+    name: 'Deep-Learning Architectures from Scratch',
     description:
-      'A small library for tracking token budgets across multi-turn LLM conversations, with pruning strategies you can swap at runtime.',
-    href: '#',
-    tags: ['typescript', 'llm', 'tooling'],
-  },
-  {
-    name: 'Retrieval Playground',
-    description:
-      'An interactive sandbox for comparing chunking and reranking strategies against your own documents, side by side.',
-    href: '#',
-    tags: ['rag', 'evaluation', 'astro'],
-  },
-  {
-    name: 'Prompt Diff',
-    description:
-      'A CLI that diffs two prompt versions and reports how model outputs shift across a fixed suite of test cases.',
-    href: '#',
-    tags: ['cli', 'testing', 'python'],
+      'Open-source PyTorch library implementing 25+ computer-vision architectures — CNNs (ResNet, ConvNeXt), Vision Transformers (DeiT, Swin), and segmentation networks — reimplemented from their original papers. Modular, packaged codebase with unit tests, GitHub Actions CI/CD, config-driven training, experiment logging, and hosted docs.',
+    href: 'https://github.com/shivam7569',
+    tags: ['pytorch', 'computer-vision', 'open-source'],
   },
 ];
 ---
 
-<BaseLayout title="Projects — areyoustillreading">
+<BaseLayout title="Projects — areyoustillreading" description="Selected engineering and research projects by Shivam Chaudhary.">
   <h1>Projects</h1>
-  <p class="note">
-    These are placeholder projects for now &mdash; real write-ups and links are on the way.
-  </p>
 
   <ul class="project-grid">
-    {
-      projects.map((p) => (
-        <li class="card">
-          <h2 class="card-title">
-            <a href={p.href}>{p.name}</a>
-          </h2>
-          <p class="card-desc">{p.description}</p>
-          <ul class="tags">
-            {p.tags.map((tag) => (
-              <li class="tag">{tag}</li>
-            ))}
-          </ul>
-        </li>
-      ))
-    }
+    {projects.map((p) => (
+      <li class="card">
+        <h2 class="card-title"><a href={p.href}>{p.name}</a></h2>
+        <p class="card-desc">{p.description}</p>
+        <ul class="tags">
+          {p.tags.map((tag) => <li class="tag">{tag}</li>)}
+        </ul>
+      </li>
+    ))}
+    <li class="card">
+      <h2 class="card-title"><a href="https://github.com/shivam7569">More on GitHub &rarr;</a></h2>
+      <p class="card-desc">Additional experiments and open-source work.</p>
+    </li>
   </ul>
 </BaseLayout>
 
 <style>
-  .note {
-    color: var(--muted);
-    font-size: 0.95rem;
-  }
-
   .project-grid {
     list-style: none;
     padding: 0;
     margin: 1.5rem 0 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: var(--space);
   }
-
   .card {
     display: flex;
     flex-direction: column;
@@ -81,35 +56,11 @@ const projects: Project[] = [
     border: 1px solid var(--border);
     border-radius: 10px;
   }
-
-  .card-title {
-    margin: 0;
-    font-size: 1.2rem;
-  }
-
-  .card-title a {
-    color: inherit;
-  }
-
-  .card-title a:hover {
-    color: var(--accent);
-  }
-
-  .card-desc {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.95rem;
-  }
-
-  .tags {
-    list-style: none;
-    padding: 0;
-    margin: auto 0 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-  }
-
+  .card-title { margin: 0; font-size: 1.15rem; }
+  .card-title a { color: inherit; }
+  .card-title a:hover { color: var(--accent); }
+  .card-desc { margin: 0; color: var(--muted); font-size: 0.95rem; }
+  .tags { list-style: none; padding: 0; margin: auto 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .tag {
     font-family: var(--font-mono);
     font-size: 0.75rem;
