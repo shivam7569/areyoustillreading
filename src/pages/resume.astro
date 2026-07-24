@@ -1,0 +1,99 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Resume — areyoustillreading"
+  description="Resume for areyoustillreading — placeholder content pending the owner's final copy."
+>
+  <article class="resume">
+    <h1>Resume</h1>
+    <p class="lede">
+      Placeholder content — to be replaced with the owner's real resume.
+    </p>
+    <p><a class="download" href="/resume.pdf" download>Download PDF</a></p>
+
+    <section class="resume-section">
+      <h2>Summary</h2>
+      <p>
+        LLM engineer and writer focused on building reliable applications on top
+        of large language models. Comfortable across the stack, from prompt and
+        evaluation design to shipping static sites and small services.
+        (Placeholder — replace with a real summary.)
+      </p>
+    </section>
+
+    <section class="resume-section">
+      <h2>Experience</h2>
+
+      <div class="entry">
+        <h3>Senior LLM Engineer &mdash; Example Labs</h3>
+        <p class="meta">Jan 2023 &ndash; Present</p>
+        <ul>
+          <li>Designed evaluation harnesses that cut regression escapes by a placeholder amount.</li>
+          <li>Built retrieval pipelines serving placeholder-scale request volumes.</li>
+          <li>Mentored engineers on prompt design and structured output patterns.</li>
+        </ul>
+      </div>
+
+      <div class="entry">
+        <h3>Software Engineer &mdash; Placeholder Co.</h3>
+        <p class="meta">Jun 2020 &ndash; Dec 2022</p>
+        <ul>
+          <li>Shipped internal tools used by placeholder teams across the company.</li>
+          <li>Owned CI and release automation for a static publishing platform.</li>
+          <li>Collaborated with design to improve accessibility and performance.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="resume-section">
+      <h2>Skills</h2>
+      <ul class="skills">
+        <li>TypeScript &amp; JavaScript</li>
+        <li>Astro &amp; static site tooling</li>
+        <li>LLM prompting &amp; evaluation</li>
+        <li>Python</li>
+        <li>Testing (Vitest)</li>
+      </ul>
+    </section>
+
+    <section class="resume-section">
+      <h2>Education</h2>
+      <div class="entry">
+        <h3>B.S. in Computer Science &mdash; Placeholder University</h3>
+        <p class="meta">Graduated 2020</p>
+      </div>
+    </section>
+  </article>
+</BaseLayout>
+
+<style>
+  .resume-section {
+    margin-top: 2.5rem;
+  }
+
+  .entry {
+    margin-top: 1.5rem;
+  }
+
+  .entry h3 {
+    margin-bottom: 0.25rem;
+  }
+
+  .meta {
+    margin-top: 0;
+    opacity: 0.75;
+    font-size: 0.9rem;
+  }
+
+  .skills {
+    columns: 2;
+  }
+
+  .download {
+    display: inline-block;
+    margin-top: 0.5rem;
+    font-weight: 600;
+  }
+</style>
