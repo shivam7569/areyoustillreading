@@ -1,0 +1,127 @@
+---
+interface Props {
+  postId: string;
+}
+const { postId } = Astro.props;
+---
+
+<section class="comments" data-post-id={postId}>
+  <h2>Comments</h2>
+  <div id="comments-list"><p class="muted">Loading comments…</p></div>
+  <div id="comment-compose"></div>
+</section>
+
+<style>
+  .comments { margin-top: 3rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
+  .muted { color: var(--muted); }
+  .comment { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+  .comment-meta { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.25rem; }
+  .comment-body { margin: 0; white-space: pre-wrap; }
+  #comment-compose textarea {
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+    resize: vertical;
+  }
+  #comment-compose button {
+    margin-top: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: 0;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+  }
+</style>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const root = document.querySelector('.comments');
+  const postId = root.getAttribute('data-post-id');
+  const list = document.getElementById('comments-list');
+  const compose = document.getElementById('comment-compose');
+
+  async function loadComments() {
+    const { data, error } = await supabase
+      .from('comments')
+      .select('id, author_name, body, created_at')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      list.textContent = 'Could not load comments.';
+      return;
+    }
+    if (!data || !data.length) {
+      list.innerHTML = '<p class="muted">No comments yet. Be the first.</p>';
+      return;
+    }
+    list.textContent = '';
+    for (const c of data) {
+      const el = document.createElement('div');
+      el.className = 'comment';
+      const meta = document.createElement('p');
+      meta.className = 'comment-meta';
+      meta.textContent = c.author_name + ' · ' + new Date(c.created_at).toLocaleDateString();
+      const body = document.createElement('p');
+      body.className = 'comment-body';
+      body.textContent = c.body; // textContent avoids HTML injection
+      el.appendChild(meta);
+      el.appendChild(body);
+      list.appendChild(el);
+    }
+  }
+
+  async function renderCompose() {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session ? data.session.user : null;
+    if (!user) {
+      compose.innerHTML = '<p class="muted"><a href="/login">Sign in</a> to join the conversation.</p>';
+      return;
+    }
+    const meta = user.user_metadata || {};
+    const authorName = meta.user_name || meta.name || (user.email ? user.email.split('@')[0] : 'Reader');
+
+    compose.textContent = '';
+    const ta = document.createElement('textarea');
+    ta.rows = 3;
+    ta.placeholder = 'Write a comment…';
+    const btn = document.createElement('button');
+    btn.textContent = 'Post comment';
+    const msg = document.createElement('p');
+    msg.className = 'muted';
+
+    btn.addEventListener('click', async () => {
+      const body = ta.value.trim();
+      if (!body) return;
+      msg.textContent = 'Posting…';
+      const { error } = await supabase.from('comments').insert({
+        post_id: postId,
+        user_id: user.id,
+        author_name: authorName,
+        body,
+      });
+      if (error) {
+        msg.textContent = error.message;
+        return;
+      }
+      ta.value = '';
+      msg.textContent = '';
+      loadComments();
+    });
+
+    compose.appendChild(ta);
+    compose.appendChild(btn);
+    compose.appendChild(msg);
+  }
+
+  supabase.auth.onAuthStateChange(() => renderCompose());
+  loadComments();
+  renderCompose();
+</script>
