@@ -1,17 +1,13 @@
 ---
-
+import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<BaseLayout title="areyoustillreading — LLM engineering notes">
+  <section class="hero">
+    <h1>areyoustillreading</h1>
+    <p class="lede">
+      In-depth writing on LLM engineering, plus the projects behind it.
+    </p>
+    <p><a class="cta" href="/blog">Read the blog &rarr;</a></p>
+  </section>
+</BaseLayout>
