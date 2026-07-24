@@ -1,43 +1,45 @@
-# Astro Starter Kit: Minimal
+# areyoustillreading
 
-```sh
-npm create astro@latest -- --template minimal
+Personal site + technical blog. Static-first, built with [Astro](https://astro.build); target host is Cloudflare Pages.
+
+## Stack
+
+- **Astro 7**, static output
+- **Blog** via content collections with zod-validated frontmatter
+- Build-time **Shiki** syntax highlighting (light/dark), **KaTeX** math, **Mermaid** diagrams (inline SVG, no client JS)
+- **RSS** feed + **sitemap** + OpenGraph/Twitter meta
+- **Pagefind** client-side search
+- **Vitest** tests that assert on the built `dist/` output
+
+## Commands
+
+| Command | Action |
+| --- | --- |
+| `npm install` | Install dependencies |
+| `npm run dev` | Dev server at http://localhost:4321 |
+| `npm run build` | Build to `dist/` (also generates the Pagefind index) |
+| `npm run preview` | Preview the production build locally |
+| `npm test` | Build, then run the Vitest suite |
+
+## Writing a post
+
+Add a Markdown file under `src/content/blog/` (the filename becomes the URL):
+
+```markdown
+---
+title: "My post"
+description: "One-line summary used in listings, RSS, and SEO."
+pubDate: 2026-07-24
+tags: ["llm"]
+draft: false
+---
+
+Body in Markdown. Fenced code is syntax-highlighted, inline/display math renders
+via KaTeX, and `mermaid` code fences render to inline SVG at build time.
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+`draft: true` hides a post from the listing, RSS, and search. The post publishes at `/blog/<filename>`.
 
-## 🚀 Project Structure
+## Notes
 
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
-```
-
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
-
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
-
-Any static assets, like images, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+- Build-time Mermaid renders via Playwright/Chromium. Locally: `npx playwright install chromium`. Any CI/deploy build must install it too (or switch Mermaid to client-side).
