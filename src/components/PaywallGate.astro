@@ -185,7 +185,7 @@ const preview = post.data.preview ?? post.data.description;
     ui.textContent = '';
     if (!isPaid()) {
       await fetchGated(false);
-    } else if (user && (await entitled())) {
+    } else if (user && (isAdmin || (await entitled()))) {
       await fetchGated(true);
     } else {
       lockBox();

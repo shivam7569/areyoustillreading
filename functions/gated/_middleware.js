@@ -52,6 +52,18 @@ export async function onRequest(context) {
   } catch (e) {}
   if (!userId) return locked();
 
+  // Admins can always read (to preview their own paywalled content).
+  try {
+    const a = await fetch(
+      `${sb}/rest/v1/admins?user_id=eq.${encodeURIComponent(userId)}&select=user_id`,
+      { headers: svc }
+    );
+    if (a.ok) {
+      const rows = await a.json();
+      if (rows.length > 0) return next();
+    }
+  } catch (e) {}
+
   // Entitlement check.
   let entitled = false;
   try {
