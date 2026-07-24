@@ -11,7 +11,8 @@
     "preview": "astro preview",
     "astro": "astro",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name=areyoustillreading"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.2.1",
@@ -27,6 +28,7 @@
     "pagefind": "^1.5.2",
     "playwright": "^1.61.1",
     "rehype-mermaid": "^3.0.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.114.0"
   }
 }

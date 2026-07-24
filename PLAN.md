@@ -1,7 +1,12 @@
 # Personal Site — Consolidated Plan
 
-Living planning document. Supersedes the original brief where they differ. No code
-until explicitly asked. Updated as decisions are made.
+Living planning document. Supersedes the original brief where they differ. Updated as
+decisions are made.
+
+**Status (2026-07-24):** Static Phase 1 front-end is BUILT and pushed to GitHub
+(github.com/shivam7569/areyoustillreading, public) — blog pipeline, Shiki highlighting,
+KaTeX, build-time Mermaid, SEO/OG, RSS, sitemap, Pagefind search, resume + projects; 21
+passing tests. Next: deploy (Cloudflare Pages via Wrangler), then email capture.
 
 ---
 
@@ -11,10 +16,13 @@ until explicitly asked. Updated as decisions are made.
 3. **Owned audience** — a subscriber email list, built from day one.
 
 ## Working rules
-- No code files unless explicitly asked.
-- Ask, don't assume. No silent defaults.
-- Be factually/logically honest; correct rather than accommodate.
-- Teach the mechanism, not just the result (owner is learning front-end from zero).
+- Build autonomously toward a working platform; don't pause for input unless truly
+  blocked (external accounts/credentials/DNS).
+- Every code increment gets a test; nothing advances until `npm test` is green. Commit
+  per increment; push to GitHub. Git author is `shivam7569` — NEVER add Claude as
+  co-author/collaborator.
+- Keep responses short and informative — no codebase teaching unless asked.
+- Ask, don't assume on genuine forks. Be factually/logically honest; correct rather than accommodate.
 
 ---
 
@@ -30,14 +38,18 @@ lazily: static by default, server routes added phase by phase.
 - **Security:** offload auth to a hosted service; use Stripe hosted checkout (card data
   never touches our code); all gating server-side (client-side paywalls aren't paywalls).
 
-## Stack (candidates, not final)
-- **Generator:** Astro — ships static by default, supports per-route hybrid/server
+## Stack (decided)
+- **Generator:** Astro 7 — ships static by default, supports per-route hybrid/server
   rendering later without a rewrite. Preserves the paywall path for free.
 - **Host:** Cloudflare Pages (free, serverless functions available).
-- **Data:** free-tier DB (Cloudflare D1 / Supabase / Neon).
-- **Email sending:** a service as a dumb pipe (Resend / Amazon SES) — we own the list
-  in our DB; they handle deliverability. *Provider not yet chosen.*
-- **Payments (phase 3):** Stripe one-time checkout.
+- **Deploy:** Wrangler **direct upload** (Option B) — build locally (`npm run build`),
+  upload `dist` with `wrangler pages deploy`. Avoids installing Chromium in CI for the
+  build-time Mermaid step. Git auto-deploy can be layered on later.
+- **Data:** **Supabase** (hosted Postgres) — also powers Auth (single vendor).
+- **Auth (phase 2):** **Supabase Auth** — bundled with the DB choice above.
+- **Email sending:** **Resend** as a dumb pipe — we own the list in our DB; they handle
+  deliverability. (Verify current free-tier limits before launch.)
+- **Payments (phase 3):** Stripe one-time **hosted checkout** (card data never touches our code).
 - **Math/diagrams:** KaTeX + Mermaid, rendered at build time (plain HTML, no client JS).
 
 ---
@@ -85,10 +97,26 @@ Needs DB + functions + stored API credentials; reuses existing backend.
 5. Ask-the-audience ("what should I write next?") — content ideas + engagement.
 6. **Strategic:** this list is the future paying audience for the phase-3 paywall.
 
-## Design direction
-Pleasant, content-first, lightly animated. Craft goes into typography, spacing,
-hierarchy, readability — not animation. Motion only where it clarifies. Start from a
-minimal starter, reshape incrementally while learning CSS; explain every rule.
+## Website security (cross-cutting — every phase)
+Security is a standing requirement, not a phase. Baseline:
+- **HTTPS everywhere** (automatic via Cloudflare) + security headers (CSP, HSTS,
+  X-Content-Type-Options, Referrer-Policy).
+- **Secrets never in the repo or client** — API keys / DB creds live in Cloudflare env vars only.
+- **All gating server-side** — never trust the client for paywall / auth / entitlements.
+- **Validate + rate-limit every server endpoint** (subscribe, comments, checkout).
+- **Email:** double opt-in (prevents list-bombing) + one-click unsubscribe.
+- **Stripe:** verify webhook signatures; entitlements written only from verified events.
+- **Auth:** offload to Supabase (hosted) — no hand-rolled password/session code.
+- **Dependencies:** keep updated; `npm audit` clean (currently 0 vulnerabilities).
+
+## Design direction (chassis — *after* the engine)
+**Order of work: build the engine first, then the chassis.** Ship the functional
+platform (deploy → email → auth → payments) before investing in deep visual design. The
+current look is a deliberately minimal, functional baseline.
+
+Theming pass (later): pleasant, content-first, lightly animated. Craft into typography,
+spacing, hierarchy, readability — not animation. Motion only where it clarifies. Reshape
+the minimal baseline incrementally.
 
 ## RSS (decided: include)
 Build-time XML file listing posts. Readers follow via a reader app (pull model, no
@@ -104,5 +132,5 @@ RSS = frictionless/anonymous; email = owned relationship. Widens the funnel at ~
   all Cloudflare; simplest deploy/HTTPS path).
 
 ## Open questions
-1. **Email sending service** — Resend vs SES vs other (check live free-tier limits).
+1. ~~Email sending service~~ → **Resend** (verify live free-tier limits before launch).
 2. **Price per post** — deferred to phase 3.
