@@ -8,8 +8,8 @@ const html = readFileSync(
 );
 
 describe('highlights', () => {
-  it('renders the (private) highlights section and save button', () => {
-    expect(html).toContain('Your highlights');
+  it('renders the highlights + discussion section and save button', () => {
+    expect(html).toContain('Highlights');
     expect(html).toContain('id="hl-save-btn"');
   });
 });

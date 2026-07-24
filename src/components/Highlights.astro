@@ -6,8 +6,8 @@ const { postId } = Astro.props;
 ---
 
 <section class="highlights" data-post-id={postId} hidden>
-  <h2>Your highlights</h2>
-  <p class="muted hl-empty">Select text in the post to save a highlight. Only you can see these.</p>
+  <h2>Highlights &amp; discussion</h2>
+  <p class="hl-status muted"></p>
   <ul id="highlights-list"></ul>
 </section>
 
@@ -16,39 +16,38 @@ const { postId } = Astro.props;
 <style>
   .highlights { margin-top: 2rem; }
   .highlights .muted { color: var(--muted); }
-  .highlights ul { list-style: none; padding: 0; margin: 0.5rem 0 0; }
-  .highlights li {
-    display: flex;
-    gap: 0.75rem;
-    justify-content: space-between;
-    align-items: start;
-    padding: 0.6rem 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .highlights blockquote {
+  #highlights-list { list-style: none; padding: 0; margin: 0.5rem 0 0; }
+  #highlights-list > li { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+  .hl-top { display: flex; gap: 0.75rem; justify-content: space-between; align-items: start; }
+  .hl-top blockquote {
     margin: 0;
     padding-left: 0.75rem;
     border-left: 3px solid var(--accent);
     color: var(--fg);
   }
-  .hl-del { background: none; border: 0; color: var(--muted); cursor: pointer; white-space: nowrap; }
-  .hl-del:hover { color: var(--fg); }
-  mark.user-highlight { background: #ffe27a; color: #000; padding: 0 0.1em; border-radius: 2px; }
-  @media (prefers-color-scheme: dark) {
-    mark.user-highlight { background: #c8a02a; color: #000; }
+  .hl-who { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+  .hl-actions { display: flex; gap: 0.75rem; margin-top: 0.4rem; }
+  .hl-actions button { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: 0.9rem; padding: 0; }
+  .hl-actions .hl-del { color: var(--muted); }
+  .hl-thread { margin: 0.6rem 0 0 0.75rem; padding-left: 0.75rem; border-left: 2px solid var(--border); }
+  .hl-msg { margin-bottom: 0.5rem; }
+  .hl-msg-meta { color: var(--muted); font-size: 0.85rem; }
+  .hl-msg p { margin: 0.1rem 0 0; white-space: pre-wrap; }
+  .hl-composer { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+  .hl-composer textarea {
+    flex: 1 1 240px; padding: 0.45rem; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; resize: vertical;
   }
+  .hl-composer button {
+    padding: 0.35rem 0.8rem; border: 0; border-radius: 6px;
+    background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+  }
+  mark.user-highlight { background: #ffe27a; color: #000; padding: 0 0.1em; border-radius: 2px; cursor: pointer; }
+  @media (prefers-color-scheme: dark) { mark.user-highlight { background: #c8a02a; color: #000; } }
   #hl-save-btn {
-    position: fixed;
-    z-index: 50;
-    padding: 0.3rem 0.65rem;
-    border: 0;
-    border-radius: 6px;
-    background: var(--accent);
-    color: #fff;
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    position: fixed; z-index: 50; padding: 0.3rem 0.65rem; border: 0; border-radius: 6px;
+    background: var(--accent); color: #fff; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
   }
 </style>
 
@@ -58,123 +57,215 @@ const { postId } = Astro.props;
   const section = document.querySelector('.highlights');
   const postId = section.getAttribute('data-post-id');
   const article = document.querySelector('article');
-  const list = document.getElementById('highlights-list');
-  const empty = section.querySelector('.hl-empty');
+  const listEl = document.getElementById('highlights-list');
+  const statusEl = section.querySelector('.hl-status');
   const saveBtn = document.getElementById('hl-save-btn');
 
   let currentUser = null;
+  let isAdmin = false;
   let pendingQuote = '';
 
-  function applyHighlight(quote) {
+  const setStatus = (m) => { statusEl.textContent = m || ''; };
+  const authorNameOf = (u) => {
+    const m = u.user_metadata || {};
+    return m.user_name || m.name || (u.email ? u.email.split('@')[0] : 'Reader');
+  };
+
+  function applyMark(h) {
     if (!article) return;
+    if (article.querySelector('mark.user-highlight[data-hid="' + h.id + '"]')) return;
     const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
     let node;
     while ((node = walker.nextNode())) {
-      const idx = node.nodeValue.indexOf(quote);
+      const idx = node.nodeValue.indexOf(h.quote);
       if (idx !== -1 && node.parentElement && node.parentElement.tagName !== 'MARK') {
         try {
           const range = document.createRange();
           range.setStart(node, idx);
-          range.setEnd(node, idx + quote.length);
+          range.setEnd(node, idx + h.quote.length);
           const mark = document.createElement('mark');
           mark.className = 'user-highlight';
+          mark.dataset.hid = h.id;
+          mark.title = 'Open discussion';
+          mark.addEventListener('click', () => openThread(h.id, true));
           range.surroundContents(mark);
-        } catch (e) {
-          /* quote spans multiple nodes — skip visual re-apply */
-        }
+        } catch (e) { /* spans nodes — skip visual */ }
         return;
       }
     }
   }
 
-  function render(rows) {
-    list.textContent = '';
+  function removeMark(hid) {
+    const mark = article && article.querySelector('mark.user-highlight[data-hid="' + hid + '"]');
+    if (mark) mark.replaceWith(document.createTextNode(mark.textContent));
+  }
+
+  async function renderThread(hid, thread) {
+    thread.textContent = 'Loading…';
+    const { data, error } = await supabase
+      .from('highlight_comments')
+      .select('id, author_name, body, created_at')
+      .eq('highlight_id', hid)
+      .order('created_at', { ascending: true });
+    thread.textContent = '';
+    if (error) { thread.textContent = 'Could not load discussion: ' + error.message; return; }
+    for (const c of data || []) {
+      const el = document.createElement('div');
+      el.className = 'hl-msg';
+      const meta = document.createElement('div');
+      meta.className = 'hl-msg-meta';
+      meta.textContent = c.author_name + ' · ' + new Date(c.created_at).toLocaleDateString();
+      const body = document.createElement('p');
+      body.textContent = c.body;
+      el.appendChild(meta); el.appendChild(body);
+      thread.appendChild(el);
+    }
+    if (!data || !data.length) {
+      const none = document.createElement('p');
+      none.className = 'muted';
+      none.textContent = 'No messages yet.';
+      thread.appendChild(none);
+    }
+    const composer = document.createElement('div');
+    composer.className = 'hl-composer';
+    const ta = document.createElement('textarea');
+    ta.rows = 2; ta.placeholder = 'Reply…';
+    const send = document.createElement('button');
+    send.textContent = 'Send';
+    const msg = document.createElement('span'); msg.className = 'muted';
+    send.addEventListener('click', async () => {
+      const body = ta.value.trim();
+      if (!body) return;
+      msg.textContent = 'Sending…';
+      const { error } = await supabase.from('highlight_comments').insert({
+        highlight_id: hid, user_id: currentUser.id, author_name: authorNameOf(currentUser), body,
+      });
+      if (error) { msg.textContent = error.message; return; }
+      renderThread(hid, thread);
+    });
+    composer.appendChild(ta); composer.appendChild(send); composer.appendChild(msg);
+    thread.appendChild(composer);
+  }
+
+  async function openThread(hid, scroll) {
+    const li = listEl.querySelector('li[data-hid="' + hid + '"]');
+    if (!li) return;
+    if (scroll) li.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const thread = li.querySelector('.hl-thread');
+    thread.hidden = false;
+    await renderThread(hid, thread);
+  }
+
+  function renderList(rows) {
+    listEl.textContent = '';
     if (!rows.length) {
-      empty.hidden = false;
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = 'Select text in the post to save a highlight.';
+      listEl.appendChild(p);
       return;
     }
-    empty.hidden = true;
     for (const h of rows) {
+      applyMark(h);
       const li = document.createElement('li');
+      li.dataset.hid = h.id;
+
+      const top = document.createElement('div');
+      top.className = 'hl-top';
       const bq = document.createElement('blockquote');
       bq.textContent = h.quote;
-      const del = document.createElement('button');
-      del.className = 'hl-del';
-      del.textContent = 'Remove';
-      del.addEventListener('click', async () => {
-        await supabase.from('highlights').delete().eq('id', h.id);
-        load();
-      });
-      li.appendChild(bq);
-      li.appendChild(del);
-      list.appendChild(li);
-      applyHighlight(h.quote);
+      top.appendChild(bq);
+      if (isAdmin) {
+        const who = document.createElement('span');
+        who.className = 'hl-who';
+        who.textContent = h.author_name;
+        top.appendChild(who);
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'hl-actions';
+      const discuss = document.createElement('button');
+      discuss.textContent = 'Discuss';
+      discuss.addEventListener('click', () => openThread(h.id, false));
+      actions.appendChild(discuss);
+      if (h.user_id === currentUser.id || isAdmin) {
+        const del = document.createElement('button');
+        del.className = 'hl-del';
+        del.textContent = 'Remove';
+        del.addEventListener('click', async () => {
+          const { error } = await supabase.from('highlights').delete().eq('id', h.id);
+          if (error) { setStatus('Delete failed: ' + error.message); return; }
+          removeMark(h.id);
+          load();
+        });
+        actions.appendChild(del);
+      }
+
+      const thread = document.createElement('div');
+      thread.className = 'hl-thread';
+      thread.hidden = true;
+
+      li.appendChild(top);
+      li.appendChild(actions);
+      li.appendChild(thread);
+      listEl.appendChild(li);
     }
   }
 
   async function load() {
     const { data, error } = await supabase
       .from('highlights')
-      .select('id, quote, created_at')
+      .select('id, quote, author_name, user_id, created_at')
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
-    if (error) {
-      empty.textContent = 'Could not load highlights.';
-      empty.hidden = false;
-      return;
-    }
-    render(data || []);
+    if (error) { setStatus('Could not load highlights: ' + error.message); return; }
+    setStatus('');
+    renderList(data || []);
   }
 
   function onSelection() {
-    if (!currentUser || !article) {
-      saveBtn.hidden = true;
-      return;
-    }
+    if (!currentUser || !article) { saveBtn.hidden = true; return; }
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) {
-      saveBtn.hidden = true;
-      return;
-    }
+    if (!sel || sel.isCollapsed) { saveBtn.hidden = true; return; }
     const text = sel.toString().trim();
-    if (!text || text.length > 2000 || !article.contains(sel.anchorNode)) {
-      saveBtn.hidden = true;
-      return;
-    }
+    if (!text || text.length > 2000 || !article.contains(sel.anchorNode)) { saveBtn.hidden = true; return; }
     pendingQuote = text;
     const rect = sel.getRangeAt(0).getBoundingClientRect();
-    saveBtn.style.top = Math.max(8, rect.top - 40) + 'px';
+    saveBtn.style.top = Math.max(8, rect.top - 42) + 'px';
     saveBtn.style.left = rect.left + 'px';
     saveBtn.hidden = false;
   }
 
-  saveBtn.addEventListener('mousedown', async (e) => {
-    e.preventDefault(); // keep the selection alive
+  saveBtn.addEventListener('click', async () => {
     if (!pendingQuote || !currentUser) return;
-    saveBtn.hidden = true;
     const quote = pendingQuote;
-    const { error } = await supabase
-      .from('highlights')
-      .insert({ post_id: postId, user_id: currentUser.id, quote });
-    if (!error) {
-      window.getSelection().removeAllRanges();
-      load();
-    }
+    saveBtn.hidden = true;
+    setStatus('Saving…');
+    const { error } = await supabase.from('highlights').insert({
+      post_id: postId, user_id: currentUser.id, author_name: authorNameOf(currentUser), quote,
+    });
+    if (error) { setStatus('Save failed: ' + error.message); return; }
+    setStatus('');
+    const s = window.getSelection(); if (s) s.removeAllRanges();
+    load();
   });
 
-  document.addEventListener('mouseup', () => setTimeout(onSelection, 0));
+  document.addEventListener('mouseup', (e) => {
+    if (e.target === saveBtn) return;
+    setTimeout(onSelection, 0);
+  });
   document.addEventListener('scroll', () => { saveBtn.hidden = true; });
 
   async function init() {
     const { data } = await supabase.auth.getSession();
     currentUser = data.session ? data.session.user : null;
-    if (currentUser) {
-      section.hidden = false;
-      load();
-    } else {
-      section.hidden = true;
-      saveBtn.hidden = true;
-    }
+    if (!currentUser) { section.hidden = true; saveBtn.hidden = true; return; }
+    section.hidden = false;
+    try {
+      const { data: adm } = await supabase.rpc('is_admin');
+      isAdmin = adm === true;
+    } catch (e) { isAdmin = false; }
+    load();
   }
 
   supabase.auth.onAuthStateChange(() => init());
