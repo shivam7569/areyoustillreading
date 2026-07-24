@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && pagefind --site dist",
     "preview": "astro preview",
     "astro": "astro",
     "test": "vitest run",
@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "pagefind": "^1.5.2",
     "playwright": "^1.61.1",
     "rehype-mermaid": "^3.0.0",
     "vitest": "^4.1.10"
