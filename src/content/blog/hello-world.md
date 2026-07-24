@@ -16,3 +16,11 @@ Body text with a [link](https://astro.build), `inline code`, and a list:
 - one
 - two
 - three
+
+A fenced code block (syntax-highlighted at build time by Shiki):
+
+```ts
+export function greet(name: string): string {
+  return `Hello, ${name}`;
+}
+```

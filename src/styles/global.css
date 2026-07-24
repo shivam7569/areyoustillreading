@@ -109,3 +109,12 @@ article time { color: var(--muted); font-size: 0.95rem; }
 .post-list { list-style: none; padding: 0; }
 .post-list li { padding: 1rem 0; border-bottom: 1px solid var(--border); }
 .post-list h2 { margin: 0 0 0.25rem; font-size: 1.25rem; }
+
+/* Shiki dual-theme: switch to the dark palette when the OS prefers dark. */
+@media (prefers-color-scheme: dark) {
+  .astro-code,
+  .astro-code span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+}
