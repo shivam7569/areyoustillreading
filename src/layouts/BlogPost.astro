@@ -3,6 +3,7 @@ import type { CollectionEntry } from 'astro:content';
 import BaseLayout from './BaseLayout.astro';
 import Comments from '../components/Comments.astro';
 import Highlights from '../components/Highlights.astro';
+import Notes from '../components/Notes.astro';
 import 'katex/dist/katex.min.css';
 
 type Props = { post: CollectionEntry<'blog'> };
@@ -33,6 +34,7 @@ const minutes = Math.max(1, Math.round(words / 200));
     <slot />
   </article>
   <Highlights postId={post.id} />
+  <Notes postId={post.id} />
   <Comments postId={post.id} />
   <p><a href="/blog">&larr; All posts</a></p>
 </BaseLayout>

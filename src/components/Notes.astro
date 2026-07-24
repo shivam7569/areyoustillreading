@@ -1,0 +1,131 @@
+---
+interface Props {
+  postId: string;
+}
+const { postId } = Astro.props;
+---
+
+<section class="notes" data-post-id={postId} hidden>
+  <h2>Your private note</h2>
+  <p class="notes-status muted"></p>
+  <textarea id="note-body" rows="5" placeholder="Private notes on this post — only you (and the admin) can see them."></textarea>
+  <div><button id="note-save">Save note</button></div>
+  <div id="others-notes"></div>
+</section>
+
+<style>
+  .notes { margin-top: 2rem; }
+  .notes .muted { color: var(--muted); }
+  #note-body {
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+    resize: vertical;
+  }
+  #note-save {
+    margin-top: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: 0;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #others-notes { margin-top: 1.25rem; }
+  .other-note { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+  .other-note-body { margin: 0.1rem 0 0; white-space: pre-wrap; }
+</style>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const section = document.querySelector('.notes');
+  const postId = section.getAttribute('data-post-id');
+  const status = section.querySelector('.notes-status');
+  const ta = document.getElementById('note-body');
+  const saveBtn = document.getElementById('note-save');
+  const others = document.getElementById('others-notes');
+
+  let currentUser = null;
+  let isAdmin = false;
+
+  const authorNameOf = (u) => {
+    const m = u.user_metadata || {};
+    return m.user_name || m.name || (u.email ? u.email.split('@')[0] : 'Reader');
+  };
+  const setStatus = (m) => { status.textContent = m || ''; };
+
+  async function load() {
+    const { data, error } = await supabase
+      .from('notes')
+      .select('user_id, author_name, body, updated_at')
+      .eq('post_id', postId);
+    if (error) { setStatus('Could not load notes: ' + error.message); return; }
+    const rows = data || [];
+    const mine = rows.find((n) => n.user_id === currentUser.id);
+    ta.value = mine ? mine.body : '';
+    others.textContent = '';
+    if (isAdmin) {
+      const readers = rows.filter((n) => n.user_id !== currentUser.id);
+      if (readers.length) {
+        const h = document.createElement('h3');
+        h.textContent = "Readers' notes";
+        others.appendChild(h);
+        for (const n of readers) {
+          const d = document.createElement('div');
+          d.className = 'other-note';
+          const meta = document.createElement('div');
+          meta.className = 'muted';
+          meta.textContent = n.author_name + ' · ' + new Date(n.updated_at).toLocaleDateString();
+          const b = document.createElement('p');
+          b.className = 'other-note-body';
+          b.textContent = n.body;
+          d.appendChild(meta);
+          d.appendChild(b);
+          others.appendChild(d);
+        }
+      }
+    }
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    const body = ta.value.trim();
+    setStatus('Saving…');
+    if (!body) {
+      const { error } = await supabase.from('notes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+      setStatus(error ? 'Save failed: ' + error.message : 'Cleared.');
+      return;
+    }
+    const { error } = await supabase.from('notes').upsert(
+      {
+        post_id: postId,
+        user_id: currentUser.id,
+        author_name: authorNameOf(currentUser),
+        body,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'post_id,user_id' }
+    );
+    setStatus(error ? 'Save failed: ' + error.message : 'Saved.');
+  });
+
+  async function init() {
+    const { data } = await supabase.auth.getSession();
+    currentUser = data.session ? data.session.user : null;
+    if (!currentUser) { section.hidden = true; return; }
+    section.hidden = false;
+    try {
+      const { data: adm } = await supabase.rpc('is_admin');
+      isAdmin = adm === true;
+    } catch (e) { isAdmin = false; }
+    load();
+  }
+
+  supabase.auth.onAuthStateChange(() => init());
+  init();
+</script>
