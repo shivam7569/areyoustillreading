@@ -15,7 +15,7 @@ const words = post.body?.split(/\s+/).filter(Boolean).length ?? 0;
 const minutes = Math.max(1, Math.round(words / 200));
 ---
 
-<BaseLayout title={title} description={description}>
+<BaseLayout title={title} description={description} image={`/og/${post.id}.png`}>
   <article>
     <h1>{title}</h1>
     <p>

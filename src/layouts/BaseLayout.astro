@@ -5,11 +5,13 @@ import BaseHead from '../components/BaseHead.astro';
 interface Props {
   title: string;
   description?: string;
+  image?: string;
 }
 
 const {
   title,
   description = 'Notes on LLM engineering, plus the projects behind them.',
+  image,
 } = Astro.props;
 
 const nav = [
@@ -23,7 +25,7 @@ const nav = [
 <!doctype html>
 <html lang="en">
   <head>
-    <BaseHead title={title} description={description} />
+    <BaseHead title={title} description={description} image={image} />
     <link rel="alternate" type="application/rss+xml" title="areyoustillreading" href="/rss.xml" />
   </head>
   <body>
