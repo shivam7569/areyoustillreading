@@ -9,9 +9,15 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "astro": "^7.1.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "vitest": "^4.1.10"
   }
 }
