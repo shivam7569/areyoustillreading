@@ -11,8 +11,10 @@ alter table public.admins enable row level security;
 -- No select policy: membership is only ever checked via is_admin() below.
 
 create or replace function public.is_admin() returns boolean
-  language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.admins where user_id = auth.uid());
+  language plpgsql stable security definer set search_path = public as $$
+begin
+  return exists (select 1 from public.admins where user_id = auth.uid());
+end;
 $$;
 
 -- 2) Highlights — a reader sees their own; the admin sees everyone's.
