@@ -1,0 +1,52 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Account — areyoustillreading" description="Your account.">
+  <h1>Account</h1>
+  <div id="account-content">
+    <p>Checking your session…</p>
+  </div>
+</BaseLayout>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const content = document.getElementById('account-content');
+
+  async function render() {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (user) {
+      content.textContent = '';
+      const p = document.createElement('p');
+      p.textContent = 'Signed in as ' + (user.email ?? 'your account') + '.';
+      const btn = document.createElement('button');
+      btn.textContent = 'Sign out';
+      btn.className = 'signout';
+      btn.addEventListener('click', async () => {
+        await supabase.auth.signOut();
+        render();
+      });
+      content.appendChild(p);
+      content.appendChild(btn);
+    } else {
+      content.innerHTML = 'You are not signed in. <a href="/login">Sign in</a>.';
+    }
+  }
+
+  // Supabase parses the magic-link / OAuth session out of the URL on load.
+  supabase.auth.onAuthStateChange(() => render());
+  render();
+</script>
+
+<style>
+  .signout {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+  }
+</style>
