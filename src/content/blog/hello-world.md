@@ -17,6 +17,16 @@ Body text with a [link](https://astro.build), `inline code`, and a list:
 - two
 - three
 
+## Math
+
+Inline math such as $E = mc^2$ renders at build time, and so do display blocks:
+
+$$
+\int_0^\infty e^{-x}\,dx = 1
+$$
+
+## Code
+
 A fenced code block (syntax-highlighted at build time by Shiki):
 
 ```ts
