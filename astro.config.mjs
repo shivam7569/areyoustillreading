@@ -8,7 +8,7 @@ import sitemap from '@astrojs/sitemap';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://areyoustillreading.dev',
-  integrations: [sitemap()],
+  integrations: [sitemap({ filter: (page) => !page.includes('/gated/') })],
   markdown: {
     // Let mermaid fences pass through un-highlighted so rehype-mermaid can render them.
     syntaxHighlight: { type: 'shiki', excludeLangs: ['mermaid'] },

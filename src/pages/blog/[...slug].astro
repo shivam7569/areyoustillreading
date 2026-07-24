@@ -1,6 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content';
 import BlogPost from '../../layouts/BlogPost.astro';
+import PaywallGate from '../../components/PaywallGate.astro';
 
 export async function getStaticPaths() {
   const posts = await getCollection('blog', ({ data }) => !data.draft);
@@ -12,5 +13,5 @@ const { Content } = await render(post);
 ---
 
 <BlogPost post={post}>
-  <Content />
+  {post.data.gateable ? <PaywallGate post={post} /> : <Content />}
 </BlogPost>

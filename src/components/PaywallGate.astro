@@ -1,0 +1,212 @@
+---
+import type { CollectionEntry } from 'astro:content';
+interface Props {
+  post: CollectionEntry<'blog'>;
+}
+const { post } = Astro.props;
+const slug = post.id;
+const preview = post.data.preview ?? post.data.description;
+---
+
+<div class="paywall" data-slug={slug}>
+  <div class="paywall-preview"><p>{preview}</p></div>
+  <div id="gated-content"></div>
+  <div id="paywall-ui"></div>
+</div>
+
+<style>
+  .paywall-preview { color: var(--fg); }
+  #paywall-ui .lock {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-align: center;
+  }
+  #paywall-ui .btn {
+    display: inline-block;
+    margin-top: 0.5rem;
+    padding: 0.55rem 1.1rem;
+    border: 0;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .admin-bar {
+    margin-top: 1rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  .admin-bar .btn-sm {
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+  }
+</style>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const root = document.querySelector('.paywall');
+  const slug = root.getAttribute('data-slug');
+  const gated = document.getElementById('gated-content');
+  const ui = document.getElementById('paywall-ui');
+
+  let user = null;
+  let isAdmin = false;
+  let paywall = null; // { is_paid, price_cents, currency } | null
+
+  const isPaid = () => !!(paywall && paywall.is_paid);
+  const price = () => (paywall ? '$' + (paywall.price_cents / 100).toFixed(2) : '');
+
+  async function token() {
+    const { data } = await supabase.auth.getSession();
+    return data.session ? data.session.access_token : '';
+  }
+
+  async function fetchGated(withAuth) {
+    const headers = {};
+    if (withAuth) {
+      const t = await token();
+      if (t) headers.Authorization = 'Bearer ' + t;
+    }
+    const res = await fetch('/gated/' + slug + '/', { headers });
+    if (!res.ok) return false;
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const body = doc.querySelector('#gated-body');
+    gated.innerHTML = body ? body.innerHTML : '';
+    return true;
+  }
+
+  async function entitled() {
+    if (!user) return false;
+    const { data } = await supabase
+      .from('entitlements')
+      .select('id')
+      .eq('post_id', slug)
+      .maybeSingle();
+    return !!data;
+  }
+
+  async function unlock() {
+    const t = await token();
+    let j = {};
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + t },
+        body: JSON.stringify({ postId: slug }),
+      });
+      j = await res.json();
+    } catch (e) {}
+    if (j.url) window.location.href = j.url;
+    else alert(j.error || 'Checkout is not set up yet.');
+  }
+
+  function lockBox() {
+    gated.innerHTML = '';
+    const box = document.createElement('div');
+    box.className = 'lock';
+    const p = document.createElement('p');
+    p.innerHTML = '🔒 The rest of this post is <strong>' + price() + '</strong>.';
+    box.appendChild(p);
+    if (!user) {
+      const a = document.createElement('a');
+      a.className = 'btn';
+      a.href = '/login';
+      a.textContent = 'Sign in to unlock';
+      box.appendChild(a);
+    } else {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.textContent = 'Unlock for ' + price();
+      b.addEventListener('click', unlock);
+      box.appendChild(b);
+    }
+    ui.appendChild(box);
+  }
+
+  function adminBar() {
+    if (!isAdmin) return;
+    const bar = document.createElement('div');
+    bar.className = 'admin-bar';
+    const status = document.createElement('span');
+    status.textContent = 'Admin: ' + (isPaid() ? 'Paywalled (' + price() + ')' : 'Free');
+    const btn = document.createElement('button');
+    btn.className = 'btn-sm';
+    btn.textContent = isPaid() ? 'Remove from paywall' : 'Add to paywall';
+    btn.addEventListener('click', async () => {
+      if (isPaid()) {
+        await supabase
+          .from('post_paywall')
+          .update({ is_paid: false, updated_at: new Date().toISOString() })
+          .eq('post_id', slug);
+      } else {
+        const dollars = prompt('Price to unlock this post (USD):', '5');
+        if (dollars === null) return;
+        const cents = Math.max(50, Math.round(parseFloat(dollars) * 100) || 500);
+        await supabase.from('post_paywall').upsert(
+          { post_id: slug, is_paid: true, price_cents: cents, currency: 'usd', updated_at: new Date().toISOString() },
+          { onConflict: 'post_id' }
+        );
+      }
+      await loadPaywall();
+      await render();
+    });
+    bar.appendChild(status);
+    bar.appendChild(btn);
+    ui.appendChild(bar);
+  }
+
+  async function loadPaywall() {
+    const { data } = await supabase
+      .from('post_paywall')
+      .select('is_paid, price_cents, currency')
+      .eq('post_id', slug)
+      .maybeSingle();
+    paywall = data;
+  }
+
+  async function render() {
+    ui.textContent = '';
+    if (!isPaid()) {
+      await fetchGated(false);
+    } else if (user && (await entitled())) {
+      await fetchGated(true);
+    } else {
+      lockBox();
+    }
+    adminBar();
+  }
+
+  async function init() {
+    const { data } = await supabase.auth.getSession();
+    user = data.session ? data.session.user : null;
+    isAdmin = false;
+    if (user) {
+      try {
+        const { data: adm } = await supabase.rpc('is_admin');
+        isAdmin = adm === true;
+      } catch (e) {}
+    }
+    await loadPaywall();
+    await render();
+  }
+
+  supabase.auth.onAuthStateChange(() => init());
+  init();
+</script>

@@ -1,0 +1,16 @@
+---
+import { getCollection, render } from 'astro:content';
+
+// Full body of gateable posts. Served ONLY through functions/gated/_middleware.js,
+// which verifies the reader's token + entitlement. data-pagefind-ignore keeps this
+// content out of the public search index; it's also excluded from the sitemap.
+export async function getStaticPaths() {
+  const posts = await getCollection('blog', ({ data }) => data.gateable && !data.draft);
+  return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+---
+
+<div id="gated-body" data-pagefind-ignore><Content /></div>
