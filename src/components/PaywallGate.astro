@@ -68,6 +68,7 @@ const preview = post.data.preview ?? post.data.description;
   let user = null;
   let isAdmin = false;
   let paywall = null; // { is_paid, price_cents, currency } | null
+  let renderGen = 0;
 
   const isPaid = () => !!(paywall && paywall.is_paid);
   const price = () => (paywall ? '$' + (paywall.price_cents / 100).toFixed(2) : '');
@@ -182,14 +183,20 @@ const preview = post.data.preview ?? post.data.description;
   }
 
   async function render() {
+    const gen = ++renderGen;
+    let mode;
+    if (!isPaid()) mode = 'free';
+    else if (user && (isAdmin || (await entitled()))) mode = 'unlocked';
+    else mode = 'locked';
+    if (gen !== renderGen) return; // superseded by a newer render
+
+    if (mode === 'locked') gated.innerHTML = '';
+    else await fetchGated(mode === 'unlocked');
+    if (gen !== renderGen) return;
+
+    // Clear + append together (after all awaits) so concurrent renders can't stack.
     ui.textContent = '';
-    if (!isPaid()) {
-      await fetchGated(false);
-    } else if (user && (isAdmin || (await entitled()))) {
-      await fetchGated(true);
-    } else {
-      lockBox();
-    }
+    if (mode === 'locked') lockBox();
     adminBar();
   }
 
