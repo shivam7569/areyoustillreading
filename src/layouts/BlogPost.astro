@@ -1,0 +1,24 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import BaseLayout from './BaseLayout.astro';
+
+type Props = { post: CollectionEntry<'blog'> };
+
+const { post } = Astro.props;
+const { title, description, pubDate, updatedDate } = post.data;
+
+const fmt = (d: Date) =>
+  d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+---
+
+<BaseLayout title={title} description={description}>
+  <article>
+    <h1>{title}</h1>
+    <p>
+      <time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time>
+      {updatedDate && <span> &middot; updated {fmt(updatedDate)}</span>}
+    </p>
+    <slot />
+  </article>
+  <p><a href="/blog">&larr; All posts</a></p>
+</BaseLayout>
