@@ -10,6 +10,11 @@ const blog = defineCollection({
     updatedDate: z.coerce.date().optional(),
     tags: z.array(z.string()).default([]),
     draft: z.boolean().default(false),
+    // Phase 3: a "gateable" post is monetizable — its full body is kept out of the
+    // static HTML (served only via the entitlement-checking gate). `preview` is the
+    // public teaser shown before unlocking. Non-gateable posts stay fully static.
+    gateable: z.boolean().default(false),
+    preview: z.string().optional(),
   }),
 });
 
