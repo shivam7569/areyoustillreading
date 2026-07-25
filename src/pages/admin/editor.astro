@@ -65,9 +65,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   // Typing an opener inserts its closer with the cursor between (e.g. '(|)'); typing
   // a closer/quote that's already next "types over" it; Backspace on an empty pair
   // deletes both. Code blocks get the same behavior via CodeMirror's closeBrackets.
-  const PAIRS = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' };
+  // NOTE: backtick is deliberately NOT paired here — it collides with Markdown's own
+  // inline-code and fenced-code-block (```) shortcuts, which Milkdown handles natively.
+  const PAIRS = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'" };
   const CLOSERS = new Set([')', ']', '}']);
-  const QUOTES = new Set(['"', "'", '`']);
+  const QUOTES = new Set(['"', "'"]);
 
   const bracketPairing = $prose(() => new Plugin({
     props: {
