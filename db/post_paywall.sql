@@ -6,8 +6,10 @@ create table if not exists public.post_paywall (
   is_paid     boolean not null default true,
   price_cents integer not null default 500,
   currency    text not null default 'usd',
+  product_id  text,
   updated_at  timestamptz not null default now()
 );
+alter table public.post_paywall add column if not exists product_id text;
 
 alter table public.post_paywall enable row level security;
 

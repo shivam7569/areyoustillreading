@@ -159,9 +159,11 @@ const preview = post.data.preview ?? post.data.description;
       } else {
         const dollars = prompt('Price to unlock this post (USD):', '5');
         if (dollars === null) return;
+        const productId = prompt('Dodo product ID for this post (create the product in Dodo first):', '');
+        if (productId === null) return;
         const cents = Math.max(50, Math.round(parseFloat(dollars) * 100) || 500);
         await supabase.from('post_paywall').upsert(
-          { post_id: slug, is_paid: true, price_cents: cents, currency: 'usd', updated_at: new Date().toISOString() },
+          { post_id: slug, is_paid: true, price_cents: cents, currency: 'usd', product_id: productId.trim(), updated_at: new Date().toISOString() },
           { onConflict: 'post_id' }
         );
       }
