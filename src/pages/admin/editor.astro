@@ -50,6 +50,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 </style>
 
+<!-- Global (unscoped) styles: the code-block preview DOM is created by Milkdown at
+     runtime, so Astro's scoped styles never reach it — target these classes globally. -->
+<style is:global>
+  .mermaid-preview { display: flex; justify-content: center; padding: 1rem; overflow-x: auto; }
+  .mermaid-preview svg { max-width: 100%; height: auto; }
+  .mermaid-error {
+    padding: 1rem; color: #e5484d; white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+</style>
+
 <script>
   import { supabase } from '../../lib/supabase';
   import { Crepe } from '@milkdown/crepe';
@@ -124,6 +135,36 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     },
   }));
 
+  // Lazy-load mermaid (a large lib) only when a diagram is first previewed, then
+  // reuse the one instance. Kept out of the initial editor bundle via import().
+  let mermaidPromise = null;
+  let mermaidSeq = 0;
+  function loadMermaid() {
+    if (!mermaidPromise) {
+      mermaidPromise = import('mermaid').then(({ default: mermaid }) => {
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+        });
+        return mermaid;
+      });
+    }
+    return mermaidPromise;
+  }
+  function diagramEl(svg) {
+    const el = document.createElement('div');
+    el.className = 'mermaid-preview';
+    el.innerHTML = svg;
+    return el;
+  }
+  function errorEl(err) {
+    const el = document.createElement('div');
+    el.className = 'mermaid-error';
+    el.textContent = 'Mermaid error: ' + (err && err.message ? err.message : String(err));
+    return el;
+  }
+
   const gate = document.getElementById('admin-gate');
   const wrap = document.getElementById('editor-wrap');
   const statusEl = document.getElementById('editor-status');
@@ -150,7 +191,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     const crepe = new Crepe({
       root: document.getElementById('milkdown'),
-      defaultValue: '# New post\n\nStart writing. Try inline math like $E = mc^2$, a fenced code block, or a list.\n',
+      defaultValue: '# New post\n\nStart writing. Try inline math like $E = mc^2$, a fenced code block, or a Mermaid diagram (open its preview):\n\n```mermaid\nflowchart LR\n  A[Draft] --> B[Publish] --> C[Live]\n```\n',
       featureConfigs: {
         // Language-aware code blocks: hand the CodeMirror feature the full
         // language set (from @codemirror/language-data) so a block tagged ts /
@@ -161,6 +202,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           // Auto-close brackets/quotes: typing '(' inserts '()' with the cursor
           // between (i.e. '(|)'), and Backspace on the empty pair removes BOTH.
           extensions: [closeBrackets(), keymap.of(closeBracketsKeymap)],
+          // Live diagrams: for a ```mermaid block, render it client-side into the
+          // block's preview panel (a toggle appears in the block's toolbar).
+          // undefined return = async; applyPreview() swaps in the SVG when ready.
+          // Any other language returns null -> no preview toggle, no overhead. On
+          // publish the same ```mermaid fence is rendered at build time by
+          // rehype-mermaid, so editor preview and live site stay identical.
+          renderPreview: (language, content, applyPreview) => {
+            if ((language || '').toLowerCase() !== 'mermaid') return null;
+            const code = content.trim();
+            if (!code) return null;
+            const id = 'mmd-' + (++mermaidSeq);
+            loadMermaid()
+              .then((mermaid) => mermaid.render(id, code))
+              .then((res) => applyPreview(diagramEl(res.svg)))
+              .catch((err) => applyPreview(errorEl(err)));
+            return undefined;
+          },
+          previewLabel: 'Diagram',
         },
       },
     });
