@@ -1,0 +1,101 @@
+---
+/*
+ * /admin/editor — the admin-only writing surface (Phase 4).
+ *
+ * Client-gated: the page is statically served, but its script checks the
+ * Supabase session + is_admin() and only mounts the editor for the owner. This
+ * is UX gating only — the real protection is server-side at *publish* time (the
+ * GitHub-commit Function will re-verify is_admin before writing anything).
+ *
+ * Editor: Milkdown "Crepe" — a Medium-style WYSIWYG that is Markdown-native, so
+ * what you write serializes straight to the Markdown files the site builds from
+ * (Option B). Live inline rendering: math (latex feature), highlighted code
+ * (code-mirror), images, slash menu (block-edit), floating toolbar. Mermaid is
+ * added in a later increment via Milkdown's diagram plugin.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Editor — admin" description="Admin editor.">
+  <p id="admin-gate" class="muted">Checking access…</p>
+
+  <div id="editor-wrap" hidden>
+    <div class="editor-bar">
+      <strong>New post</strong>
+      <span id="editor-status" class="muted"></span>
+      <button id="get-md" type="button">Preview Markdown</button>
+    </div>
+    <div id="milkdown"></div>
+    <pre id="md-out" hidden></pre>
+  </div>
+</BaseLayout>
+
+<style>
+  .muted { color: var(--muted); }
+  .editor-bar {
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    padding: 0.5rem 0; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+  }
+  .editor-bar button {
+    padding: 0.4rem 0.9rem; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+  }
+  #milkdown {
+    border: 1px solid var(--border); border-radius: 10px; min-height: 60vh;
+    background: var(--bg);
+  }
+  #md-out {
+    margin-top: 1rem; padding: 1rem; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--code-bg); overflow-x: auto; white-space: pre-wrap;
+  }
+</style>
+
+<script>
+  import { supabase } from '../../lib/supabase';
+  import { Crepe } from '@milkdown/crepe';
+  import '@milkdown/crepe/theme/common/style.css';
+  import '@milkdown/crepe/theme/nord.css';
+
+  const gate = document.getElementById('admin-gate');
+  const wrap = document.getElementById('editor-wrap');
+  const statusEl = document.getElementById('editor-status');
+
+  async function init() {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session ? data.session.user : null;
+    if (!user) {
+      gate.innerHTML = 'Please <a href="/login">sign in</a> to write.';
+      return;
+    }
+    let isAdmin = false;
+    try {
+      const { data: a } = await supabase.rpc('is_admin');
+      isAdmin = a === true;
+    } catch (e) {}
+    if (!isAdmin) {
+      gate.textContent = 'Admins only.';
+      return;
+    }
+
+    gate.hidden = true;
+    wrap.hidden = false;
+
+    const crepe = new Crepe({
+      root: document.getElementById('milkdown'),
+      defaultValue: '# New post\n\nStart writing. Try `$E = mc^2$`, a ```js code block```, or a list.\n',
+    });
+    await crepe.create();
+
+    // Temporary: prove Markdown serialization works. The next increment wires
+    // getMarkdown() into a Supabase draft + a Publish-to-GitHub Function.
+    const out = document.getElementById('md-out');
+    document.getElementById('get-md').addEventListener('click', () => {
+      const md = crepe.getMarkdown();
+      out.hidden = false;
+      out.textContent = md;
+      statusEl.textContent = md.length + ' chars';
+    });
+  }
+
+  init();
+</script>
