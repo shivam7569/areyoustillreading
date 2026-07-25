@@ -151,21 +151,26 @@ const preview = post.data.preview ?? post.data.description;
     btn.className = 'btn-sm';
     btn.textContent = isPaid() ? 'Remove from paywall' : 'Add to paywall';
     btn.addEventListener('click', async () => {
+      let error;
       if (isPaid()) {
-        await supabase
+        ({ error } = await supabase
           .from('post_paywall')
           .update({ is_paid: false, updated_at: new Date().toISOString() })
-          .eq('post_id', slug);
+          .eq('post_id', slug));
       } else {
         const dollars = prompt('Price to unlock this post (USD):', '5');
         if (dollars === null) return;
         const productId = prompt('Dodo product ID for this post (create the product in Dodo first):', '');
         if (productId === null) return;
         const cents = Math.max(50, Math.round(parseFloat(dollars) * 100) || 500);
-        await supabase.from('post_paywall').upsert(
+        ({ error } = await supabase.from('post_paywall').upsert(
           { post_id: slug, is_paid: true, price_cents: cents, currency: 'usd', product_id: productId.trim(), updated_at: new Date().toISOString() },
           { onConflict: 'post_id' }
-        );
+        ));
+      }
+      if (error) {
+        alert('Paywall update failed: ' + error.message);
+        return;
       }
       await loadPaywall();
       await render();
