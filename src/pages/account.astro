@@ -1,8 +1,68 @@
 ---
+/*
+ * FILE: src/pages/account.astro
+ * ROUTE: /account  (statically prerendered HTML shell; all logic is client-side)
+ *
+ * WHAT THIS IS
+ *   The signed-in user's minimal "account" page. Its single responsibility is to
+ *   answer one question in the browser — "is there a Supabase session right now?" —
+ *   and render one of two states accordingly:
+ *     (a) signed in  -> greeting with the user's email + a "Sign out" button
+ *     (b) signed out -> a prompt with a link to /login
+ *   That is the entire scope. It intentionally does NOT fetch entitlements, posts,
+ *   payments, or admin status; those live on other routes/functions.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ *   This is a static Astro page deployed to Cloudflare Pages (direct upload via
+ *   Wrangler, `npm run deploy`). There is NO server-side rendering here: the .astro
+ *   frontmatter runs only at build time and emits a fixed HTML shell. Everything
+ *   dynamic happens in the browser via the Supabase JS client, which reads the
+ *   session from the auth token persisted in browser storage (localStorage by
+ *   default) by the Supabase client.
+ *
+ *   Auth model (project-wide): Supabase email magic-link + GitHub OAuth. After a
+ *   successful magic-link click or OAuth redirect, the provider bounces back to a
+ *   URL carrying the session (hash/query params or PKCE code). The Supabase client
+ *   detects and consumes that on load and fires onAuthStateChange — which is why
+ *   this page can double as the post-auth landing spot and immediately reflect the
+ *   new session (see the script below).
+ *
+ * DEPENDENCIES (imports)
+ *   - ../layouts/BaseLayout.astro : site chrome (head, nav, styling shell).
+ *   - ../lib/supabase (client-side <script> import) : the shared browser Supabase
+ *       client. It holds the publishable/anon key and is safe to ship to the client;
+ *       real data protection comes from Postgres Row-Level Security, NOT from hiding
+ *       this key.
+ *
+ * WHAT DEPENDS ON THIS FILE
+ *   - Nothing imports this page. It is referenced only as a navigation target
+ *       (the /account link elsewhere in the site, and as a post-login destination).
+ *
+ * SECURITY ASSUMPTIONS / GOTCHAS
+ *   - This page is PURELY presentational auth state. The email shown and the
+ *       signed-in/out branch are client-trust only and can be spoofed by anyone
+ *       editing their own browser — they grant zero authority. Every privileged
+ *       action (reading gated content, admin toggles, payments) is enforced
+ *       server-side (Pages Functions) and by RLS + is_admin() in Postgres. Do not
+ *       add trust-bearing logic here.
+ *   - getSession() reads the LOCAL token; it does not hit the network to verify.
+ *       That is acceptable here because we only decide what to display. Never gate
+ *       a real resource on getSession() alone.
+ *   - No secrets live in this file. The only key reachable from the client is the
+ *       anon key inside ../lib/supabase, which is designed to be public.
+ */
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="Account — areyoustillreading" description="Your account.">
+  {/*
+    Static shell only. The frontmatter runs at BUILD time, so the HTML shipped to
+    the browser always shows the "Checking your session…" placeholder. The real,
+    session-dependent content is swapped in by the client <script> below once the
+    Supabase client has resolved the session. This placeholder is the deliberate
+    loading state for the brief window before that runs (or if JS is disabled, it
+    is what a no-JS visitor sees — acceptable, since there is nothing sensitive here).
+  */}
   <h1>Account</h1>
   <div id="account-content">
     <p>Checking your session…</p>
@@ -10,33 +70,62 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 </BaseLayout>
 
 <script>
+  // This <script> is bundled by Astro/esbuild and runs in the BROWSER. It is where
+  // 100% of this page's behavior lives (the .astro frontmatter above is build-time
+  // only). Comments here are stripped by the production minifier, so they do not
+  // bloat the shipped bundle.
   import { supabase } from '../lib/supabase';
 
+  // The single mount point whose contents we replace based on auth state. Captured
+  // once; the shell HTML guarantees it exists before this module executes.
   const content = document.getElementById('account-content');
 
+  // Renders the current auth state into #account-content. Idempotent and safe to
+  // call repeatedly — every call fully rebuilds the subtree, so re-running after
+  // sign-in/out never leaves stale UI behind.
   async function render() {
+    // Reads the session from LOCAL storage only (no network round-trip). Fine here
+    // because we are choosing what to DISPLAY, not authorizing anything. `data` is
+    // always defined; `.session` is null when signed out — hence optional chaining.
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
     if (user) {
+      // --- Signed-in branch ---
+      // Clear the placeholder/previous render. Using textContent = '' (not
+      // innerHTML) avoids re-parsing markup and drops old listeners with the nodes.
       content.textContent = '';
       const p = document.createElement('p');
+      // Build the greeting via textContent (NOT innerHTML): user.email is
+      // user-controlled data, and textContent makes DOM-XSS impossible regardless
+      // of its contents. `?? 'your account'` covers OAuth identities with no email.
       p.textContent = 'Signed in as ' + (user.email ?? 'your account') + '.';
       const btn = document.createElement('button');
       btn.textContent = 'Sign out';
       btn.className = 'signout';
       btn.addEventListener('click', async () => {
+        // Clear the local session/token, then re-render to show the signed-out view.
+        // signOut() also triggers onAuthStateChange, so render() may run twice — that
+        // is harmless given render() is idempotent (see above).
         await supabase.auth.signOut();
         render();
       });
       content.appendChild(p);
       content.appendChild(btn);
     } else {
+      // --- Signed-out branch ---
+      // Static, developer-authored markup with no interpolated data, so innerHTML is
+      // safe here (nothing user-controlled is injected). Links to the /login route.
       content.innerHTML = 'You are not signed in. <a href="/login">Sign in</a>.';
     }
   }
 
   // Supabase parses the magic-link / OAuth session out of the URL on load.
+  // Subscribing BEFORE the initial render() means that if this page is the
+  // post-auth landing target, the moment the client finishes consuming the URL
+  // session (SIGNED_IN event) we re-render to the signed-in view without a manual
+  // reload. It also keeps the UI in sync across tabs and after the sign-out above.
   supabase.auth.onAuthStateChange(() => render());
+  // First paint: replace the "Checking your session…" placeholder with real state.
   render();
 </script>
 

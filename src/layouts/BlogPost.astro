@@ -1,4 +1,72 @@
 ---
+/**
+ * BlogPost.astro — Presentational layout for a single blog post.
+ * =============================================================================
+ *
+ * WHAT THIS FILE IS
+ * -----------------
+ * The reusable "chrome" that wraps the rendered Markdown body of one blog
+ * entry: the <h1> title, the byline (publish date · reading time · optional
+ * updated date), the tag links, the article <slot> where the compiled Markdown
+ * is injected, and the interactive per-post widgets (Highlights, Notes,
+ * Comments) plus a back-link to the index.
+ *
+ * SINGLE RESPONSIBILITY
+ * ---------------------
+ * Presentation and composition ONLY. It takes an already-loaded content
+ * collection entry and lays it out. It does NOT:
+ *   - fetch or query the post (the caller does that),
+ *   - render the Markdown body (Astro's content pipeline does that; the body
+ *     arrives through <slot />),
+ *   - talk to Supabase / auth / payments directly (delegated wholesale to the
+ *     three child components below).
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ * ----------------------------
+ *   Route (e.g. src/pages/blog/[...slug].astro)
+ *     └─ getCollectionEntry('blog', slug)  →  entry
+ *     └─ const { Content } = await entry.render()
+ *     └─ <BlogPost post={entry}><Content /></BlogPost>
+ *                                  ▲ the <Content /> lands in our <slot />
+ *   BlogPost.astro (this file)
+ *     └─ BaseLayout.astro   → <head>, global nav/footer, OG meta, theming
+ *     └─ Highlights / Notes / Comments → client-side islands (Supabase JS,
+ *        RLS-protected reads/writes, Turnstile bot-check on write paths)
+ *
+ * IMPORTS / DEPENDENCIES
+ *   - astro:content CollectionEntry<'blog'> — the typed shape of a blog entry;
+ *     `post.data` is validated at build time against the 'blog' collection
+ *     schema (src/content/config.*), so title/pubDate/tags are trusted here.
+ *   - BaseLayout.astro — the outer HTML document + <head>. Receives the OG
+ *     image path we compute below.
+ *   - Highlights / Notes / Comments — interactive components keyed by post.id.
+ *   - katex.min.css — KaTeX stylesheet. Imported HERE (not in BaseLayout) so
+ *     the ~stylesheet only ships on pages that can contain rendered math, i.e.
+ *     blog posts. The math HTML itself is produced at build time by
+ *     remark-math/rehype-katex and arrives via <slot />; this import only
+ *     supplies the styling for that already-rendered markup.
+ *
+ * WHO DEPENDS ON THIS FILE
+ *   Every blog-post route that renders a single entry (the [...slug] page,
+ *   and any preview/gated post routes) wraps its <Content /> in this layout.
+ *   Changing the props shape or the slot contract is a breaking change for all
+ *   of them.
+ *
+ * SECURITY NOTES / GOTCHAS
+ *   - No untrusted input is handled in this frontmatter. Everything comes from
+ *     `post.data`, which is build-time content validated by the collection
+ *     schema — not user input — so title/tags/description are safe to render.
+ *   - All security-sensitive behaviour (auth, entitlement/paywall gating,
+ *     Turnstile honeypot, RLS-guarded reads/writes) lives INSIDE the child
+ *     island components (Highlights/Notes/Comments) and their backing Pages
+ *     Functions + Supabase Row-Level Security. This layout only mounts them and
+ *     hands each the post.id; it grants no access of its own. The real access
+ *     control is enforced server-side by RLS, never here.
+ *   - The OG image path is derived from post.id (a build-time collection key,
+ *     not user input); the actual PNG is generated separately by
+ *     astro-og-canvas. If that image is missing the link 404s but the page
+ *     still renders.
+ */
 import type { CollectionEntry } from 'astro:content';
 import BaseLayout from './BaseLayout.astro';
 import Comments from '../components/Comments.astro';
@@ -6,33 +74,71 @@ import Highlights from '../components/Highlights.astro';
 import Notes from '../components/Notes.astro';
 import 'katex/dist/katex.min.css';
 
+// The only prop: a fully-loaded 'blog' collection entry. The rendered Markdown
+// body is passed separately as children (see <slot /> in the template), NOT
+// through this prop.
 type Props = { post: CollectionEntry<'blog'> };
 
 const { post } = Astro.props;
+// Destructure the schema-validated frontmatter. These fields are guaranteed to
+// exist/typecheck by the 'blog' collection schema; `updatedDate` is optional.
 const { title, description, pubDate, updatedDate, tags } = post.data;
 
+// Human-readable date formatter (e.g. "July 25, 2026"). 'en-US' locale is
+// hard-coded for a stable, deterministic build output regardless of the build
+// machine's locale.
 const fmt = (d: Date) =>
   d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
+// Reading-time estimate. `post.body` is the raw Markdown source string.
+//   - `?? 0` is a fail-safe: some entries (e.g. content rendered without a
+//     body available) can leave post.body undefined; guard against splitting
+//     undefined.
+//   - filter(Boolean) drops empty tokens from collapsed/leading whitespace so
+//     the word count isn't inflated.
 const words = post.body?.split(/\s+/).filter(Boolean).length ?? 0;
+// 200 wpm is the conventional average reading speed. Math.max(1, ...) ensures
+// even a very short post reads as "1 min" rather than "0 min".
 const minutes = Math.max(1, Math.round(words / 200));
 ---
 
+{/*
+  Outer document shell. `image` is the per-post Open Graph image path, derived
+  from the build-time collection id (see astro-og-canvas). BaseLayout owns
+  <head>, global nav/footer, and meta tags.
+*/}
 <BaseLayout title={title} description={description} image={`/og/${post.id}.png`}>
   <article>
     <h1>{title}</h1>
     <p>
+      {/* Machine-readable ISO timestamp in datetime; human string in the label. */}
       <time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time>
       <span> &middot; {minutes} min read</span>
+      {/* "updated" line only renders when the optional updatedDate is present. */}
       {updatedDate && <span> &middot; updated {fmt(updatedDate)}</span>}
     </p>
+    {/* Tag row is omitted entirely (no empty <p>) when the post has no tags. */}
     {tags.length > 0 && (
       <p class="tags">
+        {/* Each tag links to its filtered index at /blog/tags/<tag>. */}
         {tags.map((t) => (<a class="tag" href={`/blog/tags/${t}`}>#{t}</a>))}
       </p>
     )}
+    {/*
+      The compiled Markdown body is injected here by the caller
+      (<BlogPost post={entry}><Content /></BlogPost>). Shiki-highlighted code,
+      KaTeX math, and build-time Mermaid diagrams all arrive as pre-rendered
+      HTML through this slot.
+    */}
     <slot />
   </article>
+  {/*
+    Interactive per-post islands, all keyed by post.id. Each is a self-contained
+    client component that talks to Supabase (via the browser JS client) under
+    Row-Level Security, and — on write paths — through Turnstile bot-checking.
+    This layout deliberately delegates ALL data/auth/paywall concerns to them;
+    it passes only the post identifier and enforces no access itself.
+  */}
   <Highlights postId={post.id} />
   <Notes postId={post.id} />
   <Comments postId={post.id} />

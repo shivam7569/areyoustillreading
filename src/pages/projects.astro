@@ -1,13 +1,74 @@
 ---
+/*
+ * ============================================================================
+ * FILE: src/pages/projects.astro
+ * ROUTE: /projects  (Astro file-based routing — this file's path IS the URL)
+ * ============================================================================
+ *
+ * WHAT THIS IS
+ *   The static "Projects" portfolio page. It renders a hard-coded list of
+ *   featured projects as a responsive card grid, plus a trailing "More on
+ *   GitHub" card. That's the whole job.
+ *
+ * SINGLE RESPONSIBILITY
+ *   Present a curated, author-maintained list of portfolio projects. Nothing
+ *   more. This page is 100% static content: it fetches nothing at runtime,
+ *   reads no database, requires no auth, and ships zero client-side JS of its
+ *   own. It is fully rendered to HTML at build time.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ *   The wider site (areyoustillreading.dev) is an Astro static build deployed
+ *   to Cloudflare Pages, backed by Cloudflare Pages Functions + Supabase +
+ *   Resend + Turnstile + Dodo Payments for the dynamic/paywalled features.
+ *   THIS page touches NONE of that backend surface. It is intentionally one of
+ *   the "boring", purely-static leaf pages. Treat it as content, not code.
+ *
+ * DEPENDENCIES (what it imports)
+ *   - ../layouts/BaseLayout.astro : the shared site shell. It owns <html>,
+ *     <head> (meta/OG/canonical), global CSS variables (--space, --border,
+ *     --accent, --muted, --font-mono, etc. used by the <style> block below),
+ *     header/nav, footer, and Pagefind indexing. The `title` and `description`
+ *     props passed to it drive the <title> tag and meta description / OG image.
+ *
+ * WHAT DEPENDS ON THIS FILE
+ *   - The site nav (in BaseLayout / the header component) links here as
+ *     "/projects". Pagefind indexes the rendered output for site search.
+ *   - The `projects` array is local and private to this file — nothing imports
+ *     it. To add/remove a project, edit the array below; no other file changes.
+ *
+ * SECURITY / RLS / GOTCHAS
+ *   - No secrets, no tokens, no entitlement checks, no RLS reliance here —
+ *     there is no data source to protect. Do not add fetches to Supabase or
+ *     Pages Functions from this page without a deliberate reason; keeping it
+ *     static is what makes it cache-forever cheap and un-attackable.
+ *   - The CSS variables referenced in <style> (--space, --border, --accent,
+ *     --muted, --font-mono) are NOT defined here; they come from BaseLayout's
+ *     global stylesheet. If those are ever renamed globally, this file's
+ *     styling silently breaks — grep for them before renaming.
+ *   - `href` values are author-controlled constants (not user input), so the
+ *     bare <a href={p.href}> is safe. If this list ever becomes data-driven
+ *     from an untrusted source, revisit link safety (rel/target, sanitizing).
+ * ============================================================================
+ */
+
+// The shared page shell (see doc block above). Owns <head>, nav, footer, and
+// the global CSS custom properties this page's <style> block consumes.
 import BaseLayout from '../layouts/BaseLayout.astro';
 
+// Shape of a single portfolio entry. Compile-time only (TS interface erased at
+// build); exists to keep the hand-authored `projects` array below honest.
 interface Project {
-  name: string;
-  description: string;
-  href: string;
-  tags: string[];
+  name: string;        // Card heading / link text.
+  description: string; // One-paragraph blurb rendered as the card body.
+  href: string;        // Outbound URL for the card's title link (author-set).
+  tags: string[];      // Short pill labels (tech/keywords) shown under the blurb.
 }
 
+// The curated, hand-maintained source of truth for this page. This is
+// deliberately a static array rather than a CMS/DB query: the list is tiny,
+// author-owned, and rarely changes, so build-time constants keep the page fully
+// static (no runtime fetch, no auth, cacheable indefinitely). To feature a new
+// project, add an object here — that is the ONLY edit required.
 const projects: Project[] = [
   {
     name: 'Deep-Learning Architectures from Scratch',
@@ -19,19 +80,37 @@ const projects: Project[] = [
 ];
 ---
 
+{/*
+  BaseLayout wraps this page's markup in the site shell. `title` becomes the
+  <title>/OG title and `description` the meta/OG description (both live in
+  BaseLayout's <head>). Everything between the tags is projected into the
+  layout's <slot />.
+*/}
 <BaseLayout title="Projects — areyoustillreading" description="Selected engineering and research projects by Shivam Chaudhary.">
   <h1>Projects</h1>
 
   <ul class="project-grid">
+    {/*
+      Render one <li class="card"> per curated project. Keyless map is fine
+      here: this is static server-rendered HTML (no client hydration / no
+      reconciliation), so React-style `key` warnings don't apply.
+    */}
     {projects.map((p) => (
       <li class="card">
+        {/* Title doubles as the outbound link to the project (author-set href). */}
         <h2 class="card-title"><a href={p.href}>{p.name}</a></h2>
         <p class="card-desc">{p.description}</p>
         <ul class="tags">
+          {/* Tags are plain display pills — no filtering/linking behavior. */}
           {p.tags.map((tag) => <li class="tag">{tag}</li>)}
         </ul>
       </li>
     ))}
+    {/*
+      Trailing "catch-all" card, intentionally hard-coded OUTSIDE the map (it's
+      a fixed CTA to the GitHub profile, not a Project entry). It reuses .card
+      styling but omits the .tags list. &rarr; is the → arrow entity.
+    */}
     <li class="card">
       <h2 class="card-title"><a href="https://github.com/shivam7569">More on GitHub &rarr;</a></h2>
       <p class="card-desc">Additional experiments and open-source work.</p>
@@ -39,7 +118,16 @@ const projects: Project[] = [
   </ul>
 </BaseLayout>
 
+{/*
+  Scoped styles. Astro auto-scopes this <style> to elements rendered by THIS
+  component (via a generated data-astro-cid attribute), so these class names
+  won't collide with the rest of the site. Colors/spacing come from global CSS
+  custom properties defined in BaseLayout (see file-top doc block).
+*/}
 <style>
+  /* Responsive auto-fitting card grid: as many ~260px+ columns as fit, each
+     flexing to fill the row. No media queries needed — auto-fill + minmax
+     handles the reflow from wide desktop down to a single mobile column. */
   .project-grid {
     list-style: none;
     padding: 0;
@@ -48,6 +136,9 @@ const projects: Project[] = [
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: var(--space);
   }
+  /* Column flexbox so the tag row can be pinned to the bottom (see .tags
+     margin-top:auto) — keeps all cards' tags aligned despite blurbs of
+     differing length. */
   .card {
     display: flex;
     flex-direction: column;
@@ -60,7 +151,10 @@ const projects: Project[] = [
   .card-title a { color: inherit; }
   .card-title a:hover { color: var(--accent); }
   .card-desc { margin: 0; color: var(--muted); font-size: 0.95rem; }
+  /* margin-top:auto (the `auto` in `auto 0 0`) pushes the tag row to the
+     bottom of the flex column, so tags bottom-align across cards. */
   .tags { list-style: none; padding: 0; margin: auto 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  /* Pill-shaped monospace keyword chips (999px radius = full pill). */
   .tag {
     font-family: var(--font-mono);
     font-size: 0.75rem;

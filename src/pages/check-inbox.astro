@@ -1,9 +1,75 @@
 ---
+/*
+ * ============================================================================
+ * FILE: src/pages/check-inbox.astro
+ * ROUTE: /check-inbox  (static HTML page, prerendered at build time)
+ * ----------------------------------------------------------------------------
+ * WHAT THIS IS
+ *   A dead-simple "interstitial" / confirmation-instruction page. After a
+ *   visitor submits the newsletter subscribe form (double opt-in flow), the
+ *   subscribe handler redirects the browser here. The page's ONLY job is to
+ *   tell the human: "we sent you an email — go click the link in it."
+ *
+ * SINGLE RESPONSIBILITY
+ *   Display static reassurance/instruction copy. Nothing more. It performs NO
+ *   logic: no data fetching, no token reading, no form handling, no auth, no
+ *   database calls, no JavaScript. It is a pure presentational leaf page.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ *   The subscribe flow is a classic double opt-in:
+ *     1. User submits email (protected by Turnstile bot check + honeypot).
+ *     2. A Pages Function inserts a pending subscriber into Supabase and asks
+ *        Resend to send a confirmation email containing a one-time token link.
+ *     3. The browser is redirected to THIS page → "check your inbox".
+ *     4. User clicks the link in the email → a separate confirm endpoint
+ *        verifies the token and flips the subscriber to confirmed.
+ *   This file is step 3's landing page only. All the security-sensitive work
+ *   (token generation/verification, entitlement gating, signature checks,
+ *   honeypot, Turnstile, RLS enforcement) lives in the Pages Functions and
+ *   Supabase — deliberately NOT here.
+ *
+ * DEPENDENCIES (imports)
+ *   - BaseLayout.astro: the shared site shell (<html>, <head> meta/OG tags,
+ *     nav, footer, global styles). This page injects only its <h1>/<p> body
+ *     into that layout's default slot. `title`/`description` feed the shell's
+ *     <title> and meta description / OG tags.
+ *
+ * WHO DEPENDS ON THIS
+ *   - The newsletter subscribe handler (Pages Function / client redirect)
+ *     sends users here by URL. If you rename or move this route, update that
+ *     redirect target or subscribers will land on a 404 mid-signup.
+ *   - No other page imports this component; it is a route endpoint, not a
+ *     reusable component.
+ *
+ * SECURITY / GOTCHA NOTES
+ *   - This page is intentionally trust-free: it reads NO query params, tokens,
+ *     or user input, so there is no injection, token-leak, or entitlement
+ *     surface here. Keep it that way — do not add token handling or reflect
+ *     any URL parameter into the DOM, or you introduce a leak/XSS vector where
+ *     none exists today.
+ *   - It is safe to serve to anyone (unauthenticated, pre-confirmation). It
+ *     reveals nothing sensitive; the copy is generic and identical for all
+ *     visitors, which avoids confirming whether a given email exists.
+ *   - Being fully static, it is prerendered and cacheable at the CDN edge with
+ *     no per-request cost or backend dependency.
+ * ============================================================================
+ */
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
+{/*
+  Presentational body only. All markup below is slotted into BaseLayout's
+  default slot. Do NOT use HTML <!-- --> comments in this template — they ship
+  to the browser; only these {/* JSX comments are stripped at build.
+*/}
 <BaseLayout title="Almost there — areyoustillreading" description="Confirm your subscription.">
   <h1>Almost there</h1>
+  {/* Instruction copy for the double opt-in: prompt the user to click the
+      confirmation link we emailed. The spam-folder nudge is a deliverability
+      fail-safe — confirmation mail (via Resend) is a common false-positive for
+      spam filters, and a missed link silently strands the signup. */}
   <p>Check your inbox for a confirmation link to finish subscribing. If it's not there in a minute, check your spam folder.</p>
+  {/* Escape hatch back to the homepage so a user who is done (or gave up)
+      isn't dead-ended on this static page. */}
   <p><a href="/">&larr; Home</a></p>
 </BaseLayout>

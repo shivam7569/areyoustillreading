@@ -1,10 +1,72 @@
 ---
+/**
+ * Comments.astro — per-post comment thread (read + write).
+ * ---------------------------------------------------------------------------
+ * WHAT THIS IS
+ *   A self-contained island that renders the comment section beneath a blog
+ *   post. It lists existing comments and, for signed-in readers, shows a
+ *   compose box to post new ones. It has NO server component of its own — all
+ *   data flow goes straight from the browser to Supabase (PostgREST) using the
+ *   shared Supabase JS client. There is no Pages Function in the middle.
+ *
+ * SINGLE RESPONSIBILITY
+ *   Own the UI + client logic for one post's comment thread. Given a `postId`
+ *   prop, it (a) fetches that post's comments, (b) renders them safely, and
+ *   (c) lets an authenticated user insert a new comment. Nothing else.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ *   - Rendered at build time by Astro into static HTML on each post page; the
+ *     <script> below is bundled by Astro/Vite and hydrates in the browser.
+ *   - Talks directly to the `comments` table over PostgREST via the browser
+ *     Supabase client (see ../lib/supabase). Reads and writes are governed
+ *     entirely by Postgres Row-Level Security (RLS) — see SECURITY below.
+ *   - Auth state comes from Supabase (email magic-link + GitHub OAuth). This
+ *     component only READS the current session; it never signs anyone in.
+ *
+ * DEPENDS ON
+ *   - ../lib/supabase — the singleton browser Supabase client (anon key).
+ *   - CSS custom props (--border, --muted, --bg, --fg, --accent) from the
+ *     global theme; this component only consumes them.
+ *   - A `comments` table with columns: id, post_id, user_id, author_name,
+ *     body, created_at — and RLS policies enforcing who may read/insert.
+ *   - /login route for the signed-out call-to-action.
+ *
+ * DEPENDED ON BY
+ *   - Post layout/pages that embed <Comments postId={...} />. The `postId`
+ *     is the stable identity used both as the query filter and the row key.
+ *
+ * SECURITY ASSUMPTIONS / GOTCHAS (read before trusting this file)
+ *   - RLS IS THE ONLY GATEKEEPER. This runs client-side with the public anon
+ *     key, so a malicious client can call Supabase directly with any payload.
+ *     Every guard here (must-be-signed-in, correct user_id, allowed columns)
+ *     is UX convenience, not enforcement. The real trust boundary is the RLS
+ *     policy on `comments`: SELECT must be scoped to what should be public,
+ *     and INSERT must force `user_id = auth.uid()` (never trust the client's
+ *     `user_id`/`author_name`). If RLS is missing or permissive, this file
+ *     does NOT protect you.
+ *   - XSS: all user-controlled strings (author_name, body) are written via
+ *     `textContent`, never innerHTML, so comment content cannot inject markup.
+ *     The only innerHTML usages here are static, developer-authored strings.
+ *   - No client-side pagination/limit: this loads the full thread every time.
+ *     Fine for a personal blog; revisit if a post ever gets thousands of rows.
+ *   - No optimistic UI: after a successful insert we re-fetch the whole list
+ *     so what the reader sees always matches what RLS actually returned.
+ */
 interface Props {
+  // Stable identifier for the post this thread belongs to. Used both as the
+  // RLS-scoped query filter (`post_id = postId`) and the compose target.
   postId: string;
 }
 const { postId } = Astro.props;
 ---
 
+{/*
+  The postId is passed to the client via a data-* attribute rather than a
+  bundled JS value: the <script> below is a separate module that cannot read
+  Astro props directly, so the DOM is the handoff channel. `#comments-list`
+  and `#comment-compose` are empty mount points the script fills in — the
+  "Loading comments…" line is placeholder text replaced on first fetch.
+*/}
 <section class="comments" data-post-id={postId}>
   <h2>Comments</h2>
   <div id="comments-list"><p class="muted">Loading comments…</p></div>
@@ -40,13 +102,23 @@ const { postId } = Astro.props;
 </style>
 
 <script>
+  // This module is bundled by Astro/Vite and runs in the browser. It uses the
+  // shared anon-key Supabase client, so remember: nothing here is trusted by
+  // the server — the `comments` RLS policies are what actually enforce access.
   import { supabase } from '../lib/supabase';
 
+  // Bind the mount points created in the template above. `postId` is recovered
+  // from the data attribute because this script cannot see Astro props.
   const root = document.querySelector('.comments');
   const postId = root.getAttribute('data-post-id');
   const list = document.getElementById('comments-list');
   const compose = document.getElementById('comment-compose');
 
+  /**
+   * Fetch and render every comment for this post, oldest-first.
+   * We select only the columns the UI needs — never `user_id` or anything
+   * private — and rely on RLS to further restrict which rows come back.
+   */
   async function loadComments() {
     const { data, error } = await supabase
       .from('comments')
@@ -54,23 +126,34 @@ const { postId } = Astro.props;
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
 
+    // Fail closed on any PostgREST/RLS error: show a neutral message rather
+    // than leaking the raw error, and stop (don't wipe any prior content).
     if (error) {
       list.textContent = 'Could not load comments.';
       return;
     }
+    // Empty-state. innerHTML is safe here — the string is a static literal
+    // with no user input interpolated into it.
     if (!data || !data.length) {
       list.innerHTML = '<p class="muted">No comments yet. Be the first.</p>';
       return;
     }
+    // Clear the placeholder/previous render before repainting the full thread.
     list.textContent = '';
     for (const c of data) {
       const el = document.createElement('div');
       el.className = 'comment';
       const meta = document.createElement('p');
       meta.className = 'comment-meta';
+      // author_name is user-controlled, so it goes through textContent too.
+      // created_at is an ISO string from Postgres; toLocaleDateString renders
+      // it in the reader's locale.
       meta.textContent = c.author_name + ' · ' + new Date(c.created_at).toLocaleDateString();
       const body = document.createElement('p');
       body.className = 'comment-body';
+      // SECURITY: textContent (not innerHTML) is the XSS guard — comment bodies
+      // are rendered as inert text, so no markup/script in a comment can run.
+      // CSS `white-space: pre-wrap` preserves the author's line breaks visually.
       body.textContent = c.body; // textContent avoids HTML injection
       el.appendChild(meta);
       el.appendChild(body);
@@ -78,13 +161,26 @@ const { postId } = Astro.props;
     }
   }
 
+  /**
+   * Render the compose area based on auth state.
+   * Signed-out readers get a prompt to /login; signed-in readers get a
+   * textarea + post button. Re-invoked whenever auth state changes (below),
+   * so it fully rebuilds `#comment-compose` each call to stay in sync.
+   */
   async function renderCompose() {
+    // Read the current session locally (no network round-trip). A null session
+    // means signed-out. This gate is UX only — RLS still enforces auth on insert.
     const { data } = await supabase.auth.getSession();
     const user = data.session ? data.session.user : null;
     if (!user) {
+      // Static, developer-authored markup — safe to use innerHTML.
       compose.innerHTML = '<p class="muted"><a href="/login">Sign in</a> to join the conversation.</p>';
       return;
     }
+    // Derive a display name best-effort from provider metadata, falling back
+    // through: OAuth username -> full name -> email local-part -> "Reader".
+    // NOTE: author_name is denormalized onto the row for cheap rendering; the
+    // authoritative identity is user_id, which RLS must pin to auth.uid().
     const meta = user.user_metadata || {};
     const authorName = meta.user_name || meta.name || (user.email ? user.email.split('@')[0] : 'Reader');
 
@@ -98,19 +194,28 @@ const { postId } = Astro.props;
     msg.className = 'muted';
 
     btn.addEventListener('click', async () => {
+      // Ignore empty/whitespace-only submissions client-side.
       const body = ta.value.trim();
       if (!body) return;
       msg.textContent = 'Posting…';
+      // INSERT the comment. We send user_id/author_name from the client, but
+      // these must NOT be trusted server-side: the RLS INSERT policy is
+      // expected to require user_id = auth.uid(), so a forged user_id fails.
+      // The anon key can't bypass that — RLS is the real check here.
       const { error } = await supabase.from('comments').insert({
         post_id: postId,
         user_id: user.id,
         author_name: authorName,
         body,
       });
+      // Surface the raw error to the author (e.g. RLS rejection) so posting
+      // failures aren't silent. Keep the textarea contents so they can retry.
       if (error) {
         msg.textContent = error.message;
         return;
       }
+      // Success: clear the box and re-fetch. We intentionally re-query instead
+      // of appending optimistically so the UI reflects exactly what RLS returns.
       ta.value = '';
       msg.textContent = '';
       loadComments();
@@ -121,7 +226,12 @@ const { postId } = Astro.props;
     compose.appendChild(msg);
   }
 
+  // Re-render the compose area on any auth transition (sign-in, sign-out,
+  // token refresh, or the async session becoming available after first paint)
+  // so the textarea vs. "Sign in" prompt always matches the live session.
   supabase.auth.onAuthStateChange(() => renderCompose());
+  // Initial paint: load the thread and draw the compose area once. The
+  // onAuthStateChange handler above then keeps compose in sync thereafter.
   loadComments();
   renderCompose();
 </script>

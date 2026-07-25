@@ -1,4 +1,54 @@
 ---
+/**
+ * src/pages/login.astro — the public sign-in page (route: /login)
+ * ---------------------------------------------------------------
+ * SINGLE RESPONSIBILITY
+ *   Render a static sign-in UI and wire two client-side Supabase auth flows:
+ *     1. Passwordless email "magic link" (OTP) sign-in.
+ *     2. GitHub OAuth sign-in.
+ *   Both flows hand the browser off to Supabase; on success the user lands
+ *   back on /account (see `redirectTo` below).
+ *
+ * WHERE IT FITS IN THE ARCHITECTURE
+ *   - This is a static Astro page (prerendered at build, deployed to
+ *     Cloudflare Pages). There is NO server-side code here: the frontmatter
+ *     only imports the layout, and all auth logic runs in the browser via the
+ *     Supabase JS client. That is intentional — auth tokens must be minted by
+ *     Supabase directly in the user's browser, never proxied through our edge.
+ *   - After auth, Supabase sets its session in the browser (localStorage) and
+ *     redirects to /account. Downstream pages/Functions read that session and
+ *     rely on Supabase Row-Level Security (RLS) + the `is_admin()` SQL function
+ *     for authorization. This page performs NO authorization — it only starts
+ *     an authentication handshake.
+ *
+ * DEPENDENCIES (imports)
+ *   - ../layouts/BaseLayout.astro : shared page shell (head, nav, theming vars
+ *     like --bg/--fg/--accent/--border/--muted used by the <style> block).
+ *   - ../lib/supabase (client <script> only) : the singleton browser Supabase
+ *     client. It carries the public anon key + project URL. NOTE: the anon key
+ *     is PUBLIC by design; it is safe to ship because every table is guarded by
+ *     RLS. This file must never import service-role keys or server secrets.
+ *
+ * WHAT DEPENDS ON THIS FILE
+ *   - Anything linking to /login (nav "Sign in" links, redirects from gated
+ *     content / PaywallGate, /account when logged out). This is the canonical
+ *     entry point for authentication.
+ *
+ * SECURITY ASSUMPTIONS & GOTCHAS
+ *   - `redirectTo` is derived from window.location.origin (not a hardcoded
+ *     URL) so it works across localhost/preview/prod. HOWEVER, Supabase only
+ *     honours redirect URLs that are on the project's allow-list (Auth
+ *     settings). This is the guardrail that stops an attacker from crafting a
+ *     login link that redirects to an arbitrary origin — keep the allow-list
+ *     tight and in sync with deployed origins, or valid logins will silently
+ *     fail to redirect.
+ *   - No bot protection (Turnstile) is wired into this form. Magic-link abuse
+ *     is rate-limited by Supabase/Resend SMTP quotas rather than a CAPTCHA
+ *     here; if abuse becomes a problem, Turnstile would be added around the
+ *     signInWithOtp call.
+ *   - There is no honeypot / entitlement / signature logic in this file — those
+ *     live in the payment + gating layer, not in the auth entry point.
+ */
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
@@ -6,15 +56,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   <h1>Sign in</h1>
   <p>Sign in to comment, highlight, and keep private notes on posts.</p>
 
+  {/* Magic-link form. `id="magic-form"` is the hook the client script binds to.
+      No `action`/`method`: submission is intercepted in JS (preventDefault) and
+      routed through Supabase — this form never POSTs to our server. */}
   <form id="magic-form" class="auth-form">
+    {/* `required` + type="email" give a free client-side validity gate before
+        we ever call Supabase. aria-label supplies an accessible name since the
+        visible label is only the placeholder. */}
     <input type="email" name="email" required placeholder="you@example.com" aria-label="Email address" />
     <button type="submit">Email me a sign-in link</button>
   </form>
 
   <p class="divider">or</p>
 
+  {/* type="button" (NOT submit) so this GitHub button lives outside the form
+      and never triggers the magic-link submit handler. */}
   <button id="github-btn" class="oauth-btn" type="button">Sign in with GitHub</button>
 
+  {/* Live status region. role="status" + aria-live="polite" announces
+      "Sending…" / success / error text to screen readers without stealing
+      focus. `min-height` in CSS reserves space so the layout doesn't jump when
+      text appears. */}
   <p id="auth-msg" class="auth-msg" role="status" aria-live="polite"></p>
 </BaseLayout>
 
@@ -43,29 +105,51 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 </style>
 
 <script>
+  // This <script> is bundled/hydrated by Astro and runs client-side only.
+  // The singleton browser Supabase client (public anon key + project URL).
   import { supabase } from '../lib/supabase';
 
+  // Absolute post-auth landing URL, computed from the current origin so the
+  // same build works on localhost, Cloudflare preview deploys, and prod.
+  // IMPORTANT: this value must be present on Supabase's redirect allow-list or
+  // Supabase will reject the redirect (see security notes in frontmatter).
   const redirectTo = window.location.origin + '/account';
   const msg = document.getElementById('auth-msg');
   const form = document.getElementById('magic-form');
 
+  // --- Magic-link (email OTP) flow -----------------------------------------
+  // Optional-chained binding: if the element is missing (e.g. markup changed)
+  // we no-op instead of throwing at module load.
   form?.addEventListener('submit', async (e) => {
+    // Stop the native form POST/navigation — we handle everything in JS.
     e.preventDefault();
     const email = form.querySelector('[name="email"]').value;
+    // Immediate feedback so the user isn't left wondering during the network call.
     msg.textContent = 'Sending…';
+    // signInWithOtp emails a one-time sign-in link. `emailRedirectTo` is where
+    // the user lands after clicking it. Supabase always responds success-shaped
+    // here (it does NOT reveal whether the email exists) to avoid account
+    // enumeration — so we show a generic "check your inbox" regardless.
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
     });
+    // Surface Supabase's own error text (e.g. rate-limit) or the generic
+    // success message. We deliberately don't distinguish "unknown email".
     msg.textContent = error ? error.message : 'Check your inbox for a sign-in link.';
   });
 
+  // --- GitHub OAuth flow ----------------------------------------------------
   document.getElementById('github-btn')?.addEventListener('click', async () => {
+    // On success this call navigates the whole page away to GitHub, so this
+    // "Redirecting…" text is the last thing shown before the handoff.
     msg.textContent = 'Redirecting to GitHub…';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: { redirectTo },
     });
+    // We only reach this line if the redirect itself failed to start
+    // (e.g. misconfigured provider); the happy path has already navigated away.
     if (error) msg.textContent = error.message;
   });
 </script>

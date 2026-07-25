@@ -1,32 +1,132 @@
 ---
+/**
+ * ============================================================================
+ * FILE: src/pages/blog/tags/[tag].astro
+ * ROUTE: /blog/tags/:tag   (one static HTML page per distinct tag)
+ * ----------------------------------------------------------------------------
+ * WHAT THIS IS
+ *   A dynamic-route Astro page that renders a "tag archive" — the list of all
+ *   published blog posts that carry a given tag, newest first. The `[tag]`
+ *   filename segment is Astro's dynamic-route syntax; the bracketed part is
+ *   filled by the `params.tag` values produced in getStaticPaths() below.
+ *
+ * SINGLE RESPONSIBILITY
+ *   Turn "a tag" into "the page listing every post with that tag". Nothing
+ *   else — no auth, no data fetching at request time, no user input handling.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ *   This is a 100% STATIC page. Everything here runs at BUILD time (during
+ *   `astro build` / `npm run deploy`), never in the browser and never in a
+ *   Cloudflare Pages Function. getStaticPaths() enumerates every tag up front,
+ *   and Astro emits one pre-rendered .html file per tag into the deploy output
+ *   that Wrangler direct-uploads to Cloudflare Pages. There is therefore no
+ *   runtime cost, no database, and no way for a request to inject a tag that
+ *   was not known at build time (an unknown /blog/tags/foo simply 404s because
+ *   no file was generated for it).
+ *
+ * DEPENDENCIES (imports)
+ *   - BaseLayout.astro  — the shared HTML shell (head, nav, footer, styling).
+ *   - astro:content getCollection — the type-safe content-collection API that
+ *     reads the `blog` collection (Markdown/MDX files + frontmatter validated
+ *     against the collection's Zod schema in src/content/config.*).
+ *
+ * WHAT DEPENDS ON THIS
+ *   - /blog/tags (the tag index page) links here via `/blog/tags/${tag}`.
+ *   - Individual post pages that render their tag pills link here.
+ *   The reverse link back to "All tags" is hard-coded in the template below.
+ *
+ * SECURITY / TRUST NOTES
+ *   - No RLS, no Supabase, no Turnstile, no Dodo/paywall logic touches this
+ *     file. It never reads the `admins` table or calls is_admin(). Tag archives
+ *     are fully public by design — they only ever surface already-public post
+ *     metadata (title, date, description).
+ *   - `tag` and all post fields are AUTHOR-CONTROLLED build inputs (they come
+ *     from repo Markdown frontmatter, not from web requests), so there is no
+ *     untrusted-input / injection surface here. JSX auto-escaping still applies
+ *     to the interpolated `{tag}` / title values as defence in depth.
+ *
+ * GOTCHA — PAYWALL LEAKAGE
+ *   This listing shows title + description for EVERY matching published post,
+ *   including posts that are gated/paywalled elsewhere. That is intentional:
+ *   the paywall (see PaywallGate / /gated) protects the post BODY, not its
+ *   existence or teaser metadata. If a future requirement is "gated posts must
+ *   not even be listed", that filtering must be ADDED to the getCollection
+ *   predicate below — it is NOT handled today.
+ * ============================================================================
+ */
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 
+/**
+ * getStaticPaths() — the build-time route generator.
+ *
+ * Astro calls this once during the build for this dynamic route. Whatever array
+ * of { params, props } it returns becomes the exhaustive, closed set of pages
+ * emitted for /blog/tags/:tag. A tag with zero published posts never appears
+ * here, so its URL will 404 — which is the desired fail-safe (no empty archives,
+ * no request-time surprises).
+ */
 export async function getStaticPaths() {
+  // Load the whole `blog` collection but DROP drafts up front. `!data.draft`
+  // is the single gate that keeps unpublished/WIP posts out of every tag page.
+  // Because filtering happens here, drafts also can't contribute their tags to
+  // the tag universe below (a draft-only tag produces no page at all).
   const posts = await getCollection('blog', ({ data }) => !data.draft);
+
+  // Build the DISTINCT set of tags across all published posts. flatMap flattens
+  // each post's tags[] array into one big list; the Set dedupes; the spread
+  // turns it back into an array we can .map() over into routes.
   const tags = [...new Set(posts.flatMap((p) => p.data.tags))];
+
+  // One route per distinct tag. We compute the filtered+sorted post list HERE,
+  // at build time, and hand it to the page as a prop — so the template does zero
+  // data work and stays a pure render.
   return tags.map((tag) => ({
-    params: { tag },
+    params: { tag }, // fills the [tag] URL segment
     props: {
       tag,
       posts: posts
+        // Keep only posts carrying THIS tag.
         .filter((p) => p.data.tags.includes(tag))
+        // Newest-first: valueOf() compares Date instances as epoch millis, so
+        // b - a yields descending chronological order.
         .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()),
     },
   }));
 }
 
+// Pull the precomputed props for THIS specific tag page. `tag` is the current
+// tag string; `posts` is its already-filtered, already-sorted post list. No
+// further processing is needed — everything was resolved in getStaticPaths().
 const { tag, posts } = Astro.props;
 ---
 
+{/*
+  Render the archive inside the shared BaseLayout shell. The title/description
+  props feed <head> (browser tab, SEO, and OG/meta consumers). `tag` is
+  interpolated into both; JSX auto-escaping neutralises any special characters,
+  though tags are author-controlled build inputs anyway.
+*/}
 <BaseLayout title={`Posts tagged “${tag}” — areyoustillreading`} description={`Posts tagged ${tag}.`}>
+  {/* Back-link to the tag index. Hard-coded route — the counterpart to the
+      inbound links other pages use to reach this archive. */}
   <p><a href="/blog/tags">&larr; All tags</a></p>
   <h1>Tagged: {tag}</h1>
   <ul class="post-list">
+    {/* `posts` is guaranteed non-empty here: getStaticPaths only emits a page
+        for a tag that has at least one published post, so no empty-state UI is
+        needed. Iterate the precomputed newest-first list. */}
     {posts.map((post) => (
       <li>
+        {/* Link to the post by its collection id (the slug). NOTE: this points
+            at the post itself; gating/paywalling of the body happens on that
+            page, not here — see the paywall-leakage gotcha in the header. */}
         <h2><a href={`/blog/${post.id}`}>{post.data.title}</a></h2>
+        {/* Machine-readable datetime uses full ISO 8601 for correctness... */}
         <time datetime={post.data.pubDate.toISOString()}>
+          {/* ...while the visible text is a human-friendly US-locale date.
+              toLocaleDateString runs at BUILD time (Node), so the formatting is
+              fixed at deploy and does not vary by visitor locale/timezone. */}
           {post.data.pubDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
         </time>
         <p>{post.data.description}</p>

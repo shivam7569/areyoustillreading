@@ -1,15 +1,79 @@
 ---
+/*
+ * Notes.astro — per-reader private note widget for a single blog post.
+ * ---------------------------------------------------------------------------
+ * SINGLE RESPONSIBILITY
+ *   Render a small "Your private note" panel under a post and let a signed-in
+ *   reader write/edit/clear ONE private note attached to that post. The post
+ *   author (admin) additionally sees every other reader's note for the same
+ *   post ("Readers' notes"). Nothing renders for anonymous visitors.
+ *
+ * WHERE IT FITS IN THE ARCHITECTURE
+ *   - This is an Astro island: the frontmatter (this fence) runs at BUILD time
+ *     on the server and only receives the `postId` prop. The <script> block at
+ *     the bottom is shipped to the browser and does all the real work at
+ *     RUNTIME using the Supabase JS client. There is NO Pages Function in the
+ *     path here — the browser talks straight to Supabase PostgREST.
+ *   - Because there is no server middleware guarding these reads/writes, ALL
+ *     access control lives in Postgres Row-Level Security (RLS) on the `notes`
+ *     table, plus the `is_admin()` SQL function. See SECURITY MODEL below.
+ *
+ * DEPENDENCIES (imports / data)
+ *   - `../lib/supabase` — the shared browser Supabase client (anon key +
+ *     persisted auth session). Imported inside the client <script>.
+ *   - Supabase table `notes` with columns: post_id, user_id, author_name,
+ *     body, updated_at. Unique/PK on (post_id, user_id) — required for the
+ *     upsert `onConflict: 'post_id,user_id'` below to work.
+ *   - Supabase RPC `is_admin()` — SECURITY DEFINER SQL function returning bool.
+ *
+ * WHO DEPENDS ON THIS
+ *   - Post layout/pages that want a private-notes affordance render
+ *     <Notes postId={...} />. The `postId` MUST match the value stored in the
+ *     `notes.post_id` column (typically the post slug/id) or notes won't line
+ *     up across save/load.
+ *
+ * SECURITY MODEL — READ BEFORE TOUCHING (RLS is the ONLY enforcement)
+ *   The anon Supabase key is public and shipped to every browser. This
+ *   component's queries are therefore fully attacker-controllable; a malicious
+ *   client can issue ANY PostgREST request it wants. The `.eq('user_id', ...)`
+ *   filters and the `isAdmin` gate below are UX conveniences, NOT security.
+ *   The real guarantees MUST be enforced by RLS policies on `notes`:
+ *     - SELECT: a reader may read only their own rows; admins may read all.
+ *     - INSERT/UPDATE/DELETE: a reader may write only rows where
+ *       user_id = auth.uid().
+ *   If those policies are wrong, the `.select(...)` on line ~64 (which has no
+ *   user_id filter) would leak every reader's private note to everyone. The
+ *   client filters `mine` / `readers` AFTER the fetch precisely because RLS is
+ *   expected to have already trimmed the result set to what this user may see.
+ *   The `is_admin()` RPC must likewise verify identity server-side; trusting a
+ *   client-set flag would let anyone reveal others' notes.
+ *
+ * GOTCHAS
+ *   - No Turnstile / honeypot / paywall logic here — those live elsewhere in
+ *     the stack (comments/newsletter/gated content). Notes are login-gated only.
+ *   - `hidden` starts true (see markup) so the panel never flashes for logged-
+ *     out users before `init()` resolves the session.
+ */
 interface Props {
   postId: string;
 }
 const { postId } = Astro.props;
 ---
 
+{/*
+  The panel ships with `hidden` set. The client script only unhides it once a
+  session is confirmed (init → section.hidden = false), so anonymous readers
+  never see it and it never flashes before auth resolves.
+  `data-post-id` is how the browser script recovers the build-time prop, since
+  the frontmatter value is not otherwise available at runtime.
+*/}
 <section class="notes" data-post-id={postId} hidden>
   <h2>Your private note</h2>
+  {/* Status line: transient "Saving…" / "Saved." / error messages via setStatus(). */}
   <p class="notes-status muted"></p>
   <textarea id="note-body" rows="5" placeholder="Private notes on this post — only you (and the admin) can see them."></textarea>
   <div><button id="note-save">Save note</button></div>
+  {/* Admin-only region: populated with other readers' notes during load(). Empty for non-admins. */}
   <div id="others-notes"></div>
 </section>
 
@@ -42,24 +106,43 @@ const { postId } = Astro.props;
 </style>
 
 <script>
+  // ===========================================================================
+  // CLIENT RUNTIME (browser). Bundled by Astro and shipped to the reader.
+  // All Supabase access happens here against the public anon key; every query
+  // is untrusted and RLS on `notes` is the real gate (see frontmatter doc).
+  // ===========================================================================
   import { supabase } from '../lib/supabase';
 
+  // Cache the DOM handles once. NOTE: querySelector('.notes') assumes a single
+  // Notes island per page — rendering two <Notes/> on one page would break this
+  // (both scripts would bind to the first section).
   const section = document.querySelector('.notes');
-  const postId = section.getAttribute('data-post-id');
+  const postId = section.getAttribute('data-post-id'); // recovered from data-attr, not the build prop
   const status = section.querySelector('.notes-status');
   const ta = document.getElementById('note-body');
   const saveBtn = document.getElementById('note-save');
   const others = document.getElementById('others-notes');
 
-  let currentUser = null;
-  let isAdmin = false;
+  let currentUser = null; // Supabase user object once session is known; null when logged out
+  let isAdmin = false;    // mirror of is_admin() RPC — controls whether readers' notes are shown
 
+  // Derive a human display name for the note's author_name column. Preference
+  // order: GitHub username → OAuth/display name → email local-part → "Reader".
+  // WHY store it on the row: admins view other readers' notes without being able
+  // to query auth.users, so the name is denormalised onto each note at save time.
   const authorNameOf = (u) => {
     const m = u.user_metadata || {};
     return m.user_name || m.name || (u.email ? u.email.split('@')[0] : 'Reader');
   };
+  // Small helper so status writes are always via textContent (never innerHTML) —
+  // avoids injecting error strings as markup.
   const setStatus = (m) => { status.textContent = m || ''; };
 
+  // Fetch every note for this post that RLS lets this user see, then split into
+  // "mine" (fills the textarea) and "others" (admin-only list). SECURITY: there
+  // is deliberately NO .eq('user_id', ...) here — a non-admin is expected to
+  // receive only their own row because the SELECT RLS policy filters server-side.
+  // If RLS were misconfigured this single query would expose all readers' notes.
   async function load() {
     const { data, error } = await supabase
       .from('notes')
@@ -67,16 +150,24 @@ const { postId } = Astro.props;
       .eq('post_id', postId);
     if (error) { setStatus('Could not load notes: ' + error.message); return; }
     const rows = data || [];
+    // Locate the caller's own note (if any) to prefill the editor.
     const mine = rows.find((n) => n.user_id === currentUser.id);
     ta.value = mine ? mine.body : '';
-    others.textContent = '';
+    others.textContent = ''; // reset admin list on every (re)load, e.g. after auth change
     if (isAdmin) {
+      // Admins see everyone else's notes. Non-admins never enter this branch AND
+      // should not have received other rows from the query in the first place —
+      // this filter is the second, purely-cosmetic line of defence.
       const readers = rows.filter((n) => n.user_id !== currentUser.id);
       if (readers.length) {
         const h = document.createElement('h3');
         h.textContent = "Readers' notes";
         others.appendChild(h);
         for (const n of readers) {
+          // Build each reader-note node via DOM APIs + textContent (NOT innerHTML)
+          // so reader-supplied author_name/body can never inject markup/script
+          // into the admin's page (stored-XSS defence — the admin is the one
+          // viewing untrusted content here).
           const d = document.createElement('div');
           d.className = 'other-note';
           const meta = document.createElement('div');
@@ -93,14 +184,24 @@ const { postId } = Astro.props;
     }
   }
 
+  // Save handler. Two paths: empty body => delete the note (a "clear" gesture);
+  // non-empty => upsert. INTENT: keep exactly one row per (post, user) and treat
+  // an emptied textarea as "I no longer want a note" rather than saving blank.
   saveBtn.addEventListener('click', async () => {
     const body = ta.value.trim();
     setStatus('Saving…');
     if (!body) {
+      // Delete only the caller's own row for this post. The user_id .eq is
+      // belt-and-braces; RLS must also restrict DELETE to auth.uid()'s rows.
       const { error } = await supabase.from('notes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
       setStatus(error ? 'Save failed: ' + error.message : 'Cleared.');
       return;
     }
+    // Upsert keyed on the (post_id, user_id) unique constraint so re-saving edits
+    // in place instead of inserting duplicates. user_id/author_name are set from
+    // the authenticated session, but a hostile client could forge them — RLS with
+    // WITH CHECK (user_id = auth.uid()) is what actually prevents writing as
+    // someone else. updated_at is client-stamped (used only for display ordering).
     const { error } = await supabase.from('notes').upsert(
       {
         post_id: postId,
@@ -114,18 +215,26 @@ const { postId } = Astro.props;
     setStatus(error ? 'Save failed: ' + error.message : 'Saved.');
   });
 
+  // Resolve auth state and, if signed in, reveal the panel and load notes.
+  // Called on first load AND on every auth change so the widget appears/hides
+  // and refreshes as the user logs in/out within the page.
   async function init() {
     const { data } = await supabase.auth.getSession();
     currentUser = data.session ? data.session.user : null;
-    if (!currentUser) { section.hidden = true; return; }
+    if (!currentUser) { section.hidden = true; return; } // logged out → keep hidden, do nothing else
     section.hidden = false;
     try {
+      // Ask Postgres whether this user is the admin. FAIL-SAFE: any error (RPC
+      // missing, network) falls through to isAdmin=false, so readers' notes are
+      // hidden by default rather than accidentally exposed. This is a UX gate
+      // only — server-side RLS still governs which rows load() can actually read.
       const { data: adm } = await supabase.rpc('is_admin');
-      isAdmin = adm === true;
+      isAdmin = adm === true; // strict === true so a non-boolean never enables admin view
     } catch (e) { isAdmin = false; }
     load();
   }
 
+  // Re-run init on login/logout/token-refresh events, then run once on mount.
   supabase.auth.onAuthStateChange(() => init());
   init();
 </script>

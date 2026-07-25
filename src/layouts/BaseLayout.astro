@@ -1,19 +1,95 @@
 ---
+/**
+ * BaseLayout.astro
+ * =============================================================================
+ * WHAT THIS FILE IS
+ *   The single, top-level page shell for every rendered page on
+ *   areyoustillreading.dev. It emits the outer `<!doctype html>` document —
+ *   `<html>`/`<head>`/`<body>` — plus the shared site chrome (header with brand
+ *   + primary nav, and footer). Page-specific content is projected into the
+ *   `<main>` region via the default `<slot />`.
+ *
+ * SINGLE RESPONSIBILITY
+ *   Own the HTML document skeleton and the persistent site-wide chrome. Nothing
+ *   page-specific lives here; anything unique to a route is passed in as props
+ *   (title/description/image) or rendered through the slot by the calling page.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ *   This is a static Astro 7 build (SSG) deployed to Cloudflare Pages via
+ *   Wrangler direct upload (`npm run deploy`). This layout runs at BUILD TIME
+ *   only — the frontmatter below (the `---` fence) is server/build-side JS that
+ *   is fully evaluated during `astro build` and never ships to the browser.
+ *   Individual pages (`src/pages/**`) and content collections wrap their output
+ *   in `<BaseLayout title=... >...</BaseLayout>`; whatever they nest becomes the
+ *   `<slot />` payload. `<head>` composition is delegated wholesale to
+ *   `BaseHead.astro` (title/description/OG image/canonical/meta), keeping this
+ *   file focused on structure.
+ *
+ * IMPORTS / DEPENDENCIES (what this file pulls in)
+ *   - '../styles/global.css'  Global stylesheet. Importing it here — in the one
+ *                             layout every page shares — guarantees the site's
+ *                             base styles are bundled into every page exactly
+ *                             once, without each page having to import it.
+ *   - BaseHead.astro          Builds the entire contents of `<head>` from the
+ *                             same title/description/image props forwarded below
+ *                             (SEO meta, Open Graph/Twitter tags, canonical URL,
+ *                             favicon, astro-og-canvas image, etc.).
+ *
+ * WHAT DEPENDS ON THIS FILE (consumers)
+ *   Effectively every user-facing route: home, /blog (+ post pages), /projects,
+ *   /resume, /account, and the payments/paywall pages. They rely on this file
+ *   for the document shell and the nav/footer being present and consistent.
+ *
+ * SECURITY / RLS / GOTCHAS
+ *   - This layout is intentionally "dumb chrome": it performs NO auth checks, NO
+ *     admin detection (`is_admin()`), NO entitlement/paywall gating, and NO
+ *     token/signature verification. All of that lives elsewhere — in Cloudflare
+ *     Pages Functions, Supabase Row-Level Security, the Supabase JS client on
+ *     the relevant pages, and components like PaywallGate. Do NOT be tempted to
+ *     add access control here: it is static HTML emitted at build time and is
+ *     identical for every visitor, so any gating placed here would be trivially
+ *     bypassable and would leak into the shared shell. Treat this file as
+ *     containing zero secrets and zero trust decisions.
+ *   - The nav is a plain static array (see below); the "Account" link is always
+ *     rendered regardless of auth state. Whether a signed-out user can DO
+ *     anything on /account is enforced by that page + Supabase RLS, not by
+ *     hiding the link here.
+ *   - Template rule for this repo: only JSX-style comments are allowed in markup
+ *     in the markup (Astro strips them at build). HTML `<!-- -->` comments must
+ *     never be added — they would ship to the browser and bloat/leak output.
+ */
+
+// Bundle the global stylesheet into every page (single shared import point).
 import '../styles/global.css';
+// Delegate all <head> construction (SEO/OG/canonical/meta) to BaseHead.
 import BaseHead from '../components/BaseHead.astro';
 
+/**
+ * Props accepted from the wrapping page.
+ * - title:       Required. Page/document title, forwarded to BaseHead.
+ * - description: Optional. Meta + OG description; defaults below when omitted.
+ * - image:       Optional. Explicit OG/social share image; when absent BaseHead
+ *                falls back to its own default (e.g. astro-og-canvas output).
+ */
 interface Props {
   title: string;
   description?: string;
   image?: string;
 }
 
+// Destructure incoming props. The default description is the site-wide tagline
+// used whenever a page does not supply its own, so social/SEO previews are
+// never left blank.
 const {
   title,
   description = 'Notes on LLM engineering, plus the projects behind them.',
   image,
 } = Astro.props;
 
+// Primary navigation, defined as data so the markup can render it with a single
+// map (below) instead of hand-writing each <a>. Static and identical for all
+// visitors — see the security note above: link visibility is NOT an access
+// control; page-level auth + Supabase RLS govern what each route actually does.
 const nav = [
   { href: '/', label: 'Home' },
   { href: '/blog', label: 'Blog' },
@@ -23,23 +99,34 @@ const nav = [
 ];
 ---
 
+{/* Root document. lang="en" set once here so every page inherits it (a11y/SEO). */}
 <!doctype html>
 <html lang="en">
   <head>
+    {/* All SEO/OG/canonical/meta tags come from BaseHead; props forwarded verbatim. */}
     <BaseHead title={title} description={description} image={image} />
+    {/* RSS autodiscovery: lets feed readers/browsers find the @astrojs/rss feed at
+        /rss.xml. Present on every page because it lives in the shared <head>. */}
     <link rel="alternate" type="application/rss+xml" title="areyoustillreading" href="/rss.xml" />
   </head>
   <body>
+    {/* Persistent site header: brand wordmark links home, followed by primary nav. */}
     <header class="site-header">
       <a href="/" class="brand">areyoustillreading</a>
       <nav>
+        {/* Render the static `nav` array as anchors — one <a> per entry. Data-driven
+            so adding/removing a link is a one-line edit above, not markup surgery. */}
         {nav.map((item) => <a href={item.href}>{item.label}</a>)}
       </nav>
     </header>
+    {/* Page-specific content is injected here by the wrapping page via the slot. */}
     <main>
       <slot />
     </main>
     <footer class="site-footer">
+      {/* Copyright year computed at BUILD TIME (this is SSG, not SSR): the year is
+          frozen to whenever the site was last built/deployed, not the visitor's
+          current date. A rebuild/redeploy is what rolls it over each January. */}
       <p>&copy; {new Date().getFullYear()} areyoustillreading</p>
     </footer>
   </body>

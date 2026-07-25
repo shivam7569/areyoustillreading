@@ -1,17 +1,110 @@
 ---
+/**
+ * ============================================================================
+ * src/pages/blog/[...slug].astro — Individual blog-post page (dynamic route)
+ * ============================================================================
+ *
+ * WHAT THIS FILE IS
+ * -----------------
+ * The single dynamic route that renders one blog post per URL. The `[...slug]`
+ * rest-parameter filename means Astro matches this file against every path under
+ * `/blog/…` (e.g. `/blog/hello-world`, `/blog/2026/notes`). Every published post
+ * in the `blog` content collection becomes one statically pre-rendered HTML page
+ * at build time.
+ *
+ * SINGLE RESPONSIBILITY
+ * ---------------------
+ * Map a URL slug → the matching content-collection entry, then render it inside
+ * the shared <BlogPost> layout. The ONLY branch of logic here is the paywall
+ * decision: a post flagged `gateable` is rendered through <PaywallGate> (which
+ * decides, per-request on the client, whether to show full content or a
+ * preview + purchase prompt); every other post renders its full <Content>
+ * inline and unconditionally.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ * ----------------------------
+ * - This is a STATIC page (Astro 7, output: static). It is built ahead of time
+ *   and served as flat HTML from Cloudflare Pages (Wrangler direct upload).
+ * - `getStaticPaths()` runs at BUILD time only — it enumerates the pages to emit.
+ * - Any per-request / per-user behaviour (auth state, entitlement checks, live
+ *   paywall toggles) is NOT decided here. It is deferred to <PaywallGate>, which
+ *   runs client-side against Supabase + Pages Functions. This file just chooses
+ *   whether to hand a post to that gate or to inline it.
+ *
+ * IMPORTS / DEPENDENCIES
+ * ----------------------
+ * - `astro:content` (getCollection, render): the content-collection API. Schema
+ *   for the `blog` collection (including the `draft`, `gateable`, `preview`
+ *   flags referenced here) is defined in src/content.config.* / a content schema.
+ * - `../../layouts/BlogPost.astro`: the shared post chrome (title, meta, OG,
+ *   KaTeX/Shiki/Mermaid-rendered markdown wrapper, Pagefind indexing, etc.).
+ * - `../../components/PaywallGate.astro`: the Merchant-of-Record (Dodo Payments)
+ *   paywall component; owns token/entitlement checks and admin bypass.
+ *
+ * WHAT DEPENDS ON THIS FILE
+ * -------------------------
+ * - Astro's build pipeline (via getStaticPaths) — this file defines which
+ *   /blog/* URLs exist. RSS (@astrojs/rss), the sitemap, and internal links all
+ *   point at the URLs this route emits.
+ *
+ * SECURITY ASSUMPTIONS & GOTCHAS
+ * ------------------------------
+ * - LEAK RISK: because pages are static, whatever HTML this route emits ships to
+ *   the CDN for anyone to fetch. Therefore gated posts must NOT inline their full
+ *   body here. The `gateable` branch below hands rendering to <PaywallGate>,
+ *   which is responsible for only emitting preview-safe content in the static
+ *   HTML and fetching the paid body per-request after an entitlement check. The
+ *   real enforcement (token validation, entitlement lookup, RLS) lives in
+ *   Supabase + Pages Functions, NOT in this file. Do not "optimise" the ternary
+ *   into rendering <Content /> for gated posts — that would bake the paid body
+ *   into public HTML.
+ * - The `!data.draft` filter is the ONLY thing keeping draft posts from being
+ *   built into public URLs. Drafts are excluded at build time, so they never get
+ *   an emitted page at all (stronger than hiding them at runtime).
+ * - No user input is trusted here: `slug` comes exclusively from the build-time
+ *   enumeration of collection entries, not from the request, so there is no
+ *   arbitrary-path / injection surface in this route.
+ */
+
 import { getCollection, render } from 'astro:content';
 import BlogPost from '../../layouts/BlogPost.astro';
 import PaywallGate from '../../components/PaywallGate.astro';
 
+/**
+ * getStaticPaths — BUILD-TIME path enumeration.
+ *
+ * Runs once during `astro build`. Returns one entry per page to statically
+ * generate. Astro calls this to learn every /blog/* URL that should exist.
+ */
 export async function getStaticPaths() {
+  // Pull all `blog` entries, filtering OUT drafts at the source. Excluding
+  // drafts here (rather than at render time) guarantees no page/URL is ever
+  // emitted for an unpublished post — nothing to leak, nothing to 404-guard.
   const posts = await getCollection('blog', ({ data }) => !data.draft);
+  // Map each surviving entry to a route: `post.id` is the collection slug and
+  // becomes the URL's rest-param; the full `post` is passed through as a prop so
+  // the template need not re-fetch it. params.slug MUST match the [...slug] name.
   return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
 }
 
+// The entry chosen for THIS page, forwarded from getStaticPaths via props.
 const { post } = Astro.props;
+// Compile the post's markdown/MDX into a renderable <Content /> component. This
+// runs the full markdown pipeline (Shiki, KaTeX, build-time Mermaid, etc.).
+// NOTE: <Content /> is the FULL body — for gated posts we deliberately do not
+// render it here (see the security note above); PaywallGate controls exposure.
 const { Content } = await render(post);
 ---
 
 <BlogPost post={post}>
+  {/*
+    Paywall decision (the only branching logic on this page):
+    - `gateable` true  → delegate to <PaywallGate>, which decides per-request
+      (client-side, against Supabase entitlements / admin bypass) whether to
+      reveal the paid body or show a preview + purchase CTA. This keeps the full
+      body OUT of the statically-served HTML for paid posts.
+    - `gateable` false → render the full <Content /> inline; this is a normal,
+      fully-public post baked into the static page.
+  */}
   {post.data.gateable ? <PaywallGate post={post} /> : <Content />}
 </BlogPost>

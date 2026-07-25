@@ -1,14 +1,93 @@
 ---
+/*
+ * =============================================================================
+ * FILE: src/pages/index.astro
+ * ROUTE: "/"  (the site homepage / landing page)
+ * =============================================================================
+ *
+ * WHAT THIS IS
+ * ------------
+ * The Astro page component that renders the site root. Astro's file-based
+ * router maps `src/pages/index.astro` -> the "/" URL. This file is compiled to
+ * a fully STATIC HTML page at build time (`npm run build`) and shipped to
+ * Cloudflare Pages via Wrangler direct upload (`npm run deploy`). There is NO
+ * server-side execution at request time for this page: everything in the
+ * frontmatter fence below runs ONCE during the build, not per-visitor.
+ *
+ * SINGLE RESPONSIBILITY
+ * ---------------------
+ * Present the marketing/landing surface: a hero blurb, a "Latest posts" teaser
+ * (the 3 newest non-draft blog entries), and the newsletter subscribe form.
+ * It intentionally does NO data mutation, auth, payments, or gating logic — it
+ * is a read-only shop window that funnels visitors to /blog and to the
+ * newsletter.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ * ----------------------------
+ *   - Wraps its content in <BaseLayout>, which supplies the <html>/<head>,
+ *     global styles, nav, footer, and site-wide meta/OG plumbing. This page
+ *     only owns the <body> content between the layout slots.
+ *   - Reads the "blog" content collection (Markdown/MDX under src/content/blog,
+ *     defined by the Zod schema in src/content/config.ts). getCollection is a
+ *     BUILD-TIME API — the collection is resolved from local files on disk, not
+ *     from Supabase. None of the backend stack (Supabase / PostgREST / RLS /
+ *     Resend / Turnstile / Dodo Payments) is touched when rendering this page.
+ *   - The interactive/backend concerns live entirely inside <SubscribeForm>
+ *     (Turnstile bot check + a Pages Function that talks to Supabase/Resend).
+ *     This page just drops that component in; it knows nothing about its guts.
+ *
+ * DEPENDS ON (imports)
+ *   - ../layouts/BaseLayout.astro   -> page chrome + <head>
+ *   - ../components/SubscribeForm.astro -> newsletter capture (self-contained)
+ *   - astro:content getCollection   -> build-time blog entry loader
+ *   - The "blog" collection schema (title, description, pubDate, draft, ...).
+ *     If that schema's field names change, the template accessors below
+ *     (data.title / data.description / data.pubDate / data.draft) must change too.
+ *
+ * DEPENDED ON BY
+ *   - The Cloudflare Pages router only: this is the "/" entry point. No other
+ *     module imports this file. Changing the exported markup only affects the
+ *     homepage.
+ *
+ * SECURITY / GOTCHAS
+ *   - No secrets, tokens, or user data are read here, so there is no RLS or
+ *     signature-verification surface in THIS file. The security-sensitive path
+ *     (honeypot, Turnstile token, RLS-guarded insert) is encapsulated in
+ *     <SubscribeForm> and its backing Pages Function — audit those, not this.
+ *   - Draft safety: the getCollection filter below is the ONLY thing keeping
+ *     unpublished posts off the public homepage. Because the site is fully
+ *     static, a draft that slips past this filter would be baked into public
+ *     HTML with no runtime gate to catch it. Treat the `!data.draft` predicate
+ *     as a publication guard, not a cosmetic sort option.
+ *   - Never add HTML <!-- --> comments to the template region: they would ship
+ *     to the browser. Use {/* ... *\/} JSX comments (stripped at build) instead.
+ */
+
+// Page chrome (html/head/nav/footer + global styles). This page only fills the slot.
 import BaseLayout from '../layouts/BaseLayout.astro';
+// Newsletter capture widget. Self-contained: owns its own Turnstile bot check,
+// honeypot, and the fetch to the subscribe Pages Function. Treated as a black box here.
 import SubscribeForm from '../components/SubscribeForm.astro';
+// Build-time loader for local content collections. NOT a network/DB call.
 import { getCollection } from 'astro:content';
 
+// Build the "Latest posts" teaser list. This executes ONCE at build time.
+//   1. getCollection('blog', filter) loads every entry in the blog collection,
+//      applying the predicate as a PUBLICATION GUARD: `!data.draft` drops any
+//      entry marked dra:true so unfinished posts are never baked into the
+//      public homepage (there is no runtime gate on a static page — see header).
+//   2. .sort() orders newest-first. pubDate is a Date (coerced by the collection
+//      schema); .valueOf() compares epoch millis, and b - a yields descending order.
+//   3. .slice(0, 3) keeps only the three most recent — this is a teaser, the full
+//      archive lives at /blog. If fewer than 3 exist, slice returns what's there.
 const posts = (await getCollection('blog', ({ data }) => !data.draft))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
   .slice(0, 3);
 ---
 
+{/* title flows into BaseLayout's <head> (<title> + OG/meta). This page owns only the body slot. */}
 <BaseLayout title="areyoustillreading — LLM engineering notes">
+  {/* Static hero: fixed marketing copy + primary CTA into the blog archive. No data binding. */}
   <section class="hero">
     <h1>areyoustillreading</h1>
     <p class="lede">
@@ -17,13 +96,21 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft))
     <p><a class="cta" href="/blog">Read the blog &rarr;</a></p>
   </section>
 
+  {/* Short-circuit: render the whole "Latest posts" section ONLY if at least one
+      published post exists, so a brand-new/empty site shows no dangling heading
+      or empty <ul>. `&&` returns false (renders nothing) when the list is empty. */}
   {posts.length > 0 && (
     <section>
       <h2>Latest posts</h2>
       <ul class="post-list">
+        {/* One <li> per teaser entry. post.id is the collection slug used to build
+            the canonical /blog/<slug> permalink — it must match the blog route. */}
         {posts.map((post) => (
           <li>
             <h2><a href={`/blog/${post.id}`}>{post.data.title}</a></h2>
+            {/* datetime carries the machine-readable ISO timestamp (for crawlers/AT);
+                the visible text is a human-friendly localized date. Both come from the
+                same pubDate so they never drift. */}
             <time datetime={post.data.pubDate.toISOString()}>
               {post.data.pubDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
             </time>
@@ -34,5 +121,8 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft))
     </section>
   )}
 
+  {/* Newsletter capture. All bot-defense (honeypot + Turnstile) and the
+      Supabase/Resend write happen inside this component + its Pages Function,
+      not here — see SubscribeForm for the security-sensitive logic. */}
   <SubscribeForm />
 </BaseLayout>

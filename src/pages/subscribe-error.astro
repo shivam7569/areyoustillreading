@@ -1,9 +1,80 @@
 ---
+/**
+ * ============================================================================
+ * FILE: src/pages/subscribe-error.astro
+ * ROUTE: /subscribe-error  (static HTML, prerendered at build time)
+ * ----------------------------------------------------------------------------
+ * WHAT THIS IS
+ *   A dead-simple, fully static "friendly failure" landing page for the
+ *   newsletter subscription / double opt-in flow. When the subscribe pipeline
+ *   cannot complete, the user's browser is redirected here so they see a
+ *   human-readable apology and a way back, instead of a raw 4xx/5xx or a blank
+ *   page.
+ *
+ * SINGLE RESPONSIBILITY
+ *   Render one reassuring error message + a link home. Nothing else. It holds
+ *   NO logic, reads NO query params, makes NO network/DB calls, and renders the
+ *   IDENTICAL markup for every visitor. It is the terminal "sad path" screen,
+ *   deliberately kept logic-free so it can never itself fail.
+ *
+ * WHERE IT FITS IN THE ARCHITECTURE
+ *   The subscribe flow lives in Cloudflare Pages Functions (server side) +
+ *   Supabase (subscribers table, RLS-locked) + Resend (sends the confirmation
+ *   email) + Turnstile (bot check on the submit). Those server-side pieces own
+ *   ALL validation, token/signature checking, and honeypot logic. When any of
+ *   those steps rejects the request, the Function responds with a redirect
+ *   (302) to this page. Typical triggers:
+ *     - the magic confirmation token is invalid, already used, or expired
+ *     - the email address is malformed / fails validation
+ *     - Turnstile bot verification failed
+ *     - a transient backend error (Supabase/Resend) aborted the write
+ *   The happy-path counterpart is the success page the flow redirects to
+ *   instead; this file is only ever reached on the failure branch.
+ *
+ * WHY THE ERROR TEXT IS INTENTIONALLY VAGUE (SECURITY)
+ *   The copy says "may be invalid or expired, or the email was malformed"
+ *   without revealing WHICH check failed. This is deliberate: a precise error
+ *   ("token already used" vs "no such token" vs "signature mismatch") would
+ *   leak information an attacker could use to probe tokens or enumerate
+ *   subscribers. All the real, sensitive verification happens server-side in
+ *   the Pages Function; this page must never echo the reason, the token, the
+ *   email, or any query-string value back to the user. It renders a constant
+ *   string precisely so nothing sensitive can leak into the HTML.
+ *
+ * DEPENDS ON (imports)
+ *   - ../layouts/BaseLayout.astro — the site-wide shell (head/meta, header,
+ *     footer, styling). This page contributes only the <h1>/<p> body.
+ *
+ * DEPENDED ON BY (who sends users here)
+ *   - The subscribe / opt-in-confirm Cloudflare Pages Function(s), via HTTP
+ *     redirect to the literal path "/subscribe-error". The path string is the
+ *     contract: renaming this file or its route WILL break those redirects
+ *     (they are not compile-time linked), so keep the route stable.
+ *
+ * GOTCHAS FOR FUTURE-YOU
+ *   - Static & cacheable: prerendered at build, served from Cloudflare's edge
+ *     cache. Do NOT add per-request logic here — this route is not a Function
+ *     and has no request context; anything dynamic belongs in the Function
+ *     that redirects here.
+ *   - No query-string handling on purpose. If you're tempted to read
+ *     ?reason=... to customize the message, don't reflect it into the DOM
+ *     unescaped — that's an XSS vector and it re-introduces the info-leak risk
+ *     described above.
+ */
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
+{/* Static shell. title/description are plain constants (no user/query data),
+    so nothing sensitive can reach the <head>. The description is terse on
+    purpose — this is a low-value error page we don't want indexed prominently. */}
 <BaseLayout title="Something went wrong — areyoustillreading" description="Subscription error.">
+  {/* Deliberately warm, blame-free heading — this is often a legitimate user
+      hitting an expired link, not an attacker. */}
   <h1>Hmm, that didn't work</h1>
+  {/* Vague-by-design copy: lists the plausible causes without disclosing which
+      check actually failed (see the SECURITY note in the frontmatter). Also
+      gives the user a concrete next step: retry from the homepage. */}
   <p>That link may be invalid or expired, or the email was malformed. Try subscribing again from the homepage.</p>
+  {/* Only escape hatch: a link back to the root so the user is never stranded. */}
   <p><a href="/">&larr; Home</a></p>
 </BaseLayout>

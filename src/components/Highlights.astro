@@ -1,16 +1,105 @@
 ---
+/**
+ * ============================================================================
+ * Highlights.astro — per-post reader highlights + threaded discussion widget
+ * ============================================================================
+ *
+ * WHAT THIS IS
+ * ------------
+ * A self-contained UI island rendered at the bottom of a blog post. Signed-in
+ * readers can select text in the article, save it as a "highlight" (a quoted
+ * excerpt), and hold a threaded discussion attached to that highlight. Each
+ * saved highlight is visually re-applied as a <mark> over the matching text in
+ * the article body, and clicking a mark jumps to its discussion thread.
+ *
+ * SINGLE RESPONSIBILITY
+ * ---------------------
+ * Own the entire client-side lifecycle of highlights + their comment threads
+ * for ONE post: auth-gating the feature, reading/writing the `highlights` and
+ * `highlight_comments` tables, and keeping the article's inline <mark>s in sync
+ * with the list. It does not handle post rendering, auth UI, or payments.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ * ----------------------------
+ * - Astro component. The frontmatter (this block) runs at BUILD time and only
+ *   emits static markup + a hydrated <script>. All dynamic behaviour lives in
+ *   the client <script> below, which talks directly to Supabase from the
+ *   browser using the shared Supabase JS client (`../lib/supabase`). There is
+ *   NO Pages Function in the read/write path here — it is pure client ⇄
+ *   PostgREST over the anon key.
+ * - Because writes go straight from the browser, ALL authorization is enforced
+ *   by Supabase Row-Level Security (RLS) on `highlights` and
+ *   `highlight_comments`, plus the `is_admin()` SQL function. See SECURITY.
+ *
+ * PROPS / INPUTS
+ * --------------
+ * - `postId: string` — the post this widget is bound to. Written to the
+ *   section's `data-post-id` attribute so the client script can read it back
+ *   (the frontmatter value is not otherwise visible to the runtime script).
+ *
+ * DEPENDS ON (imports / runtime assumptions)
+ * ------------------------------------------
+ * - `../lib/supabase` — pre-configured Supabase browser client (anon key +
+ *   persisted session). Provides `auth`, `.from(...)` PostgREST queries, and
+ *   `.rpc('is_admin')`.
+ * - A single `<article>` element on the page = the post body it highlights.
+ * - CSS custom props from the global theme: --accent, --fg, --muted, --border,
+ *   --bg.
+ * - Supabase tables `highlights` (id, post_id, user_id, author_name, quote,
+ *   created_at) and `highlight_comments` (id, highlight_id, user_id,
+ *   author_name, body, created_at), and the `is_admin()` RPC.
+ *
+ * DEPENDED ON BY
+ * --------------
+ * - The post layout/page template embeds <Highlights postId={...} /> beneath
+ *   the article. Nothing imports its internals; it is a leaf UI component.
+ *
+ * SECURITY ASSUMPTIONS & GOTCHAS  (READ BEFORE CHANGING)
+ * ------------------------------------------------------
+ * - RLS IS THE ONLY GUARD. This code runs in the untrusted browser; a user can
+ *   forge any insert/delete/select payload. The client-side checks here
+ *   (hiding the "Remove" button unless owner/admin, gating the section behind a
+ *   session) are UX conveniences ONLY. Real enforcement MUST live in RLS
+ *   policies: e.g. inserts require auth.uid() == user_id; deletes require
+ *   owner-or-is_admin(); selects scoped as intended. Never rely on this file
+ *   to keep anyone out.
+ * - `author_name` and `user_id` are supplied by the client on insert (see the
+ *   insert calls). RLS must verify user_id == auth.uid() so a user cannot
+ *   attribute content to someone else; author_name is display-only and
+ *   spoofable — treat it as untrusted when rendering elsewhere.
+ * - XSS SAFETY: all user-generated content (quote, comment body, author_name)
+ *   is injected via `.textContent` / DOM node creation, never innerHTML, so it
+ *   cannot execute markup. Preserve that — do not switch to innerHTML.
+ * - `is_admin()` RPC result only toggles UI (shows author names + lets admin
+ *   remove others' highlights). The privileged DELETE it enables is still
+ *   RLS-checked server-side; a spoofed `isAdmin = true` in the browser buys
+ *   nothing without a matching admins-table row.
+ * - MARK RE-APPLICATION (applyMark) mutates the live article DOM by wrapping
+ *   the first text-node match of the quote in a <mark>. It is best-effort:
+ *   quotes that span element boundaries are silently skipped (Range
+ *   .surroundContents throws), and only the FIRST occurrence is marked. This
+ *   is cosmetic and must never be load-bearing.
+ */
 interface Props {
   postId: string;
 }
 const { postId } = Astro.props;
 ---
 
+{/* Widget shell. Starts `hidden` and is revealed by init() ONLY for a signed-in
+    user; anonymous readers never see it. postId is passed through the DOM via
+    data-post-id because the client script (a separate bundle) cannot read Astro
+    frontmatter variables. The <ul> and .hl-status are empty placeholders that
+    the script populates at runtime. */}
 <section class="highlights" data-post-id={postId} hidden>
   <h2>Highlights &amp; discussion</h2>
   <p class="hl-status muted"></p>
   <ul id="highlights-list"></ul>
 </section>
 
+{/* Floating "Highlight" action button. Lives outside .highlights so it can be
+    position:fixed near the current text selection. Hidden until a valid
+    in-article selection exists (see onSelection). */}
 <button id="hl-save-btn" type="button" hidden>Highlight</button>
 
 <style>
@@ -52,32 +141,52 @@ const { postId } = Astro.props;
 </style>
 
 <script>
+  // Shared Supabase browser client (anon key + persisted session). Every DB
+  // call below is subject to RLS as the currently-authenticated user.
   import { supabase } from '../lib/supabase';
 
+  // Cache the DOM handles once. `section` is the widget shell; `article` is the
+  // post body we highlight over (may be null on pages without an <article>,
+  // which is guarded throughout).
   const section = document.querySelector('.highlights');
-  const postId = section.getAttribute('data-post-id');
+  const postId = section.getAttribute('data-post-id'); // read back from data-attr
   const article = document.querySelector('article');
   const listEl = document.getElementById('highlights-list');
   const statusEl = section.querySelector('.hl-status');
   const saveBtn = document.getElementById('hl-save-btn');
 
+  // Runtime state. currentUser gates all write UI; isAdmin only unlocks extra UI
+  // (author names + removing others' highlights) and is re-derived on every auth
+  // change — never trusted for actual authorization (RLS does that).
   let currentUser = null;
   let isAdmin = false;
-  let pendingQuote = '';
+  let pendingQuote = ''; // the selected text captured for the floating save button
 
   const setStatus = (m) => { statusEl.textContent = m || ''; };
+
+  // Derive a human-friendly display name from the auth user, preferring OAuth
+  // handles (GitHub user_name), then a full name, then the email local-part,
+  // finally a generic fallback. This is display-only and gets stored as
+  // author_name on inserts; it is spoofable and must not be used for auth.
   const authorNameOf = (u) => {
     const m = u.user_metadata || {};
     return m.user_name || m.name || (u.email ? u.email.split('@')[0] : 'Reader');
   };
 
+  // Best-effort visual re-application of a saved highlight onto the live article.
+  // WHY a TreeWalker + indexOf instead of storing DOM offsets: quotes are stored
+  // as plain text, so on each load we re-locate the text in whatever DOM the post
+  // currently renders. This is resilient to markup changes but only finds the
+  // FIRST text-node containing the exact quote.
   function applyMark(h) {
     if (!article) return;
+    // Idempotent: never double-wrap the same highlight id (load() can re-run).
     if (article.querySelector('mark.user-highlight[data-hid="' + h.id + '"]')) return;
     const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
     let node;
     while ((node = walker.nextNode())) {
       const idx = node.nodeValue.indexOf(h.quote);
+      // Skip matches already inside a <mark> to avoid nesting marks.
       if (idx !== -1 && node.parentElement && node.parentElement.tagName !== 'MARK') {
         try {
           const range = document.createRange();
@@ -87,28 +196,41 @@ const { postId } = Astro.props;
           mark.className = 'user-highlight';
           mark.dataset.hid = h.id;
           mark.title = 'Open discussion';
+          // Clicking an inline mark jumps to + opens its discussion thread.
           mark.addEventListener('click', () => openThread(h.id, true));
           range.surroundContents(mark);
-        } catch (e) { /* spans nodes — skip visual */ }
-        return;
+        } catch (e) {
+          // surroundContents throws when the range crosses element boundaries
+          // (e.g. quote spans a <em> or paragraph break). Cosmetic only — we
+          // simply skip the visual mark; the highlight still shows in the list.
+        }
+        return; // one text node handled per highlight; stop after first match
       }
     }
   }
 
+  // Unwrap a highlight's <mark>, restoring the raw text node. Called after a
+  // successful delete so the article no longer shows a stale highlight.
   function removeMark(hid) {
     const mark = article && article.querySelector('mark.user-highlight[data-hid="' + hid + '"]');
     if (mark) mark.replaceWith(document.createTextNode(mark.textContent));
   }
 
+  // (Re)render the comment thread for one highlight inside its .hl-thread box,
+  // then append a reply composer. Called both to open a thread and to refresh it
+  // after a successful reply. Fully rebuilds the box each time (textContent = '')
+  // so there is no incremental-append drift.
   async function renderThread(hid, thread) {
     thread.textContent = 'Loading…';
     const { data, error } = await supabase
       .from('highlight_comments')
       .select('id, author_name, body, created_at')
       .eq('highlight_id', hid)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true }); // oldest-first, conversational order
     thread.textContent = '';
     if (error) { thread.textContent = 'Could not load discussion: ' + error.message; return; }
+    // Render each message. All user text goes through textContent (never
+    // innerHTML) — this is the XSS boundary; do not weaken it.
     for (const c of data || []) {
       const el = document.createElement('div');
       el.className = 'hl-msg';
@@ -126,6 +248,9 @@ const { postId } = Astro.props;
       none.textContent = 'No messages yet.';
       thread.appendChild(none);
     }
+    // Reply composer. currentUser is guaranteed non-null here because the whole
+    // widget is hidden for anonymous users, but the insert's authorization still
+    // rests on RLS (user_id must match auth.uid()).
     const composer = document.createElement('div');
     composer.className = 'hl-composer';
     const ta = document.createElement('textarea');
@@ -135,30 +260,36 @@ const { postId } = Astro.props;
     const msg = document.createElement('span'); msg.className = 'muted';
     send.addEventListener('click', async () => {
       const body = ta.value.trim();
-      if (!body) return;
+      if (!body) return; // ignore empty/whitespace-only replies
       msg.textContent = 'Sending…';
       const { error } = await supabase.from('highlight_comments').insert({
         highlight_id: hid, user_id: currentUser.id, author_name: authorNameOf(currentUser), body,
       });
       if (error) { msg.textContent = error.message; return; }
-      renderThread(hid, thread);
+      renderThread(hid, thread); // refresh to show the just-sent reply + clear input
     });
     composer.appendChild(ta); composer.appendChild(send); composer.appendChild(msg);
     thread.appendChild(composer);
   }
 
+  // Reveal and populate a highlight's thread. `scroll` centers the list item in
+  // view (used when arriving via an inline mark click, not via the Discuss btn).
   async function openThread(hid, scroll) {
     const li = listEl.querySelector('li[data-hid="' + hid + '"]');
-    if (!li) return;
+    if (!li) return; // thread's list item may not exist yet if list not loaded
     if (scroll) li.scrollIntoView({ behavior: 'smooth', block: 'center' });
     const thread = li.querySelector('.hl-thread');
     thread.hidden = false;
     await renderThread(hid, thread);
   }
 
+  // Render the full highlights list for the post. Rebuilds from scratch on each
+  // call. Also (re)applies the inline article marks as a side effect via
+  // applyMark so the list and the body stay in sync.
   function renderList(rows) {
     listEl.textContent = '';
     if (!rows.length) {
+      // Empty state doubles as the how-to hint for a signed-in reader.
       const p = document.createElement('p');
       p.className = 'muted';
       p.textContent = 'Select text in the post to save a highlight.';
@@ -166,15 +297,17 @@ const { postId } = Astro.props;
       return;
     }
     for (const h of rows) {
-      applyMark(h);
+      applyMark(h); // paint the inline <mark> in the article for this row
       const li = document.createElement('li');
-      li.dataset.hid = h.id;
+      li.dataset.hid = h.id; // links list item ⇄ inline mark ⇄ openThread
 
       const top = document.createElement('div');
       top.className = 'hl-top';
       const bq = document.createElement('blockquote');
-      bq.textContent = h.quote;
+      bq.textContent = h.quote; // textContent = XSS-safe rendering of the quote
       top.appendChild(bq);
+      // Author attribution is shown to admins only (privacy: readers don't see
+      // who highlighted what). This is a display choice, not a security control.
       if (isAdmin) {
         const who = document.createElement('span');
         who.className = 'hl-who';
@@ -186,8 +319,11 @@ const { postId } = Astro.props;
       actions.className = 'hl-actions';
       const discuss = document.createElement('button');
       discuss.textContent = 'Discuss';
-      discuss.addEventListener('click', () => openThread(h.id, false));
+      discuss.addEventListener('click', () => openThread(h.id, false)); // no scroll; already in list
       actions.appendChild(discuss);
+      // Show "Remove" only to the highlight's owner or an admin. This merely
+      // hides the button — the DELETE below is still authorized server-side by
+      // RLS, so a crafted request from a non-owner is rejected regardless.
       if (h.user_id === currentUser.id || isAdmin) {
         const del = document.createElement('button');
         del.className = 'hl-del';
@@ -195,12 +331,13 @@ const { postId } = Astro.props;
         del.addEventListener('click', async () => {
           const { error } = await supabase.from('highlights').delete().eq('id', h.id);
           if (error) { setStatus('Delete failed: ' + error.message); return; }
-          removeMark(h.id);
-          load();
+          removeMark(h.id); // drop the inline mark immediately
+          load();           // then reload the list to reflect the deletion
         });
         actions.appendChild(del);
       }
 
+      // Per-highlight discussion container, collapsed until Discuss/mark click.
       const thread = document.createElement('div');
       thread.className = 'hl-thread';
       thread.hidden = true;
@@ -212,6 +349,8 @@ const { postId } = Astro.props;
     }
   }
 
+  // Fetch all highlights for this post (oldest first) and render them. RLS
+  // decides which rows are visible; this select trusts the DB to scope results.
   async function load() {
     const { data, error } = await supabase
       .from('highlights')
@@ -223,19 +362,30 @@ const { postId } = Astro.props;
     renderList(data || []);
   }
 
+  // Decide whether to show the floating "Highlight" button for the current text
+  // selection, and position it just above the selection. Runs after every
+  // mouseup. Guards, in order: must be signed in + have an article; must have a
+  // non-collapsed selection; the trimmed text must be non-empty, <= 2000 chars
+  // (matches the DB/quote size limit and blocks giant paste-bombs), and the
+  // selection must originate INSIDE the article (anchorNode) so UI/nav text
+  // can't be highlighted.
   function onSelection() {
     if (!currentUser || !article) { saveBtn.hidden = true; return; }
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) { saveBtn.hidden = true; return; }
     const text = sel.toString().trim();
     if (!text || text.length > 2000 || !article.contains(sel.anchorNode)) { saveBtn.hidden = true; return; }
-    pendingQuote = text;
+    pendingQuote = text; // stash for the button's click handler
+    // Position the fixed button above the selection; clamp to 8px from the top
+    // so it never renders off-screen for selections near the viewport top.
     const rect = sel.getRangeAt(0).getBoundingClientRect();
     saveBtn.style.top = Math.max(8, rect.top - 42) + 'px';
     saveBtn.style.left = rect.left + 'px';
     saveBtn.hidden = false;
   }
 
+  // Persist the pending selection as a highlight. user_id/author_name are sent
+  // from the client but RLS must enforce user_id == auth.uid() on insert.
   saveBtn.addEventListener('click', async () => {
     if (!pendingQuote || !currentUser) return;
     const quote = pendingQuote;
@@ -246,21 +396,34 @@ const { postId } = Astro.props;
     });
     if (error) { setStatus('Save failed: ' + error.message); return; }
     setStatus('');
-    const s = window.getSelection(); if (s) s.removeAllRanges();
-    load();
+    const s = window.getSelection(); if (s) s.removeAllRanges(); // clear the selection
+    load(); // reload so the new highlight appears in the list + gets marked
   });
 
+  // Recompute the save button on selection changes. Ignore mouseup ON the button
+  // itself (that's the save click, not a new selection). setTimeout(...,0) defers
+  // to the next tick so window.getSelection() reflects the final selection state.
   document.addEventListener('mouseup', (e) => {
     if (e.target === saveBtn) return;
     setTimeout(onSelection, 0);
   });
+  // Hide the button on scroll — its fixed position would otherwise detach from
+  // the (now-moved) selection.
   document.addEventListener('scroll', () => { saveBtn.hidden = true; });
 
+  // Entry point / auth-state sync. Determines the signed-in user, gates the
+  // widget, resolves admin status, and loads highlights. Re-run on every auth
+  // change so signing in/out live-updates the widget without a page reload.
   async function init() {
     const { data } = await supabase.auth.getSession();
     currentUser = data.session ? data.session.user : null;
+    // No session → hide the whole feature. This is the reader-facing gate; it is
+    // convenience only, since RLS independently blocks anonymous writes.
     if (!currentUser) { section.hidden = true; saveBtn.hidden = true; return; }
     section.hidden = false;
+    // Ask the DB whether this user is an admin. Failure defaults to non-admin
+    // (fail-closed): a broken RPC must never grant elevated UI. Even when true,
+    // this only unlocks UI — the privileged deletes remain RLS-checked.
     try {
       const { data: adm } = await supabase.rpc('is_admin');
       isAdmin = adm === true;
@@ -268,6 +431,7 @@ const { postId } = Astro.props;
     load();
   }
 
+  // Wire the auth listener first, then kick off the initial load.
   supabase.auth.onAuthStateChange(() => init());
   init();
 </script>

@@ -1,7 +1,71 @@
 ---
+/**
+ * subscribed.astro — Newsletter subscription confirmation landing page.
+ *
+ * WHAT THIS FILE IS
+ * A tiny, fully-static Astro page rendered at the route `/subscribed`. It is the
+ * human-facing "thank you / you're in" screen a visitor lands on AFTER they have
+ * confirmed (double opt-in) their newsletter subscription. It contains no logic —
+ * it is pure presentational markup wrapped in the shared site layout.
+ *
+ * SINGLE RESPONSIBILITY
+ * Show a friendly confirmation message and point the reader back into the blog.
+ * That is the whole job. It intentionally does NOT verify, mutate, or read any
+ * subscription state.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ * The subscription flow lives elsewhere (a Pages Function / Supabase +
+ * Resend-driven double opt-in). That flow is responsible for:
+ *   1. Capturing the email (with a Turnstile bot check + honeypot on the form),
+ *   2. Persisting a pending subscriber row in Supabase (guarded by RLS),
+ *   3. Emailing a signed confirmation link via Resend,
+ *   4. Verifying that link's token server-side and marking the row confirmed.
+ * ONLY once step 4 succeeds should the user be redirected here. This page is the
+ * terminal, side-effect-free destination of that redirect — the "receipt", not
+ * the "transaction".
+ *
+ * SECURITY / TRUST ASSUMPTIONS (important — do not weaken)
+ *   - This page performs NO authentication, NO token verification, and NO
+ *     entitlement check. It must therefore never display anything sensitive
+ *     (no email address, no subscriber data, no admin controls). Anyone who
+ *     types the URL directly will see it — that is fine BECAUSE it reveals
+ *     nothing and changes nothing.
+ *   - Because it is statically pre-rendered at build time (no server runtime,
+ *     no `Astro.request` usage, no cookies read), there is no injection surface
+ *     and no per-request state to leak.
+ *   - Corollary / gotcha: reaching this page is NOT proof that a subscription
+ *     was actually confirmed. Never treat a visit here as an entitlement. The
+ *     real confirmation is the Supabase row flipped by the server-side token
+ *     check; this page is cosmetic.
+ *
+ * DEPENDENCIES (imports)
+ *   - BaseLayout: the shared site chrome (html/head/meta/OG, header, footer,
+ *     global styles). All page content is projected into its default <slot/>.
+ *     `title` feeds <title>/OG; `description` feeds the meta description.
+ *
+ * WHAT DEPENDS ON THIS FILE
+ *   - The server-side confirmation handler, which redirects the browser to
+ *     `/subscribed` on success. If this route is renamed or removed, update that
+ *     redirect target or confirmed users will hit a 404.
+ *   - Possibly the Resend confirmation email copy ("you'll be taken to…").
+ *
+ * MAINTENANCE NOTE
+ * Keep this page dumb and static. Any temptation to "read the token here and
+ * show the user's email" belongs in the server function, not in this
+ * publicly-reachable static page.
+ */
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
+{/*
+  Static confirmation content, slotted into BaseLayout.
+  - title/description are passed to <head> by BaseLayout (drives <title> + OG card).
+  - &#127881; is the HTML numeric entity for the 🎉 party-popper emoji; used as an
+    entity (rather than a raw glyph) to stay encoding-safe in the source file.
+  - &rarr; renders "→"; also an entity for the same encoding-safety reason.
+  - The only interactive element is a plain internal link back to /blog — no forms,
+    no scripts, no client JS ships from this page.
+*/}
 <BaseLayout title="Subscribed — areyoustillreading" description="You're subscribed.">
   <h1>You're subscribed &#127881;</h1>
   <p>Thanks for confirming. You'll get new posts by email.</p>

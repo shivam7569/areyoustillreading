@@ -1,8 +1,63 @@
 ---
+/**
+ * 404.astro — Site-wide "page not found" fallback.
+ * ---------------------------------------------------------------------------
+ * WHAT THIS IS
+ *   The custom Not-Found page for areyoustillreading.dev. Astro treats a
+ *   top-level `src/pages/404.astro` specially: at build time it emits
+ *   `dist/404.html`, which Cloudflare Pages serves automatically for any
+ *   request that matches no static asset and no Pages Function route. This is
+ *   the single most-hit "error" surface on the site, so it is intentionally
+ *   tiny and dependency-light.
+ *
+ * SINGLE RESPONSIBILITY
+ *   Render a friendly, correctly-chromed 404 page and point the visitor back
+ *   to two known-good destinations (the blog index and the home page). It does
+ *   NOTHING else — no data fetching, no auth, no gating, no side effects.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ *   - This is a fully STATIC page. It is prerendered at build (`npm run deploy`,
+ *     Wrangler direct upload) into `404.html`. There is no runtime code here and
+ *     no Pages Function backing it.
+ *   - Cloudflare Pages routing order matters: a real asset wins, then a Pages
+ *     Function/redirect can win, and only if nothing matches does Pages fall
+ *     back to serving `404.html` with an HTTP 404 status. So this page is the
+ *     LAST responder, not a router — it never sees the attempted path and must
+ *     not try to reason about it.
+ *
+ * DEPENDS ON
+ *   - `../layouts/BaseLayout.astro` — supplies <html>/<head>/<body>, the shared
+ *     site nav/footer, meta tags, and the OG/SEO scaffolding. `title` and
+ *     `description` are forwarded to BaseLayout, which owns the <title> and
+ *     <meta name="description">. Keep those props in sync with BaseLayout's
+ *     prop contract; if BaseLayout's signature changes, this page must follow.
+ *
+ * DEPENDED ON BY
+ *   - Nothing imports this file. Its only "consumer" is Cloudflare Pages' static
+ *     not-found fallback (the emitted 404.html). Renaming/moving it would break
+ *     that convention and the site would fall back to a generic Pages 404.
+ *
+ * SECURITY / GOTCHAS
+ *   - No user input is read, echoed, or reflected here (no requested-path
+ *     display), which deliberately avoids reflected-XSS / open-redirect risk on
+ *     the error path. Keep it that way: do not interpolate `Astro.url`,
+ *     referrers, or query params into the markup.
+ *   - Both links are hard-coded, same-origin relative paths ("/blog", "/") —
+ *     safe, cacheable, and independent of any backend (Supabase/PostgREST,
+ *     RLS, Resend, Turnstile, Dodo Payments). None of those systems are touched
+ *     by a 404, by design: the error page must render even if every backend is
+ *     down.
+ *   - Because this ships as prerendered HTML, keep it lightweight; avoid adding
+ *     client scripts or HTML comments (they would bloat every miss).
+ */
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
+{/* Delegate all page chrome (head, nav, footer, meta) to BaseLayout. `title`
+    and `description` become the <title>/<meta> tags for this error page. */}
 <BaseLayout title="Not found — areyoustillreading" description="Page not found.">
   <h1>404 — not found</h1>
+  {/* Two escape hatches to KNOWN-GOOD, hard-coded same-origin routes. Never
+      derive these from the requested URL or referrer — see security note. */}
   <p>That page doesn't exist. Try the <a href="/blog">blog</a>, or head back <a href="/">home</a>.</p>
 </BaseLayout>

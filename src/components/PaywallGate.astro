@@ -1,16 +1,108 @@
 ---
+/*
+ * ============================================================================
+ * PaywallGate.astro — client-side per-post paywall renderer
+ * ============================================================================
+ *
+ * WHAT THIS IS
+ * ------------
+ * An Astro component that renders the "gate" region of a blog post: a
+ * free preview, plus — depending on the viewer's auth state, admin status,
+ * and whether they've paid — either the full gated body, a "buy to unlock"
+ * lock box, or nothing (for admins/owners it also renders an inline
+ * admin toggle bar). It is the Phase 3 payments UI surface.
+ *
+ * SINGLE RESPONSIBILITY
+ * ---------------------
+ * Decide, entirely in the browser AT RUNTIME, which of three view modes a
+ * given viewer should see for THIS post — `free`, `unlocked`, or `locked` —
+ * and paint the DOM accordingly. It does NOT itself enforce access; see the
+ * security note below.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ * ----------------------------
+ * The site is statically prerendered and shipped to Cloudflare Pages, so the
+ * public HTML of a post CANNOT contain the paid body (a static asset is world
+ * readable — anyone could curl it). Instead:
+ *   - The prerendered post page embeds only this component (preview + empty
+ *     mount points). The paid body lives at a SEPARATE `/gated/<slug>/` route.
+ *   - This script runs after hydration, checks the Supabase session, asks the
+ *     server for the gated body WITH the user's bearer token, and injects it.
+ *   - `/gated/<slug>/` is a Pages Function (server) that verifies the token
+ *     and the buyer's entitlement server-side before returning the body.
+ *   - Purchases go through `/api/checkout` (Dodo Payments, Merchant-of-Record),
+ *     whose webhook writes a row into the `entitlements` table on success.
+ *
+ * TRUST BOUNDARY / SECURITY ASSUMPTIONS (read before editing!)
+ * -----------------------------------------------------------
+ *   - This component is UNTRUSTED, cosmetic, and easily bypassed. All the
+ *     mode logic here (isPaid / entitled / isAdmin) is a UX convenience only.
+ *     A determined viewer can flip variables in devtools — that must NOT leak
+ *     paid content, because the ONLY real gate is the server:
+ *       * `/gated/<slug>/` must independently verify the bearer token and that
+ *         the caller owns an `entitlements` row (or is an admin) before it
+ *         returns any paid HTML. If it returns the body without checking,
+ *         the paywall is defeated regardless of anything in this file.
+ *   - Supabase Row-Level Security is the real guard on every table read below:
+ *       * `entitlements` — RLS must restrict SELECT to the owning user, so
+ *         `entitled()` can only ever see the current viewer's own rows.
+ *       * `post_paywall` reads are effectively public (price/flag are not
+ *         secret); the admin-only WRITES in `adminBar()` rely on RLS policies
+ *         gated by the `is_admin()` SQL function — the client `isAdmin` flag is
+ *         cosmetic and does not grant DB write permission by itself.
+ *       * `is_admin()` is a SECURITY DEFINER RPC; the returned boolean only
+ *         decides whether we bother drawing the admin bar.
+ *   - No signature verification, honeypot, or Turnstile check happens in this
+ *     file — those live on the server (checkout webhook signature, auth flows).
+ *
+ * DEPENDS ON (imports)
+ * --------------------
+ *   - `astro:content` CollectionEntry<'blog'> — for the `post` prop typing.
+ *   - `../lib/supabase` (browser Supabase JS client) — session, RPC, table reads.
+ *   - Server routes it fetches at runtime: `/gated/<slug>/` and `/api/checkout`.
+ *   - DB tables/functions: `post_paywall`, `entitlements`, `is_admin()`.
+ *
+ * DEPENDED ON BY
+ * --------------
+ *   - Blog post layout/pages that opt a post into gating (renders this in
+ *     place of, or after, the free portion of the post body).
+ *
+ * GOTCHAS
+ * -------
+ *   - Re-entrancy: `init()` is called on load AND on every Supabase auth-state
+ *     change. Concurrent async renders are guarded by the `renderGen` counter
+ *     (see render()), which is why UI is cleared+repainted only after all
+ *     awaits resolve — this fixed the "triplicated admin bar" bug.
+ *   - `slug`/`post_id` is `post.id` (the content collection id), used verbatim
+ *     as the key across the DB, `/gated/`, and `/api/checkout`.
+ */
+
 import type { CollectionEntry } from 'astro:content';
 interface Props {
   post: CollectionEntry<'blog'>;
 }
 const { post } = Astro.props;
+// `post.id` is the content-collection identifier (e.g. the slug). It is the
+// canonical key used everywhere: post_paywall.post_id, entitlements.post_id,
+// the /gated/<slug>/ path, and the /api/checkout body. Keep them in lockstep.
 const slug = post.id;
+// The always-visible teaser. Prefer an explicit `preview` field; fall back to
+// the post `description` so a gated post is never left with an empty teaser.
 const preview = post.data.preview ?? post.data.description;
 ---
 
+{/*
+  Static mount scaffold. Only the preview text is present in the prerendered
+  HTML — the two empty divs are hydration targets the <script> fills at runtime.
+  `data-slug` carries the post key to the client script (which has no access to
+  Astro props once it runs in the browser). NOTHING paid is ever emitted here.
+*/}
 <div class="paywall" data-slug={slug}>
+  {/* Free teaser: always shown to everyone, regardless of paywall state. */}
   <div class="paywall-preview"><p>{preview}</p></div>
+  {/* Injection point for the fetched gated body (only ever filled server-verified). */}
   <div id="gated-content"></div>
+  {/* Injection point for the lock box and/or the admin toggle bar. */}
   <div id="paywall-ui"></div>
 </div>
 
@@ -58,26 +150,47 @@ const preview = post.data.preview ?? post.data.description;
 </style>
 
 <script>
+  // Browser Supabase client (anon key + user session in localStorage). Every
+  // table read below is subject to Row-Level Security; this client cannot see
+  // rows the policies don't allow, which is what makes the reads safe to run
+  // in untrusted client code.
   import { supabase } from '../lib/supabase';
 
+  // Cache DOM handles once. `root` carries the slug via its data attribute;
+  // `gated`/`ui` are the two empty mount points from the template above.
   const root = document.querySelector('.paywall');
   const slug = root.getAttribute('data-slug');
   const gated = document.getElementById('gated-content');
   const ui = document.getElementById('paywall-ui');
 
-  let user = null;
-  let isAdmin = false;
-  let paywall = null; // { is_paid, price_cents, currency } | null
-  let renderGen = 0;
+  // Module-level view state, recomputed by init(). All are cosmetic — see the
+  // trust-boundary note in the frontmatter; none of these gate real access.
+  let user = null;         // Supabase user object, or null when signed out.
+  let isAdmin = false;     // Result of is_admin() RPC; only toggles the admin UI.
+  let paywall = null;      // post_paywall row: { is_paid, price_cents, currency } | null.
+  let renderGen = 0;       // Monotonic guard so stale async renders self-abort.
 
+  // A post is gated only if it has a paywall row flagged is_paid. Missing row
+  // (null) => free. The `!!` collapses undefined/null to a strict boolean.
   const isPaid = () => !!(paywall && paywall.is_paid);
+  // Format the stored integer cents as a display price. Empty string when there
+  // is no paywall row so callers can concatenate without a "$NaN".
   const price = () => (paywall ? '$' + (paywall.price_cents / 100).toFixed(2) : '');
 
+  // Pull the current JWT access token for authenticating server fetches.
+  // Returns '' when signed out so callers can decide to skip the Authorization
+  // header entirely rather than send a bogus one.
   async function token() {
     const { data } = await supabase.auth.getSession();
     return data.session ? data.session.access_token : '';
   }
 
+  // Fetch the paid body from the SERVER route and inject it. `withAuth` sends
+  // the bearer token so the server can verify entitlement; the server is what
+  // actually decides whether to return the body — a false/omitted token simply
+  // gets a non-OK response here. We parse the returned HTML and lift only the
+  // #gated-body fragment (the route returns a full document) to avoid injecting
+  // the route's own <head>/scripts into this page.
   async function fetchGated(withAuth) {
     const headers = {};
     if (withAuth) {
@@ -85,7 +198,7 @@ const preview = post.data.preview ?? post.data.description;
       if (t) headers.Authorization = 'Bearer ' + t;
     }
     const res = await fetch('/gated/' + slug + '/', { headers });
-    if (!res.ok) return false;
+    if (!res.ok) return false; // Server refused (no token / not entitled) — body stays hidden.
     const html = await res.text();
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const body = doc.querySelector('#gated-body');
@@ -93,6 +206,11 @@ const preview = post.data.preview ?? post.data.description;
     return true;
   }
 
+  // Does the signed-in viewer own an entitlement for this post? Relies on
+  // entitlements RLS restricting SELECT to the owner, so a returned row can
+  // only ever be the current user's. maybeSingle() => null (not an error) when
+  // there is no matching row. This only picks the client mode; the /gated/
+  // route re-checks entitlement server-side before serving the body.
   async function entitled() {
     if (!user) return false;
     const { data } = await supabase
@@ -103,6 +221,11 @@ const preview = post.data.preview ?? post.data.description;
     return !!data;
   }
 
+  // Start a Dodo (Merchant-of-Record) checkout for this post. Posts the token +
+  // postId to /api/checkout, which creates the payment session server-side and
+  // returns a hosted checkout URL. On success the browser is redirected there;
+  // the actual entitlement is granted later by Dodo's signature-verified webhook
+  // (not here). Any network/parse failure falls through to the alert fallback.
   async function unlock() {
     const t = await token();
     let j = {};
@@ -115,11 +238,14 @@ const preview = post.data.preview ?? post.data.description;
       j = await res.json();
     } catch (e) {}
     if (j.url) window.location.href = j.url;
-    else alert(j.error || 'Checkout is not set up yet.');
+    else alert(j.error || 'Checkout is not set up yet.'); // Surface server error or unconfigured state.
   }
 
+  // Build the "you must pay to read the rest" box shown in `locked` mode.
+  // Two variants: signed-out viewers get a link to /login (can't buy without an
+  // account to attach the entitlement to); signed-in viewers get a buy button.
   function lockBox() {
-    gated.innerHTML = '';
+    gated.innerHTML = ''; // Ensure no stale/paid body remains behind the lock.
     const box = document.createElement('div');
     box.className = 'lock';
     const p = document.createElement('p');
@@ -141,6 +267,11 @@ const preview = post.data.preview ?? post.data.description;
     ui.appendChild(box);
   }
 
+  // Inline owner-only control to flip this post's paywall on/off without leaving
+  // the page. Rendered ONLY when isAdmin — but note that flag is cosmetic: the
+  // actual protection is the RLS policy on post_paywall (writes allowed only
+  // when is_admin() is true server-side). A non-admin who forced this UI to
+  // render would simply get a permission error back from Supabase.
   function adminBar() {
     if (!isAdmin) return;
     const bar = document.createElement('div');
@@ -153,25 +284,35 @@ const preview = post.data.preview ?? post.data.description;
     btn.addEventListener('click', async () => {
       let error;
       if (isPaid()) {
+        // Un-gate: keep the row (preserves price/product history) but clear the
+        // flag. RLS + is_admin() authorize this UPDATE server-side.
         ({ error } = await supabase
           .from('post_paywall')
           .update({ is_paid: false, updated_at: new Date().toISOString() })
           .eq('post_id', slug));
       } else {
+        // Gate: collect price and the Dodo product id (the product must already
+        // exist in Dodo — checkout later references it). `=== null` means the
+        // admin hit Cancel, so we abort without touching the DB.
         const dollars = prompt('Price to unlock this post (USD):', '5');
         if (dollars === null) return;
         const productId = prompt('Dodo product ID for this post (create the product in Dodo first):', '');
         if (productId === null) return;
+        // Store price as integer cents; floor at 50c and default to 500 (=$5)
+        // when the input is blank/NaN, so we never write a zero/negative price.
         const cents = Math.max(50, Math.round(parseFloat(dollars) * 100) || 500);
+        // upsert on post_id: first-time gating inserts, re-gating updates.
         ({ error } = await supabase.from('post_paywall').upsert(
           { post_id: slug, is_paid: true, price_cents: cents, currency: 'usd', product_id: productId.trim(), updated_at: new Date().toISOString() },
           { onConflict: 'post_id' }
         ));
       }
       if (error) {
+        // Most likely an RLS denial (caller isn't actually an admin) — surface it.
         alert('Paywall update failed: ' + error.message);
         return;
       }
+      // Reflect the new state immediately: reload the row, then repaint.
       await loadPaywall();
       await render();
     });
@@ -180,6 +321,8 @@ const preview = post.data.preview ?? post.data.description;
     ui.appendChild(bar);
   }
 
+  // Read this post's paywall row (price + flag). These columns are non-secret,
+  // so RLS may allow public SELECT; `paywall` stays null for un-gated posts.
   async function loadPaywall() {
     const { data } = await supabase
       .from('post_paywall')
@@ -189,14 +332,22 @@ const preview = post.data.preview ?? post.data.description;
     paywall = data;
   }
 
+  // Core decision + paint. Picks one of three modes and updates both mount
+  // points. IMPORTANT: this is async and may be invoked concurrently (load +
+  // auth-state changes), so it is guarded by `renderGen`.
   async function render() {
+    // Claim a generation number. If a newer render() starts while we're
+    // awaiting, `renderGen` moves past `gen` and we bail before touching the
+    // DOM — this is the fix for the duplicated/triplicated admin-bar bug.
     const gen = ++renderGen;
     let mode;
-    if (!isPaid()) mode = 'free';
-    else if (user && (isAdmin || (await entitled()))) mode = 'unlocked';
-    else mode = 'locked';
+    if (!isPaid()) mode = 'free';                                  // Not gated: show everything.
+    else if (user && (isAdmin || (await entitled()))) mode = 'unlocked'; // Owner or buyer.
+    else mode = 'locked';                                          // Gated, no access.
     if (gen !== renderGen) return; // superseded by a newer render
 
+    // Body: locked hides it; free/unlocked fetch it (only unlocked sends auth,
+    // so the server serves free bodies without a token but paid bodies only with).
     if (mode === 'locked') gated.innerHTML = '';
     else await fetchGated(mode === 'unlocked');
     if (gen !== renderGen) return;
@@ -207,6 +358,10 @@ const preview = post.data.preview ?? post.data.description;
     adminBar();
   }
 
+  // Establish viewer identity, then render. Resolves the session, then (only if
+  // signed in) calls the is_admin() RPC to decide whether to offer admin tools.
+  // The RPC is wrapped in try/catch so an RPC failure degrades to a normal
+  // (non-admin) viewer rather than blocking the whole render.
   async function init() {
     const { data } = await supabase.auth.getSession();
     user = data.session ? data.session.user : null;
@@ -214,13 +369,16 @@ const preview = post.data.preview ?? post.data.description;
     if (user) {
       try {
         const { data: adm } = await supabase.rpc('is_admin');
-        isAdmin = adm === true;
+        isAdmin = adm === true; // Strict compare: only literal true enables admin UI.
       } catch (e) {}
     }
     await loadPaywall();
     await render();
   }
 
+  // Re-run the whole flow whenever auth changes (sign in/out, token refresh) so
+  // the gate reacts live — e.g. a fresh magic-link login unlocks the body
+  // without a page reload. Then kick off the initial render on script load.
   supabase.auth.onAuthStateChange(() => init());
   init();
 </script>

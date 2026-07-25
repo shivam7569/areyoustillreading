@@ -1,13 +1,75 @@
 ---
-// Email subscribe form. Posts to the /api/subscribe Cloudflare Pages Function.
-// The Turnstile widget renders only when PUBLIC_TURNSTILE_SITE_KEY is set at build.
+/**
+ * SubscribeForm.astro
+ * ------------------------------------------------------------------------------
+ * WHAT THIS IS
+ *   A self-contained, drop-in newsletter subscribe widget: a <section> with an
+ *   email field, an anti-bot honeypot, an optional Cloudflare Turnstile challenge,
+ *   and a small inline progressive-enhancement script that submits via fetch().
+ *
+ * SINGLE RESPONSIBILITY
+ *   Collect an email address and hand it to the /api/subscribe Cloudflare Pages
+ *   Function. It does NOT itself write to the database, send mail, or verify the
+ *   Turnstile token — it only gathers input, does client-side bot friction, and
+ *   relays the payload. All trust decisions happen server-side (see SECURITY).
+ *
+ * WHERE IT FITS IN THE ARCHITECTURE
+ *   Browser (this component)
+ *     -> POST /api/subscribe            (Cloudflare Pages Function, the trust boundary)
+ *        -> verifies Turnstile token with Cloudflare's siteverify API
+ *        -> inserts a pending subscriber into Supabase (Postgres via PostgREST, RLS-locked)
+ *        -> sends a double-opt-in confirmation email via Resend
+ *   The double opt-in ("Check your inbox to confirm") means a successful POST here
+ *   creates only a PENDING record; the address is not truly subscribed until the
+ *   user clicks the emailed confirmation link. This component has no knowledge of
+ *   that later step.
+ *
+ * DEPENDENCIES (what this imports / relies on)
+ *   - import.meta.env.PUBLIC_TURNSTILE_SITE_KEY: build-time public env var. The
+ *     PUBLIC_ prefix is required for Astro/Vite to expose it to client code. It is
+ *     the Turnstile *site* key (safe to ship); the matching *secret* key lives only
+ *     in the /api/subscribe function's environment and never reaches the browser.
+ *   - Cloudflare Turnstile script (challenges.cloudflare.com), loaded only when a
+ *     site key exists. It injects a hidden <input name="cf-turnstile-response">.
+ *   - The /api/subscribe Pages Function, which is the real security boundary.
+ *   - CSS custom properties (--border, --bg, --fg, --accent, --muted) from the
+ *     global theme; this component ships no color values of its own beyond #fff.
+ *
+ * WHAT DEPENDS ON THIS
+ *   Any page/layout that embeds <SubscribeForm />. It uses a hard-coded element id
+ *   ("subscribe-form"), so rendering it more than once per page would produce
+ *   duplicate ids and the inline script would only wire up the first instance.
+ *
+ * SECURITY ASSUMPTIONS / GOTCHAS
+ *   - Client-side checks here (honeypot, Turnstile widget) are FRICTION, not
+ *     enforcement. A hostile client can skip this script entirely and POST raw
+ *     JSON. Therefore /api/subscribe MUST re-validate the Turnstile token, re-check
+ *     the honeypot, and rely on Supabase Row-Level Security — never trust this form.
+ *   - The site key is intentionally public; exposing it is expected and harmless.
+ *   - If PUBLIC_TURNSTILE_SITE_KEY is unset at build time, the widget and its script
+ *     are omitted and turnstileToken is sent as undefined. Whether that is allowed
+ *     is the server's decision (e.g. dev/local vs. production policy).
+ *   - No secrets, tokens, or personal data are placed in the URL; the email travels
+ *     in the POST body only.
+ */
+
+// Read at build time. When present, the template renders the Turnstile widget and
+// loads its script; when absent (e.g. local dev without keys), both are skipped and
+// the form still works, deferring bot policy to the server.
 const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
 ---
 
+{/*
+  The form carries method="POST" action="/api/subscribe" so it degrades gracefully:
+  if JavaScript is disabled or the inline script fails, the browser still performs a
+  native POST to the same endpoint. The inline script below hijacks submit to give
+  an inline status message instead of a full page navigation.
+*/}
 <section class="subscribe">
   <h2>Subscribe</h2>
   <p>New posts by email. Double opt-in, one-click unsubscribe, no spam.</p>
   <form id="subscribe-form" method="POST" action="/api/subscribe">
+    {/* required + type=email gives free browser-level validation before submit. */}
     <input
       type="email"
       name="email"
@@ -15,14 +77,38 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
       placeholder="you@example.com"
       aria-label="Email address"
     />
+    {/*
+      HONEYPOT (spam trap). This "website" field is visually hidden off-screen via
+      the .hp class (NOT display:none, so it stays in the accessibility/DOM tree and
+      autofill/scripted bots still see and fill it). Real humans never see it and
+      leave it blank. tabindex="-1" keeps keyboard users from tabbing into it,
+      autocomplete="off" stops password managers pre-filling it, and aria-hidden
+      hides it from screen readers. The server treats a non-empty "website" value as
+      a bot and silently drops the request — silent so bots get no signal to adapt.
+      NOTE: the html comment on the next line predates this block and is retained
+      as-is; do not rely on it for the full explanation.
+    */}
     <!-- honeypot: hidden from humans; bots fill it and get silently dropped -->
     <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true" />
+    {/*
+      Turnstile mount point. Rendered only when a site key exists. The Turnstile
+      script (loaded below) finds this div by its .cf-turnstile class and injects a
+      hidden <input name="cf-turnstile-response"> holding the challenge token, which
+      the inline script reads and forwards to the server for verification.
+    */}
     {siteKey && <div class="cf-turnstile" data-sitekey={siteKey}></div>}
     <button type="submit">Subscribe</button>
+    {/* Live region: aria-live="polite" so the status text is announced to screen
+        readers without stealing focus. Populated by the inline script. */}
     <p class="form-msg" role="status" aria-live="polite"></p>
   </form>
 </section>
 
+{/*
+  Load Turnstile's client library only when configured. is:inline keeps Astro from
+  bundling/transforming this third-party script; async/defer avoid blocking render.
+  When siteKey is absent this whole tag is omitted, so no external request is made.
+*/}
 {siteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
 
 <style>
@@ -52,20 +138,37 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
     cursor: pointer;
   }
   .subscribe .cf-turnstile { flex-basis: 100%; }
+  /* Honeypot hide technique: pushed far off-screen and shrunk to ~0px rather than
+     display:none/visibility:hidden. Intentional — many bots skip fields that are
+     display:none, so keeping it in layout (just invisible) makes them more likely to
+     fill it and trip the trap. Do not change to display:none. */
   .subscribe .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
   .form-msg { flex-basis: 100%; margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; min-height: 1.2em; }
 </style>
 
+{/*
+  Progressive-enhancement submit handler. is:inline so Astro ships it verbatim (no
+  bundling) and it runs immediately without imports. Written as an IIFE with var/ES5
+  so it needs no module scope and runs in older browsers. If this script never runs,
+  the form's native POST (method/action above) is the fallback.
+*/}
 <script is:inline>
   (function () {
     var form = document.getElementById('subscribe-form');
+    // Defensive: bail if the form isn't on the page (e.g. component not rendered).
     if (!form) return;
     var msg = form.querySelector('.form-msg');
     form.addEventListener('submit', async function (e) {
+      // Stop the native navigation so we can POST via fetch and show inline status.
       e.preventDefault();
       msg.textContent = 'Submitting…';
+      // Turnstile injects this hidden input; may be absent if no site key was
+      // configured or the challenge hasn't resolved yet. We forward whatever exists
+      // and let the server decide whether a missing/blank token is acceptable.
       var tokenEl = form.querySelector('[name="cf-turnstile-response"]');
       try {
+        // Send JSON (native fallback would send form-encoded); the endpoint accepts
+        // this shape. website=honeypot value, forwarded so the server can reject bots.
         var res = await fetch('/api/subscribe', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -75,13 +178,23 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
             turnstileToken: tokenEl ? tokenEl.value : undefined,
           }),
         });
+        // Tolerate non-JSON / empty bodies (e.g. error pages) so .json() never throws
+        // uncaught; fall back to {} and then to generic copy below.
         var data = await res.json().catch(function () { return {}; });
+        // Prefer the server's own message/error text; otherwise use status-based copy.
+        // "Check your inbox to confirm." reflects the double-opt-in flow: success here
+        // only means a confirmation email was queued, not that they're subscribed yet.
         msg.textContent = data.message || data.error || (res.ok ? 'Check your inbox to confirm.' : 'Something went wrong.');
         if (res.ok) {
           form.reset();
+          // Reset Turnstile so a fresh token is issued for any subsequent submit
+          // (tokens are single-use). Guarded try/catch: the global may be missing if
+          // the script failed to load, and a reset failure must not break the UX.
           if (window.turnstile) { try { window.turnstile.reset(); } catch (e) {} }
         }
       } catch (err) {
+        // Network/transport failure (fetch rejected) — distinct from an HTTP error,
+        // which is handled above via res.ok. Never surface the raw error to the user.
         msg.textContent = 'Network error. Please try again.';
       }
     });

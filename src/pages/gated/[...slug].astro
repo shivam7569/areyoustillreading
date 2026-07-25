@@ -1,16 +1,101 @@
 ---
+/**
+ * ============================================================================
+ * src/pages/gated/[...slug].astro — Paywalled post body ("gated" route)
+ * ============================================================================
+ *
+ * WHAT THIS IS
+ *   A statically-generated Astro page that emits the FULL rendered body of
+ *   every paywalled ("gateable") blog post at build time, one HTML file per
+ *   post under the /gated/<slug> URL space (e.g. /gated/my-paid-essay/).
+ *
+ * SINGLE RESPONSIBILITY
+ *   Render the complete post content — nothing else. It carries no paywall
+ *   logic, no auth checks, no UI chrome (no header/footer/layout). It is a
+ *   bare content fragment whose ONLY job is to exist as a build artifact that
+ *   the edge middleware can serve to entitled readers.
+ *
+ * HOW IT FITS THE ARCHITECTURE (why a separate route exists at all)
+ *   The public post page (src/pages/blog/[...slug] or similar) ships only a
+ *   teaser/preview plus the <PaywallGate> component. The paid body is NOT in
+ *   that HTML — otherwise anyone could "View Source" and read it for free.
+ *   Instead the paid body lives here, under /gated/*, and access is enforced
+ *   at the EDGE by functions/gated/_middleware.js (a Cloudflare Pages
+ *   Function). The request flow:
+ *
+ *     reader → GET /gated/<slug>
+ *            → functions/gated/_middleware.js intercepts FIRST
+ *                • validates the reader's access token (signature + expiry)
+ *                • checks the Supabase entitlement (did they pay for THIS post?)
+ *                • honors admin bypass (is_admin()) for the owner's own preview
+ *            → only on success does it let Cloudflare Pages return the static
+ *              HTML that THIS file generated.
+ *
+ *   So the security boundary is the middleware, not this page. This page is
+ *   "dumb" on purpose: keeping gate logic out of the static asset means the
+ *   asset is safe to cache and impossible to partially leak.
+ *
+ * SECURITY ASSUMPTIONS / GOTCHAS (read before touching anything)
+ *   1. THE MIDDLEWARE IS THE ONLY GUARD. If functions/gated/_middleware.js is
+ *      removed, renamed, or its matcher stops covering /gated/*, these fully
+ *      rendered paid bodies become world-readable static files. Do not move
+ *      this route out from under the middleware's path.
+ *   2. NO SECRETS IN CONTENT. Because the output is a plain static file behind
+ *      an edge check (not per-user rendered), never assume anything here is
+ *      private beyond the token/entitlement gate. It's the whole post, served
+ *      as-is to anyone the middleware admits.
+ *   3. SEARCH / SITEMAP LEAK VECTORS. Paid bodies must never surface in the
+ *      public search index or sitemap, or the text would leak via those
+ *      indexes even though the page itself is gated. This is defended in two
+ *      places: `data-pagefind-ignore` below (Pagefind skips the node), and
+ *      the sitemap/RSS config excludes the /gated/* path. Both must stay true.
+ *   4. NO DRAFTS, GATEABLE ONLY. getStaticPaths filters to gateable && !draft
+ *      so we don't accidentally build a /gated page for a post that isn't
+ *      meant to be sold, and don't publish unfinished drafts to the edge.
+ *
+ * DEPENDS ON
+ *   - astro:content — getCollection('blog') + render() (Astro content layer).
+ *   - The 'blog' content collection schema, which must define the booleans
+ *     `gateable` and `draft` used in the filter below.
+ *
+ * DEPENDED ON BY
+ *   - functions/gated/_middleware.js — gates access to these built files.
+ *   - The public post page's <PaywallGate>, which points entitled readers at
+ *     the corresponding /gated/<slug> URL to fetch/reveal the paid body.
+ * ============================================================================
+ */
 import { getCollection, render } from 'astro:content';
 
 // Full body of gateable posts. Served ONLY through functions/gated/_middleware.js,
 // which verifies the reader's token + entitlement. data-pagefind-ignore keeps this
 // content out of the public search index; it's also excluded from the sitemap.
+//
+// getStaticPaths runs at BUILD time and enumerates which /gated/<slug> pages to
+// generate. The predicate is a security-relevant allow-list:
+//   • data.gateable  — only posts explicitly flagged as sellable get a gated body.
+//   • !data.draft    — never emit a gated body for an unfinished/unpublished draft.
+// `post.id` (the collection entry id, i.e. the slug) becomes the [...slug] param,
+// and the full entry is forwarded via `props` so we don't re-fetch it below.
 export async function getStaticPaths() {
   const posts = await getCollection('blog', ({ data }) => data.gateable && !data.draft);
   return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
 }
 
+// `post` arrives from getStaticPaths props (no runtime query needed). render()
+// compiles the post's Markdown/MDX into an Astro <Content /> component using the
+// full pipeline (Shiki, KaTeX, build-time Mermaid, etc.) — the exact same body a
+// paying reader is entitled to see.
 const { post } = Astro.props;
 const { Content } = await render(post);
 ---
 
+{/*
+  The ONLY output of this page: the fully-rendered paid body, nothing else.
+  - id="gated-body" is the stable hook the client-side PaywallGate looks for when
+    it swaps the teaser for the real content after the middleware serves this file.
+  - data-pagefind-ignore tells the Pagefind indexer to skip this subtree so the
+    paid text never enters the public search index (leak vector #3 above).
+  No layout/header/footer here on purpose — this is a content fragment, and the
+  edge middleware is what decides whether the fragment is ever delivered.
+*/}
 <div id="gated-body" data-pagefind-ignore><Content /></div>

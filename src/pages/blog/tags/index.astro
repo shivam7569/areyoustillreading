@@ -1,19 +1,94 @@
 ---
+/**
+ * ROUTE: /blog/tags/  (Astro file-based routing — this is the tag *index*,
+ *                      i.e. the "browse all tags" landing page)
+ *
+ * WHAT THIS FILE IS
+ * -----------------
+ * A fully static, build-time-rendered page that lists every tag used across
+ * the blog, each with a count of how many published posts carry it, sorted
+ * most-used-first. It is the parent/hub for the per-tag archive pages that
+ * live at /blog/tags/[tag] (see the sibling `[tag].astro` dynamic route).
+ *
+ * SINGLE RESPONSIBILITY
+ * ---------------------
+ * Aggregate the blog content collection into a (tag -> post count) index and
+ * render it as a linked list. Nothing else — no data fetching at runtime, no
+ * user input, no auth. This is a leaf presentation page.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ * ----------------------------
+ * - Astro content collections: posts are Markdown/MDX files validated by the
+ *   `blog` collection schema (see src/content/config.ts). `getCollection`
+ *   reads them at BUILD TIME; the rendered HTML is a flat file served by
+ *   Cloudflare Pages. There is NO server component to this page.
+ * - Because it is static, none of the backend stack (Supabase / PostgREST /
+ *   RLS / Resend / Turnstile / Dodo Payments) is involved here. There is no
+ *   database query, no secret, and no request context. Any paywall/entitlement
+ *   logic elsewhere in the app is irrelevant to this route.
+ *
+ * DEPENDS ON (imports)
+ * --------------------
+ * - BaseLayout.astro — shared page shell (head, nav, footer, global styles).
+ *   The `.post-list` and `.count` classes used below are expected to be styled
+ *   globally (via BaseLayout / global CSS), not scoped here.
+ * - astro:content `getCollection` — the build-time content API.
+ * - Implicitly: the `blog` collection schema, which must define `draft:boolean`
+ *   and `tags:string[]` (both are read below). If that schema changes shape,
+ *   this file breaks at build time.
+ *
+ * DEPENDED ON BY
+ * --------------
+ * - /blog/tags/[tag].astro links back here ("all tags") and this page links
+ *   forward to each [tag] archive. Navigation, RSS, and the main /blog index
+ *   may also link to /blog/tags/.
+ *
+ * SECURITY / GOTCHAS
+ * ------------------
+ * - No security surface: no untrusted input, no auth, no secrets. Tags come
+ *   from the author's own repo content, so they are trusted.
+ * - Tag values are interpolated raw into the href (`/blog/tags/${tag}`). This
+ *   is safe ONLY because tags are author-controlled build-time content. If tags
+ *   ever became user-supplied, they would need URL-encoding here.
+ * - Draft filtering (`!data.draft`) is the one correctness-critical line: it
+ *   keeps unpublished posts (and any tag that exists ONLY on drafts) out of the
+ *   public index. A tag used solely by drafts simply won't appear.
+ */
+
+// Pull every blog entry, EXCLUDING drafts. The predicate runs at build time;
+// `data` is the frontmatter validated against the collection schema. Filtering
+// here (rather than after aggregating) means draft-only tags never surface and
+// draft posts never inflate any count.
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 
 const posts = await getCollection('blog', ({ data }) => !data.draft);
+
+// Build a frequency index: tag -> number of published posts carrying it.
+// A Map (not a plain object) avoids prototype-key pitfalls if a tag were ever
+// named e.g. "constructor" or "__proto__".
 const counts = new Map<string, number>();
 for (const p of posts) {
+  // `?? 0` seeds the count on first sight of a tag; a post's tags array may be
+  // empty, in which case this inner loop simply contributes nothing.
   for (const t of p.data.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
 }
+
+// Sort for a stable, useful display order: primary = count descending (most
+// popular tags first); tie-breaker = tag name ascending (localeCompare) so the
+// output is deterministic across builds regardless of Map insertion order.
 const tags = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 ---
 
+{/* BaseLayout supplies <head>/nav/footer; title+description feed the SEO/OG tags. */}
 <BaseLayout title="Tags — areyoustillreading" description="Browse posts by tag.">
+  {/* Escape hatch back to the unfiltered post index. */}
   <p><a href="/blog">&larr; All posts</a></p>
   <h1>Tags</h1>
   <ul class="post-list">
+    {/* One <li> per tag, already sorted (popularity desc, then name asc).
+        Link target is the per-tag archive route /blog/tags/[tag]. The `#`
+        is a cosmetic prefix; `(count)` shows how many published posts match. */}
     {tags.map(([tag, count]) => (
       <li><a href={`/blog/tags/${tag}`}>#{tag}</a> <span class="count">({count})</span></li>
     ))}

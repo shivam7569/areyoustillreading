@@ -1,4 +1,65 @@
 ---
+/**
+ * BaseHead.astro
+ * ---------------------------------------------------------------------------
+ * WHAT THIS FILE IS
+ *   The single, reusable set of `<head>` elements shared by every page on the
+ *   site. It emits the core HTML metadata: charset, viewport, <title>,
+ *   description, canonical URL, favicon, and the OpenGraph + Twitter Card tags
+ *   that control how links look when shared on social platforms / chat apps.
+ *
+ * SINGLE RESPONSIBILITY
+ *   Produce correct, per-page head metadata from three inputs (title,
+ *   description, optional image). It does NOT render <html>, <head>, <body>,
+ *   analytics, fonts, or KaTeX/Shiki assets — those belong to the layout(s)
+ *   that include this component. Keeping this file narrow means every page
+ *   gets consistent SEO/social metadata from one place.
+ *
+ * HOW IT FITS THE ARCHITECTURE
+ *   This is a build-time Astro component (frontmatter runs during the static
+ *   build; the output is plain HTML — there is no client JS here). Layouts
+ *   (e.g. the base/blog-post layouts) render `<BaseHead .../>` inside their
+ *   own `<head>`. Because this ships to every crawler and social scraper, the
+ *   values here directly drive Google/Bing indexing and OG previews.
+ *
+ * DEPENDS ON
+ *   - Astro.props ....... title/description/image passed by the including page.
+ *   - Astro.site ........ the site's absolute base URL, configured in
+ *                         astro.config.* (`site:`). REQUIRED: if `site` is
+ *                         unset, `new URL(path, Astro.site)` throws at build
+ *                         time — this component is the tripwire that surfaces a
+ *                         missing `site` config.
+ *   - Astro.url ......... the current page's URL (used for the canonical path).
+ *   - Astro.generator ... Astro's version string for the <meta generator> tag.
+ *
+ * DEPENDED ON BY
+ *   Every page, transitively, via the site layouts. A change here changes the
+ *   head of the entire site, so treat edits as site-wide.
+ *
+ * SECURITY / SAFETY NOTES
+ *   - No secrets, tokens, or auth here. This file has NO relationship to
+ *     Supabase RLS, Pages Functions, paywall entitlements, Turnstile, or
+ *     Dodo webhooks — it is pure static presentation metadata and safe to ship
+ *     to anonymous visitors and bots.
+ *   - INJECTION SURFACE: `title`/`description`/`image` are interpolated into
+ *     meta attributes. Astro auto-escapes expression values in attributes, so
+ *     these are safe against HTML/attribute injection — but callers should
+ *     still pass trusted, human-authored copy (post frontmatter), not raw
+ *     user-generated content, to avoid misleading OG previews.
+ *   - All URLs are resolved to ABSOLUTE via `new URL(..., Astro.site)`.
+ *     OpenGraph/Twitter and canonical tags require absolute URLs; relative
+ *     ones are silently ignored by scrapers, so this normalization is
+ *     load-bearing, not cosmetic.
+ */
+
+/**
+ * Props contract for this component.
+ * @property title       Page title -> <title> + og:title + twitter:title.
+ * @property description Meta description -> description + og/twitter description.
+ * @property image       OPTIONAL absolute-or-root-relative path to a social
+ *                        share image. When omitted we fall back to the favicon
+ *                        (see `ogImage` below) so previews always have an image.
+ */
 interface Props {
   title: string;
   description: string;
@@ -7,18 +68,42 @@ interface Props {
 
 const { title, description, image } = Astro.props;
 
+// Canonical URL for THIS page: combine the current pathname with the site's
+// base URL to get a stable absolute URL. Prevents duplicate-content SEO
+// penalties (e.g. trailing-slash / query-string variants all point here).
 const canonical = new URL(Astro.url.pathname, Astro.site);
+
+// Absolute URL for the social-share image. WHY the `?? '/favicon.svg'`
+// fallback: og:image / twitter:image must always be present and absolute for a
+// card to render; if a page supplies no image we degrade gracefully to the
+// site favicon rather than emitting a broken/empty image tag.
 const ogImage = new URL(image ?? '/favicon.svg', Astro.site);
 ---
 
+{/*
+  TEMPLATE: emits the raw <head> children. No wrapping element — the including
+  layout provides the surrounding <head>. Every {expression} below is
+  auto-escaped by Astro when placed in an attribute value.
+*/}
+
+{/* Core document metadata. charset MUST come first (within the head's first
+    bytes) so the browser parses the rest of the head with the right encoding.
+    viewport enables responsive layout on mobile. */}
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="generator" content={Astro.generator} />
 <title>{title}</title>
 <meta name="description" content={description} />
+{/* Canonical + favicon. `.toString()` turns the URL object into the string the
+    attribute expects. The favicon is referenced by a fixed root-relative path
+    (not the resolved `ogImage`) because the browser resolves it against the
+    page origin and it is always this exact asset. */}
 <link rel="canonical" href={canonical.toString()} />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
+{/* OpenGraph tags: consumed by Facebook/LinkedIn/Slack/Discord/iMessage etc.
+    og:url mirrors the canonical URL; og:image MUST be absolute (see frontmatter
+    `ogImage`). og:site_name is a fixed brand string. */}
 <!-- OpenGraph -->
 <meta property="og:type" content="website" />
 <meta property="og:url" content={canonical.toString()} />
@@ -27,6 +112,9 @@ const ogImage = new URL(image ?? '/favicon.svg', Astro.site);
 <meta property="og:image" content={ogImage.toString()} />
 <meta property="og:site_name" content="areyoustillreading" />
 
+{/* Twitter/X Card tags. `summary_large_image` renders the big-image card
+    style; it reuses the same absolute title/description/image as OpenGraph so
+    both networks show a consistent preview. */}
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content={title} />
