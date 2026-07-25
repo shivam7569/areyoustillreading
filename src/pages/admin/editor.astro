@@ -54,8 +54,73 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   import { supabase } from '../../lib/supabase';
   import { Crepe } from '@milkdown/crepe';
   import { languages } from '@codemirror/language-data';
+  import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
+  import { keymap } from '@codemirror/view';
+  import { $prose } from '@milkdown/kit/utils';
+  import { Plugin, TextSelection } from '@milkdown/kit/prose/state';
   import '@milkdown/crepe/theme/common/style.css';
   import '@milkdown/crepe/theme/nord.css';
+
+  // Auto-pair brackets AND quotes across the whole editor (blog-wide, prose side).
+  // Typing an opener inserts its closer with the cursor between (e.g. '(|)'); typing
+  // a closer/quote that's already next "types over" it; Backspace on an empty pair
+  // deletes both. Code blocks get the same behavior via CodeMirror's closeBrackets.
+  const PAIRS = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' };
+  const CLOSERS = new Set([')', ']', '}']);
+  const QUOTES = new Set(['"', "'", '`']);
+
+  const bracketPairing = $prose(() => new Plugin({
+    props: {
+      handleTextInput(view, from, to, text) {
+        const { state } = view;
+        const closing = PAIRS[text];
+        if (closing) {
+          if (QUOTES.has(text) && from === to) {
+            // Type over an existing identical quote instead of nesting a new pair.
+            if (state.doc.textBetween(from, from + 1) === text) {
+              view.dispatch(state.tr.setSelection(TextSelection.create(state.doc, from + 1)));
+              return true;
+            }
+            // Don't auto-pair a quote right after a word char (contractions: don't, it's).
+            const before = from > 0 ? state.doc.textBetween(from - 1, from) : '';
+            if (/\w/.test(before)) return false;
+          }
+          const tr = state.tr;
+          if (from !== to) {
+            // Wrap the current selection in the pair, keeping it selected.
+            const inner = state.doc.textBetween(from, to);
+            tr.insertText(text + inner + closing, from, to);
+            tr.setSelection(TextSelection.create(tr.doc, from + 1, from + 1 + inner.length));
+          } else {
+            tr.insertText(text + closing, from, to);
+            tr.setSelection(TextSelection.create(tr.doc, from + 1));
+          }
+          view.dispatch(tr);
+          return true;
+        }
+        // Type over a bracket closer that's already the next character.
+        if (CLOSERS.has(text) && from === to && state.doc.textBetween(from, from + 1) === text) {
+          view.dispatch(state.tr.setSelection(TextSelection.create(state.doc, from + 1)));
+          return true;
+        }
+        return false;
+      },
+      handleKeyDown(view, event) {
+        if (event.key !== 'Backspace') return false;
+        const { state } = view;
+        const sel = state.selection;
+        if (!sel.empty || sel.from === 0) return false;
+        const before = state.doc.textBetween(sel.from - 1, sel.from);
+        const after = state.doc.textBetween(sel.from, sel.from + 1);
+        // Cursor sits between an empty pair -> delete both sides.
+        if (PAIRS[before] && PAIRS[before] === after) {
+          view.dispatch(state.tr.delete(sel.from - 1, sel.from + 1));
+          return true;
+        }
+        return false;
+      },
+    },
+  }));
 
   const gate = document.getElementById('admin-gate');
   const wrap = document.getElementById('editor-wrap');
@@ -89,9 +154,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         // language set (from @codemirror/language-data) so a block tagged ts /
         // python / rust / etc. loads that grammar and highlights accordingly,
         // with a language picker in the block. Matches the build-time Shiki output.
-        [Crepe.Feature.CodeMirror]: { languages },
+        [Crepe.Feature.CodeMirror]: {
+          languages,
+          // Auto-close brackets/quotes: typing '(' inserts '()' with the cursor
+          // between (i.e. '(|)'), and Backspace on the empty pair removes BOTH.
+          extensions: [closeBrackets(), keymap.of(closeBracketsKeymap)],
+        },
       },
     });
+    crepe.editor.use(bracketPairing);
     await crepe.create();
 
     // Temporary: prove Markdown serialization works. The next increment wires
