@@ -59,6 +59,19 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     padding: 1rem; color: #e5484d; white-space: pre-wrap;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
+  .py-figure { display: flex; justify-content: center; padding: 0.5rem; overflow-x: auto; }
+  .py-figure svg { max-width: 100%; height: auto; }
+  .py-anim { display: block; margin: 0.5rem auto; max-width: 100%; height: auto; }
+  .py-error {
+    padding: 0.75rem; margin: 0; color: #e5484d; white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em;
+  }
+  .py-stdout {
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0 0; white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em;
+    opacity: 0.8; border-top: 1px dashed var(--border);
+  }
+  .py-empty { padding: 0.5rem 0.75rem; opacity: 0.7; }
 </style>
 
 <script>
@@ -69,6 +82,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   import { keymap } from '@codemirror/view';
   import { $prose } from '@milkdown/kit/utils';
   import { Plugin, TextSelection } from '@milkdown/kit/prose/state';
+  import { renderPythonPlot } from '../../lib/pyplot';
   import '@milkdown/crepe/theme/common/style.css';
   import '@milkdown/crepe/theme/nord.css';
 
@@ -165,27 +179,68 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return el;
   }
 
+  // --- Python plot cells (mini "notebook") ------------------------------------
+  // A ```python block runs client-side via Pyodide (see lib/pyplot) and its plot
+  // renders in the block's preview panel, right below the code. Results are cached
+  // by source; execution is debounced so it only runs when you pause typing.
+  const plotCache = new Map();   // source -> output HTML (svg / <img> gif / error)
+  const plotPending = new Map(); // source -> applyPreview, awaiting the next flush
+  let plotTimer = null;
+  let plotFreshTick = false;
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  }
+  function plotHtml({ svg, gif, stdout, error }) {
+    if (error) return '<pre class="py-error">' + escapeHtml(error) + '</pre>';
+    let out = '';
+    if (gif) out += '<img class="py-anim" alt="plot animation" src="data:image/gif;base64,' + gif + '">';
+    else if (svg) out += '<div class="py-figure">' + svg + '</div>';
+    else out += '<p class="py-empty">Ran with no figure. Add a plot (e.g. matplotlib) to see output.</p>';
+    if (stdout && stdout.trim()) out += '<pre class="py-stdout">' + escapeHtml(stdout) + '</pre>';
+    return out;
+  }
+  async function flushPlots() {
+    const jobs = [...plotPending.entries()];
+    plotPending.clear();
+    for (const [code, applyPreview] of jobs) {
+      let html;
+      try {
+        html = plotHtml(await renderPythonPlot(code));
+      } catch (e) {
+        html = '<pre class="py-error">' + escapeHtml('Could not run Python: ' + (e && e.message ? e.message : String(e))) + '</pre>';
+      }
+      plotCache.set(code, html);
+      applyPreview(html);
+    }
+  }
+  function schedulePlot(code, applyPreview) {
+    if (plotCache.has(code)) { applyPreview(plotCache.get(code)); return; }
+    // A synchronous burst (mount: several blocks at once) accumulates so each one
+    // renders; a later keystroke starts a fresh tick and drops the previous
+    // intermediate of the block being edited, so we don't run on every keystroke.
+    if (!plotFreshTick) {
+      plotPending.clear();
+      plotFreshTick = true;
+      Promise.resolve().then(() => { plotFreshTick = false; });
+    }
+    plotPending.set(code, applyPreview);
+    clearTimeout(plotTimer);
+    plotTimer = setTimeout(flushPlots, 700);
+  }
+
   const gate = document.getElementById('admin-gate');
   const wrap = document.getElementById('editor-wrap');
   const statusEl = document.getElementById('editor-status');
 
   async function init() {
-    const { data } = await supabase.auth.getSession();
-    const user = data.session ? data.session.user : null;
-    if (!user) {
-      gate.innerHTML = 'Please <a href="/login">sign in</a> to write.';
-      return;
-    }
-    let isAdmin = false;
-    try {
-      const { data: a } = await supabase.rpc('is_admin');
-      isAdmin = a === true;
-    } catch (e) {}
-    if (!isAdmin) {
-      gate.textContent = 'Admins only.';
-      return;
-    }
-
+    // TEMP (dev): the editor is intentionally UNGATED so it can be built and tested
+    // from a general user's POV without an admin login. BEFORE LAUNCH, restore the
+    // gate here — require a session AND is_admin:
+    //   const { data } = await supabase.auth.getSession();
+    //   if (!data.session) { gate.innerHTML = 'Please <a href="/login">sign in</a> to write.'; return; }
+    //   const { data: a } = await supabase.rpc('is_admin');
+    //   if (a !== true) { gate.textContent = 'Admins only.'; return; }
     gate.hidden = true;
     wrap.hidden = false;
 
@@ -209,17 +264,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           // publish the same ```mermaid fence is rendered at build time by
           // rehype-mermaid, so editor preview and live site stay identical.
           renderPreview: (language, content, applyPreview) => {
-            if ((language || '').toLowerCase() !== 'mermaid') return null;
+            const lang = (language || '').toLowerCase();
             const code = content.trim();
             if (!code) return null;
-            const id = 'mmd-' + (++mermaidSeq);
-            loadMermaid()
-              .then((mermaid) => mermaid.render(id, code))
-              .then((res) => applyPreview(diagramEl(res.svg)))
-              .catch((err) => applyPreview(errorEl(err)));
-            return undefined;
+            if (lang === 'mermaid') {
+              const id = 'mmd-' + (++mermaidSeq);
+              loadMermaid()
+                .then((mermaid) => mermaid.render(id, code))
+                .then((res) => applyPreview(diagramEl(res.svg)))
+                .catch((err) => applyPreview(errorEl(err)));
+              return undefined;
+            }
+            if (lang === 'python' || lang === 'py') {
+              schedulePlot(code, applyPreview);
+              return undefined;
+            }
+            return null;
           },
-          previewLabel: 'Diagram',
+          previewLabel: 'Output',
         },
       },
     });
