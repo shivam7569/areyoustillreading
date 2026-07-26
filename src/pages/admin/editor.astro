@@ -59,19 +59,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     padding: 1rem; color: #e5484d; white-space: pre-wrap;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  .py-figure { display: flex; justify-content: center; padding: 0.5rem; overflow-x: auto; }
-  .py-figure svg { max-width: 100%; height: auto; }
-  .py-anim { display: block; margin: 0.5rem auto; max-width: 100%; height: auto; }
-  .py-error {
+  .plotly-cell { margin: 0.25rem 0 1rem; }
+  .plotly-holder { width: 100%; min-height: 340px; }
+  .plotly-status, .plotly-empty { padding: 0.75rem; opacity: 0.7; }
+  .plotly-empty code, .plotly-error {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .plotly-error {
     padding: 0.75rem; margin: 0; color: #e5484d; white-space: pre-wrap;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em;
+    overflow-x: auto; font-size: 0.85em;
   }
-  .py-stdout {
-    padding: 0.5rem 0.75rem; margin: 0.5rem 0 0; white-space: pre-wrap;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em;
-    opacity: 0.8; border-top: 1px dashed var(--border);
-  }
-  .py-empty { padding: 0.5rem 0.75rem; opacity: 0.7; }
 </style>
 
 <script>
@@ -81,8 +78,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
   import { keymap } from '@codemirror/view';
   import { $prose } from '@milkdown/kit/utils';
-  import { Plugin, TextSelection } from '@milkdown/kit/prose/state';
-  import { renderPythonPlot } from '../../lib/pyplot';
+  import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state';
+  import { Decoration, DecorationSet } from '@milkdown/kit/prose/view';
+  import { renderPlotlyFigure, loadPlotlyJs } from '../../lib/plotly';
   import '@milkdown/crepe/theme/common/style.css';
   import '@milkdown/crepe/theme/nord.css';
 
@@ -179,55 +177,109 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return el;
   }
 
-  // --- Python plot cells (mini "notebook") ------------------------------------
-  // A ```python block runs client-side via Pyodide (see lib/pyplot) and its plot
-  // renders in the block's preview panel, right below the code. Results are cached
-  // by source; execution is debounced so it only runs when you pause typing.
-  const plotCache = new Map();   // source -> output HTML (svg / <img> gif / error)
-  const plotPending = new Map(); // source -> applyPreview, awaiting the next flush
-  let plotTimer = null;
-  let plotFreshTick = false;
+  // --- Interactive Python plot cells (Plotly) ---------------------------------
+  // Each ```python block gets a live, interactive plot rendered right below it —
+  // a notebook-style cell. The author's plotly.py runs client-side via Pyodide
+  // (lib/plotly) and plotly.js renders the figure, so 3D plots rotate/zoom right
+  // in the editor. The panel is a ProseMirror WIDGET decoration (non-editable,
+  // outside Crepe's sanitizer) so interactivity survives. Panels are keyed by the
+  // python block's index, so a panel (and its plot) persists while you edit —
+  // only its contents re-render, debounced.
+  const plotlyKey = new PluginKey('plotly-cells');
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-  }
-  function plotHtml({ svg, gif, stdout, error }) {
-    if (error) return '<pre class="py-error">' + escapeHtml(error) + '</pre>';
-    let out = '';
-    if (gif) out += '<img class="py-anim" alt="plot animation" src="data:image/gif;base64,' + gif + '">';
-    else if (svg) out += '<div class="py-figure">' + svg + '</div>';
-    else out += '<p class="py-empty">Ran with no figure. Add a plot (e.g. matplotlib) to see output.</p>';
-    if (stdout && stdout.trim()) out += '<pre class="py-stdout">' + escapeHtml(stdout) + '</pre>';
-    return out;
-  }
-  async function flushPlots() {
-    const jobs = [...plotPending.entries()];
-    plotPending.clear();
-    for (const [code, applyPreview] of jobs) {
-      let html;
-      try {
-        html = plotHtml(await renderPythonPlot(code));
-      } catch (e) {
-        html = '<pre class="py-error">' + escapeHtml('Could not run Python: ' + (e && e.message ? e.message : String(e))) + '</pre>';
+  const plotlyCells = $prose(() => {
+    const panels = new Map(); // key -> panel DOM
+    const timers = new Map(); // panel -> debounce timer id
+    let plotlyJs = null;
+
+    function render(panel, code) {
+      if (panel.__code === code) return;
+      panel.__code = code;
+      clearTimeout(timers.get(panel));
+      if (!code) { panel.replaceChildren(); return; }
+      // Only show "Rendering…" on the first render; later edits keep the last plot
+      // visible until the new one is ready (no flicker).
+      if (!panel.querySelector('.plotly-holder')) {
+        const s = document.createElement('div');
+        s.className = 'plotly-status';
+        s.textContent = 'Rendering…';
+        panel.replaceChildren(s);
       }
-      plotCache.set(code, html);
-      applyPreview(html);
+      timers.set(panel, setTimeout(async () => {
+        try {
+          const { figure, error } = await renderPlotlyFigure(code);
+          if (panel.__code !== code) return; // superseded by a newer edit
+          if (error) {
+            const pre = document.createElement('pre');
+            pre.className = 'plotly-error';
+            pre.textContent = error;
+            panel.replaceChildren(pre);
+          } else if (figure) {
+            if (!plotlyJs) plotlyJs = await loadPlotlyJs();
+            let holder = panel.querySelector('.plotly-holder');
+            if (!holder) {
+              holder = document.createElement('div');
+              holder.className = 'plotly-holder';
+              panel.replaceChildren(holder);
+            }
+            await plotlyJs.react(holder, figure.data || [], figure.layout || {}, { responsive: true, displaylogo: false });
+          } else {
+            const p = document.createElement('p');
+            p.className = 'plotly-empty';
+            p.innerHTML = 'No figure — assign your plot to <code>fig</code>.';
+            panel.replaceChildren(p);
+          }
+        } catch (e) {
+          const pre = document.createElement('pre');
+          pre.className = 'plotly-error';
+          pre.textContent = 'Could not run: ' + (e && e.message ? e.message : String(e));
+          panel.replaceChildren(pre);
+        }
+      }, 700));
     }
-  }
-  function schedulePlot(code, applyPreview) {
-    if (plotCache.has(code)) { applyPreview(plotCache.get(code)); return; }
-    // A synchronous burst (mount: several blocks at once) accumulates so each one
-    // renders; a later keystroke starts a fresh tick and drops the previous
-    // intermediate of the block being edited, so we don't run on every keystroke.
-    if (!plotFreshTick) {
-      plotPending.clear();
-      plotFreshTick = true;
-      Promise.resolve().then(() => { plotFreshTick = false; });
+
+    function build(state) {
+      const decos = [];
+      const used = new Set();
+      let i = 0;
+      state.doc.descendants((node, pos) => {
+        if (node.type.name !== 'code_block') return;
+        const lang = (node.attrs.language || '').toLowerCase();
+        if (lang !== 'python' && lang !== 'py') return;
+        const key = 'py-' + i++;
+        used.add(key);
+        let panel = panels.get(key);
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.className = 'plotly-cell';
+          panels.set(key, panel);
+        }
+        render(panel, node.textContent.trim());
+        decos.push(Decoration.widget(pos + node.nodeSize, panel, {
+          key, side: 1, ignoreSelection: true, stopEvent: () => true,
+        }));
+      });
+      // Drop panels whose block was removed.
+      for (const [k, p] of panels) {
+        if (!used.has(k)) {
+          clearTimeout(timers.get(p));
+          timers.delete(p);
+          if (plotlyJs) { try { plotlyJs.purge(p.querySelector('.plotly-holder')); } catch {} }
+          panels.delete(k);
+        }
+      }
+      return DecorationSet.create(state.doc, decos);
     }
-    plotPending.set(code, applyPreview);
-    clearTimeout(plotTimer);
-    plotTimer = setTimeout(flushPlots, 700);
-  }
+
+    return new Plugin({
+      key: plotlyKey,
+      state: {
+        init: (_, state) => build(state),
+        apply: (tr, old, _o, newState) => (tr.docChanged ? build(newState) : old),
+      },
+      props: { decorations(state) { return plotlyKey.getState(state); } },
+    });
+  });
 
   const gate = document.getElementById('admin-gate');
   const wrap = document.getElementById('editor-wrap');
@@ -275,10 +327,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
                 .catch((err) => applyPreview(errorEl(err)));
               return undefined;
             }
-            if (lang === 'python' || lang === 'py') {
-              schedulePlot(code, applyPreview);
-              return undefined;
-            }
+            // Python plots are handled by the interactive Plotly panel plugin
+            // (rendered below the block), not by this sanitized preview.
             return null;
           },
           previewLabel: 'Output',
@@ -286,6 +336,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       },
     });
     crepe.editor.use(bracketPairing);
+    crepe.editor.use(plotlyCells);
     await crepe.create();
 
     // Temporary: prove Markdown serialization works. The next increment wires
