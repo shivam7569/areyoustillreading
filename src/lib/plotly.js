@@ -67,19 +67,28 @@ function initPyodide() {
  *  - stdout: anything the script printed
  *  - error:  a Python traceback string, or null on success
  */
-export async function renderPlotlyFigure(code) {
-  const pyodide = await initPyodide();
-  try {
-    await pyodide.loadPackagesFromImports(code);
-  } catch {}
-  pyodide.globals.set('__user_src', code);
-  const raw = await pyodide.runPythonAsync('__run_user_plotly(__user_src)');
-  const res = JSON.parse(raw);
-  return {
-    figure: res.figure ? JSON.parse(res.figure) : null,
-    stdout: res.stdout || '',
-    error: res.error,
+// Pyodide is one shared interpreter, so runs must never overlap — concurrent
+// cells would race on the __user_src global and render each other's code. Chain
+// every call through a promise queue so they execute strictly one at a time.
+let renderQueue = Promise.resolve();
+export function renderPlotlyFigure(code) {
+  const run = async () => {
+    const pyodide = await initPyodide();
+    try {
+      await pyodide.loadPackagesFromImports(code);
+    } catch {}
+    pyodide.globals.set('__user_src', code);
+    const raw = await pyodide.runPythonAsync('__run_user_plotly(__user_src)');
+    const res = JSON.parse(raw);
+    return {
+      figure: res.figure ? JSON.parse(res.figure) : null,
+      stdout: res.stdout || '',
+      error: res.error,
+    };
   };
+  const result = renderQueue.then(run, run);
+  renderQueue = result.then(() => {}, () => {}); // keep the chain alive past errors
+  return result;
 }
 
 let plotlyJsPromise = null;
