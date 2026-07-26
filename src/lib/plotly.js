@@ -48,7 +48,10 @@ function initPyodide() {
       // @vite-ignore keeps Vite from bundling the remote CDN module.
       const { loadPyodide } = await import(/* @vite-ignore */ CDN + 'pyodide.mjs');
       const pyodide = await loadPyodide({ indexURL: CDN });
-      await pyodide.loadPackage(['micropip', 'numpy']);
+      // numpy + pandas cover the common cases: plotly.express needs pandas (even for
+      // its bundled datasets like px.data.iris()). Anything else the script imports
+      // is auto-loaded per-run via loadPackagesFromImports below.
+      await pyodide.loadPackage(['micropip', 'numpy', 'pandas']);
       const micropip = pyodide.pyimport('micropip');
       await micropip.install('plotly');
       await pyodide.runPythonAsync(HARNESS);
