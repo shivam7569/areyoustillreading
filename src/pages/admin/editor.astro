@@ -59,8 +59,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     padding: 1rem; color: #e5484d; white-space: pre-wrap;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  .plotly-cell { margin: 0.25rem 0 1rem; }
-  .plotly-holder { width: 100%; min-height: 340px; }
+  .plotly-cell { margin: 0.25rem 0 1rem; max-width: 100%; overflow-x: hidden; }
+  .plotly-holder { width: 100%; height: 380px; }
   .plotly-status, .plotly-empty { padding: 0.75rem; opacity: 0.7; }
   .plotly-empty code, .plotly-error {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -69,6 +69,22 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     padding: 0.75rem; margin: 0; color: #e5484d; white-space: pre-wrap;
     overflow-x: auto; font-size: 0.85em;
   }
+  .plotly-controls {
+    display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+    padding: 0.4rem 0.6rem; font-size: 0.85em;
+  }
+  .plotly-controls .pc-label { font-weight: 600; opacity: 0.85; }
+  .plotly-controls label { display: inline-flex; align-items: center; gap: 0.25rem; opacity: 0.85; }
+  .plotly-controls input {
+    width: 3.5rem; padding: 0.15rem 0.3rem; border: 1px solid var(--border);
+    border-radius: 4px; background: var(--bg); color: inherit;
+  }
+  .plotly-controls button {
+    padding: 0.25rem 0.7rem; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+  }
+  .plotly-controls button:disabled { opacity: 0.6; cursor: default; }
+  .plotly-controls .pc-status { opacity: 0.75; }
 </style>
 
 <script>
@@ -80,7 +96,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   import { $prose } from '@milkdown/kit/utils';
   import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state';
   import { Decoration, DecorationSet } from '@milkdown/kit/prose/view';
-  import { renderPlotlyFigure, loadPlotlyJs } from '../../lib/plotly';
+  import { renderPlotlyFigure, loadPlotlyJs, makeRotatingGif } from '../../lib/plotly';
   import '@milkdown/crepe/theme/common/style.css';
   import '@milkdown/crepe/theme/nord.css';
 
@@ -222,7 +238,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               holder.className = 'plotly-holder';
               panel.replaceChildren(holder);
             }
-            await plotlyJs.react(holder, figure.data || [], figure.layout || {}, { responsive: true, displaylogo: false });
+            // Fit the plot to the editor column: drop any hard-coded width/height the
+            // figure set (common in examples, e.g. width=800, height=700) so it can't
+            // overflow the container; let it autosize to the fixed-size holder instead.
+            const layout = { ...(figure.layout || {}) };
+            delete layout.width;
+            delete layout.height;
+            layout.autosize = true;
+            await plotlyJs.react(holder, figure.data || [], layout, { responsive: true, displaylogo: false });
+            // Lock the plot to the container once layout settles (the widget decoration
+            // can otherwise let plotly measure a stale width and overflow).
+            requestAnimationFrame(() => { try { plotlyJs.Plots.resize(holder); } catch {} });
+            updateControls(panel, holder, figure);
           } else {
             const p = document.createElement('p');
             p.className = 'plotly-empty';
@@ -236,6 +263,53 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           panel.replaceChildren(pre);
         }
       }, 700));
+    }
+
+    // For 3D figures, offer a rotating-GIF export below the plot (author sets the
+    // frame count and fps). 2D figures get no controls.
+    function updateControls(panel, holder, figure) {
+      const types = (figure.data || []).map((t) => t && t.type).filter(Boolean);
+      const is3d = !!(figure.layout && figure.layout.scene) ||
+        types.some((t) => /3d$/.test(t) || ['surface', 'mesh3d', 'cone', 'streamtube', 'volume', 'isosurface'].includes(t));
+      let bar = panel.querySelector('.plotly-controls');
+      if (!is3d) { if (bar) bar.remove(); return; }
+      if (bar) return; // already present
+      bar = document.createElement('div');
+      bar.className = 'plotly-controls';
+      bar.innerHTML =
+        '<span class="pc-label">Rotating GIF</span>' +
+        '<label>frames <input type="number" class="pc-frames" value="36" min="4" max="180"></label>' +
+        '<label>fps <input type="number" class="pc-fps" value="15" min="1" max="60"></label>' +
+        '<button type="button" class="pc-gif">Download GIF</button>' +
+        '<span class="pc-status"></span>';
+      const btn = bar.querySelector('.pc-gif');
+      const status = bar.querySelector('.pc-status');
+      btn.addEventListener('click', async () => {
+        const frames = Math.max(4, Math.min(180, parseInt(bar.querySelector('.pc-frames').value, 10) || 36));
+        const fps = Math.max(1, Math.min(60, parseInt(bar.querySelector('.pc-fps').value, 10) || 15));
+        btn.disabled = true;
+        status.textContent = 'Rendering… 0%';
+        try {
+          const blob = await makeRotatingGif(holder, {
+            frames, fps,
+            onProgress: (p) => { status.textContent = 'Rendering… ' + Math.round(p * 100) + '%'; },
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'plot.gif';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          status.textContent = 'Saved · ' + Math.round(blob.size / 1024) + ' KB';
+        } catch (e) {
+          status.textContent = 'Failed: ' + (e && e.message ? e.message : String(e));
+        } finally {
+          btn.disabled = false;
+        }
+      });
+      panel.appendChild(bar);
     }
 
     function build(state) {
