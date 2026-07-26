@@ -61,13 +61,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
   .plotly-cell { margin: 0.25rem 0 1rem; max-width: 100%; overflow-x: hidden; }
   .plotly-holder { width: 100%; height: 380px; }
-  .plotly-status, .plotly-empty { padding: 0.75rem; opacity: 0.7; }
-  .plotly-empty code, .plotly-error {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  .py-running { padding: 0.5rem 0.8rem; opacity: 0.6; font-size: 0.85em; }
+  .py-output {
+    margin: 0; padding: 0.6rem 0.8rem; white-space: pre-wrap; overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em;
+    background: var(--code-bg); border-radius: 6px;
   }
   .plotly-error {
     padding: 0.75rem; margin: 0; color: #e5484d; white-space: pre-wrap;
     overflow-x: auto; font-size: 0.85em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   .plotly-controls {
     display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
@@ -79,11 +82,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     width: 3.5rem; padding: 0.15rem 0.3rem; border: 1px solid var(--border);
     border-radius: 4px; background: var(--bg); color: inherit;
   }
+  /* !important: the Milkdown/Crepe editor theme otherwise overrides editor buttons
+     to a transparent background, making this one invisible (white text on white). */
   .plotly-controls button {
-    padding: 0.25rem 0.7rem; border: 1px solid var(--border); border-radius: 6px;
-    background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+    padding: 0.3rem 0.85rem !important; border: 0 !important; border-radius: 6px !important;
+    background: var(--accent) !important; color: #fff !important; opacity: 1 !important;
+    font-weight: 600 !important; font-size: 0.85em !important; cursor: pointer !important;
   }
-  .plotly-controls button:disabled { opacity: 0.6; cursor: default; }
+  .plotly-controls button:disabled { opacity: 0.55 !important; cursor: default !important; }
   .plotly-controls .pc-status { opacity: 0.75; }
 </style>
 
@@ -212,55 +218,60 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       if (panel.__code === code) return;
       panel.__code = code;
       clearTimeout(timers.get(panel));
-      if (!code) { panel.replaceChildren(); return; }
-      // Only show "Rendering…" on the first render; later edits keep the last plot
-      // visible until the new one is ready (no flicker).
-      if (!panel.querySelector('.plotly-holder')) {
+      if (!code) { panel.replaceChildren(); panel.__ran = false; return; }
+      // Show "Running…" only before a cell's FIRST result; later edits keep the last
+      // output visible until the new one is ready (no flicker/spam while typing).
+      if (!panel.__ran) {
         const s = document.createElement('div');
-        s.className = 'plotly-status';
-        s.textContent = 'Rendering…';
+        s.className = 'py-running';
+        s.textContent = 'Running…';
         panel.replaceChildren(s);
       }
       timers.set(panel, setTimeout(async () => {
+        let res;
         try {
-          const { figure, error } = await renderPlotlyFigure(code);
-          if (panel.__code !== code) return; // superseded by a newer edit
-          if (error) {
-            const pre = document.createElement('pre');
-            pre.className = 'plotly-error';
-            pre.textContent = error;
-            panel.replaceChildren(pre);
-          } else if (figure) {
-            if (!plotlyJs) plotlyJs = await loadPlotlyJs();
-            let holder = panel.querySelector('.plotly-holder');
-            if (!holder) {
-              holder = document.createElement('div');
-              holder.className = 'plotly-holder';
-              panel.replaceChildren(holder);
-            }
-            // Fit the plot to the editor column: drop any hard-coded width/height the
-            // figure set (common in examples, e.g. width=800, height=700) so it can't
-            // overflow the container; let it autosize to the fixed-size holder instead.
-            const layout = { ...(figure.layout || {}) };
-            delete layout.width;
-            delete layout.height;
-            layout.autosize = true;
-            await plotlyJs.react(holder, figure.data || [], layout, { responsive: true, displaylogo: false });
-            // Lock the plot to the container once layout settles (the widget decoration
-            // can otherwise let plotly measure a stale width and overflow).
-            requestAnimationFrame(() => { try { plotlyJs.Plots.resize(holder); } catch {} });
-            updateControls(panel, holder, figure);
-          } else {
-            const p = document.createElement('p');
-            p.className = 'plotly-empty';
-            p.innerHTML = 'No figure — assign your plot to <code>fig</code>.';
-            panel.replaceChildren(p);
-          }
+          res = await renderPlotlyFigure(code);
         } catch (e) {
+          res = { error: 'Could not run: ' + (e && e.message ? e.message : String(e)) };
+        }
+        if (panel.__code !== code) return; // superseded by a newer edit
+        panel.__ran = true;
+        const { figure, stdout, error } = res;
+        if (error) {
           const pre = document.createElement('pre');
           pre.className = 'plotly-error';
-          pre.textContent = 'Could not run: ' + (e && e.message ? e.message : String(e));
+          pre.textContent = error;
           panel.replaceChildren(pre);
+        } else if (figure) {
+          // Plotting cell -> interactive plot.
+          if (!plotlyJs) plotlyJs = await loadPlotlyJs();
+          let holder = panel.querySelector('.plotly-holder');
+          if (!holder) {
+            holder = document.createElement('div');
+            holder.className = 'plotly-holder';
+            panel.replaceChildren(holder);
+          }
+          // Fit the plot to the editor column: drop any hard-coded width/height the
+          // figure set (e.g. width=800) so it can't overflow; autosize to the holder.
+          const layout = { ...(figure.layout || {}) };
+          delete layout.width;
+          delete layout.height;
+          layout.autosize = true;
+          await plotlyJs.react(holder, figure.data || [], layout, { responsive: true, displaylogo: false });
+          requestAnimationFrame(() => { try { plotlyJs.Plots.resize(holder); } catch {} });
+          updateControls(panel, holder, figure);
+        } else {
+          // Non-plotting cell -> a notebook-style output block showing stdout. If the
+          // cell printed nothing, show nothing (no clutter).
+          const out = (stdout || '').replace(/\s+$/, '');
+          if (out) {
+            const pre = document.createElement('pre');
+            pre.className = 'py-output';
+            pre.textContent = out;
+            panel.replaceChildren(pre);
+          } else {
+            panel.replaceChildren();
+          }
         }
       }, 700));
     }
