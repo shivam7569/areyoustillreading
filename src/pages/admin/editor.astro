@@ -21,8 +21,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   <div id="editor-wrap" hidden>
     <div class="editor-bar">
-      <strong>New post</strong>
+      <strong>Draft</strong>
       <span id="editor-status" class="muted"></span>
+      <button id="new-draft" type="button">New</button>
       <button id="get-md" type="button">Preview Markdown</button>
     </div>
     <div id="milkdown"></div>
@@ -381,9 +382,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     gate.hidden = true;
     wrap.hidden = false;
 
+    // Draft persistence (dev): autosave the Markdown to localStorage so work survives
+    // reloads. TODO: migrate to per-user Supabase drafts once the editor is re-gated.
+    const DRAFT_KEY = 'aysr:editor-draft';
+    let savedDraft = null;
+    try { savedDraft = localStorage.getItem(DRAFT_KEY); } catch {}
+
     const crepe = new Crepe({
       root: document.getElementById('milkdown'),
-      defaultValue: '# New post\n\nStart writing.\n',
+      defaultValue: savedDraft != null ? savedDraft : '# New post\n\nStart writing.\n',
       featureConfigs: {
         // Language-aware code blocks: hand the CodeMirror feature the full
         // language set (from @codemirror/language-data) so a block tagged ts /
@@ -420,18 +427,44 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         },
       },
     });
+    let saveTimer = null;
+    crepe.on((api) => {
+      api.markdownUpdated((_ctx, md) => {
+        statusEl.textContent = 'Saving…';
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+          try { localStorage.setItem(DRAFT_KEY, md); statusEl.textContent = 'Saved'; }
+          catch { statusEl.textContent = 'Save failed'; }
+        }, 800);
+      });
+    });
+
     crepe.editor.use(bracketPairing);
     crepe.editor.use(plotlyCells);
     await crepe.create();
+    if (savedDraft != null) statusEl.textContent = 'Draft restored';
 
-    // Temporary: prove Markdown serialization works. The next increment wires
-    // getMarkdown() into a Supabase draft + a Publish-to-GitHub Function.
+    // "New" clears the saved draft and starts a fresh post (two-click confirm so an
+    // accidental click can't nuke your work).
+    let armNew = false;
+    const newBtn = document.getElementById('new-draft');
+    newBtn.addEventListener('click', () => {
+      if (!armNew) {
+        armNew = true;
+        newBtn.textContent = 'Confirm New?';
+        setTimeout(() => { armNew = false; newBtn.textContent = 'New'; }, 3000);
+        return;
+      }
+      try { localStorage.removeItem(DRAFT_KEY); } catch {}
+      location.reload();
+    });
+
+    // "Preview Markdown" shows the serialized Markdown (temporary debug view — this
+    // is what Publish will commit to GitHub in the next increment).
     const out = document.getElementById('md-out');
     document.getElementById('get-md').addEventListener('click', () => {
-      const md = crepe.getMarkdown();
       out.hidden = false;
-      out.textContent = md;
-      statusEl.textContent = md.length + ' chars';
+      out.textContent = crepe.getMarkdown();
     });
   }
 
