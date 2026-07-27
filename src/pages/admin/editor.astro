@@ -262,10 +262,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state';
   import { Decoration, DecorationSet } from '@milkdown/kit/prose/view';
   import { renderPlotlyFigure, loadPlotlyJs, makeRotatingGif } from '../../lib/plotly';
-  // Render-at-publish: render the body with the same pipeline as the build, then
-  // assemble the full page from the /post-shell donor for the instant KV overlay.
-  import { renderPostBodyBrowser } from '../../lib/render-post-browser.mjs';
-  import { assemblePostHtml } from '../../lib/assemble-post.mjs';
+  // NOTE: the render-at-publish modules (render-post-browser → @astrojs/markdown-remark
+  // + Shiki + browser-D2, and assemble-post) are heavy and only needed at publish, so
+  // they are DYNAMICALLY imported in the publish handler — not here — to keep the
+  // editor's initial bundle light and make the page interactive fast.
   import '@milkdown/crepe/theme/common/style.css';
   import '@milkdown/crepe/theme/nord.css';
 
@@ -392,11 +392,28 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   // "[object Object]". Funnel every render through a serial queue so only one runs at
   // a time. Same reason as the plotly renderQueue.
   let d2Queue = Promise.resolve();
+  // Memoize rendered SVG by exact source. The code-block preview re-invokes render on
+  // every keystroke/cursor move even when the diagram text is unchanged (switching
+  // blocks, editing prose elsewhere), and each WASM compile+render is the slow part —
+  // an unchanged diagram should never pay it twice. Bounded LRU-ish (drop oldest) so a
+  // long editing session can't grow the cache without limit.
+  const d2Cache = new Map();
+  const D2_CACHE_MAX = 64;
   function renderD2(code) {
+    if (d2Cache.has(code)) {
+      // Refresh recency: re-insert so it's treated as most-recently-used.
+      const svg = d2Cache.get(code);
+      d2Cache.delete(code);
+      d2Cache.set(code, svg);
+      return Promise.resolve(svg);
+    }
     const run = async () => {
       const d2 = await loadD2();
       const res = await d2.compile(code, { pad: 20, noXMLTag: true });
-      return await d2.render(res.diagram, res.renderOptions);
+      const svg = await d2.render(res.diagram, res.renderOptions);
+      d2Cache.set(code, svg);
+      if (d2Cache.size > D2_CACHE_MAX) d2Cache.delete(d2Cache.keys().next().value);
+      return svg;
     };
     const result = d2Queue.then(run, run);
     d2Queue = result.then(() => {}, () => {}); // keep the chain alive past errors
@@ -658,6 +675,23 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     await crepe.create();
     if (savedDraft != null) statusEl.textContent = 'Draft restored';
 
+    // WARM-UP: now that the editor is interactive, prefetch the heavy bits during idle
+    // time — the browser's spare cycles while you read/type/navigate — so nothing is
+    // paid on the critical load path yet everything is ready by the time you need it:
+    //   • the render-at-publish pipeline (markdown-remark + Shiki + browser-D2 assembler)
+    //     — import() caches the module, so the publish handler's import() is then instant.
+    //   • the D2 WASM instance — so the first ```d2 preview renders without cold-start lag.
+    // requestIdleCallback runs only when the main thread is free (never competing with
+    // typing); a timeout fallback covers browsers without it. All best-effort — a failed
+    // prefetch just means that path pays its own load later, exactly as before.
+    const warmUp = () => {
+      import('../../lib/render-post-browser.mjs').catch(() => {});
+      import('../../lib/assemble-post.mjs').catch(() => {});
+      loadD2().catch(() => {});
+    };
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(warmUp, { timeout: 4000 });
+    else setTimeout(warmUp, 1500);
+
     // "New" clears the saved draft and starts a fresh post (two-click confirm so an
     // accidental click can't nuke your work).
     let armNew = false;
@@ -819,6 +853,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       status.textContent = 'Rendering…';
       let assembledHtml = null;
       try {
+        // Heavy render pipeline (markdown-remark + Shiki + browser-D2) + shell assembler
+        // are loaded on demand here, so they never weigh down the editor's initial load.
+        const [{ renderPostBodyBrowser }, { assemblePostHtml }] = await Promise.all([
+          import('../../lib/render-post-browser.mjs'),
+          import('../../lib/assemble-post.mjs'),
+        ]);
         const bodyHtml = await renderPostBodyBrowser(body);
         const shellHtml = await (await fetch('/post-shell', { cache: 'no-store' })).text();
         assembledHtml = assemblePostHtml(shellHtml, {
