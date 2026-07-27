@@ -120,6 +120,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
             <textarea id="pm-post-desc" rows="2" placeholder="One sentence that makes people want to read."></textarea></label>
           <div class="pm-field"><span class="pm-label">Tags</span>
             <div class="pm-tags" id="pm-tags"><input id="pm-tag-input" type="text" placeholder="Add a tag…" /></div></div>
+          <div class="pm-field"><span class="pm-label">Series <span style="font-weight:400;color:var(--muted)">— optional</span></span>
+            <div style="display:flex; gap:0.5rem;">
+              <input id="pm-series" type="text" placeholder="Series name — e.g. Rust Basics" style="flex:1 1 auto" />
+              <input id="pm-series-order" type="number" min="1" step="1" placeholder="Part #" style="flex:0 0 92px" aria-label="Part number" />
+            </div></div>
           <p class="pm-permalink">areyoustillreading.dev/blog/<span id="pm-slug" class="pm-slug" contenteditable="true" spellcheck="false"></span></p>
           <label class="pm-toggle"><input id="pm-draft" type="checkbox" /> <span>Save as a draft — only you can see it</span></label>
           <label class="pm-toggle"><input id="pm-email-subs" type="checkbox" /> <span id="pm-email-subs-label">Email subscribers about this post</span></label>
@@ -648,6 +653,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           tags: Array.isArray(fm.tags) ? fm.tags.map(String) : [],
           pubDate: typeof fm.pubDate === 'string' ? fm.pubDate.slice(0, 10) : '',
           draft: fm.draft === true,
+          // Prefill the Series field with the human name (seriesTitle), falling
+          // back to the slug; the Part # from seriesOrder.
+          series: typeof fm.seriesTitle === 'string' && fm.seriesTitle
+            ? fm.seriesTitle
+            : (typeof fm.series === 'string' ? fm.series : ''),
+          seriesOrder: fm.seriesOrder != null && fm.seriesOrder !== '' ? String(fm.seriesOrder) : '',
         };
         restoredMsg = 'Editing “' + title + '”';
       } catch (e) {
@@ -831,6 +842,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         $('pm-slug').contentEditable = 'false';
         $('pm-slug').style.color = 'var(--muted)';
         $('pm-draft').checked = !!editing.draft;
+        $('pm-series').value = editing.series || '';
+        $('pm-series-order').value = editing.seriesOrder || '';
         slugEdited = true; // don't let title edits rewrite an existing post's permalink
         $('pm-form-title').textContent = 'Update post';
         $('pm-publish').textContent = 'Update';
@@ -951,16 +964,27 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       // Preserve the original publish date when updating an existing post; a brand-new
       // post is dated today.
       const pubDate = (editing && editing.pubDate) || new Date().toISOString().slice(0, 10);
-      const content = [
+      // Series (optional): the author types a display name; we store a slug for
+      // grouping (`series`), the raw name for display (`seriesTitle`), and the part
+      // number (`seriesOrder`). Omitted entirely when the field is blank.
+      const seriesTitleRaw = $('pm-series').value.trim();
+      const seriesSlug = seriesTitleRaw ? slugify(seriesTitleRaw) : '';
+      const seriesOrderNum = parseInt($('pm-series-order').value, 10);
+      const seriesOrder = Number.isFinite(seriesOrderNum) && seriesOrderNum > 0 ? seriesOrderNum : null;
+      const fmLines = [
         '---',
         `title: ${yaml(title)}`,
         `description: ${yaml(description)}`,
         `pubDate: ${yaml(pubDate)}`,
         `tags: [${pubTags.map(yaml).join(', ')}]`,
-        `draft: ${draft}`,
-        '---',
-        '',
-      ].join('\n') + body;
+      ];
+      if (seriesSlug) {
+        fmLines.push(`series: ${yaml(seriesSlug)}`);
+        fmLines.push(`seriesTitle: ${yaml(seriesTitleRaw)}`);
+        if (seriesOrder != null) fmLines.push(`seriesOrder: ${seriesOrder}`);
+      }
+      fmLines.push(`draft: ${draft}`, '---', '');
+      const content = fmLines.join('\n') + body;
 
       $('pm-publish').disabled = true;
       // Assemble the full page HTML for the instant KV overlay: render the body with

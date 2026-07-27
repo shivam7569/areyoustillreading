@@ -90,6 +90,16 @@ const blog = defineCollection({
     // Free-form tag list. Defaults to [] so downstream code can always iterate
     // without a null/undefined guard (fail-safe against missing frontmatter).
     tags: z.array(z.string()).default([]),
+    // --- Series (optional) --------------------------------------------------
+    // A post belongs to a series when `series` is set to a shared slug. All posts
+    // with the same `series` are grouped and ordered by `seriesOrder` (ascending;
+    // the lowest is the intro/index the author writes). `seriesTitle` is the human
+    // display name — set on the intro (or any part); the first non-empty one wins.
+    // These only drive the in-post series navigation (src/lib/series.ts +
+    // SeriesNav.astro); a post without them behaves exactly as before.
+    series: z.string().optional(),
+    seriesOrder: z.coerce.number().optional(),
+    seriesTitle: z.string().optional(),
     // Draft flag. Defaults to false (published). Pages are expected to filter
     // out `draft: true` entries in production builds so unfinished posts stay
     // hidden. This is an editorial gate, NOT a security gate — a draft still

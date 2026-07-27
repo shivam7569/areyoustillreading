@@ -73,6 +73,8 @@ import Comments from '../components/Comments.astro';
 import Highlights from '../components/Highlights.astro';
 import Notes from '../components/Notes.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
+import SeriesNav from '../components/SeriesNav.astro';
+import { getSeriesNav } from '../lib/series';
 import 'katex/dist/katex.min.css';
 
 // The only prop: a fully-loaded 'blog' collection entry. The rendered Markdown
@@ -101,6 +103,11 @@ const words = post.body?.split(/\s+/).filter(Boolean).length ?? 0;
 // 200 wpm is the conventional average reading speed. Math.max(1, ...) ensures
 // even a very short post reads as "1 min" rather than "0 min".
 const minutes = Math.max(1, Math.round(words / 200));
+
+// Series context (null unless this post is part of a multi-post series). Computed
+// at build from the whole collection, so each part's list — and the author-written
+// intro's list — stays current automatically. See src/lib/series.ts.
+const series = await getSeriesNav(post);
 ---
 
 {/*
@@ -125,6 +132,9 @@ const minutes = Math.max(1, Math.round(words / 200));
         {tags.map((t) => (<a class="tag" href={`/blog/tags/${t}`}>#{t}</a>))}
       </p>
     )}
+    {/* Series card (only when this post is part of a multi-post series): the
+        ordered parts list with the current one highlighted. */}
+    {series && <SeriesNav data={series} placement="top" />}
     {/*
       The compiled Markdown body is injected here by the caller. For a normal
       post that is <Content /> (<BlogPost post={entry}><Content /></BlogPost>);
@@ -140,6 +150,8 @@ const minutes = Math.max(1, Math.round(words / 200));
     */}
     <slot />
   </article>
+  {/* Continue the series: previous / next part. */}
+  {series && <SeriesNav data={series} placement="bottom" />}
   {/*
     End-of-post subscribe note. Placed right after the article body — the moment a
     reader has just finished — so a post reached directly (not via the homepage)
