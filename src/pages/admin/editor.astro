@@ -751,6 +751,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
       status.textContent = 'Publishing…';
       $('pm-publish').disabled = true;
+      // Set once publish succeeds and we begin waiting for the rebuild, so the `finally`
+      // below doesn't re-enable the button while we're about to navigate away.
+      let navigating = false;
       try {
         const res = await fetch('/api/publish', {
           method: 'POST',
@@ -759,15 +762,36 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         });
         const j = await res.json().catch(() => ({}));
         if (res.ok && j.ok) {
-          status.innerHTML = (j.updated ? 'Updated' : 'Published') + ' — the site is rebuilding, live shortly. ' +
-            '<a href="/blog/' + slug + '/" target="_blank" rel="noopener">View →</a>';
+          navigating = true;
+          // Publishing is a git commit that triggers a fresh site build (~1-2 min); the
+          // post's page does not exist until that build finishes. Rather than leave the
+          // author on a "rebuilding" note (and a link that 404s until then), poll the
+          // post URL and navigate to it the instant it goes live — so submitting the
+          // form lands them on their real, published post.
+          const postUrl = '/blog/' + slug + '/';
+          status.textContent = (j.updated ? 'Updated' : 'Published') + ' — building your post… (~1–2 min)';
+          const deadline = Date.now() + 5 * 60 * 1000;
+          const goWhenLive = async () => {
+            if (modal.hidden) return; // author closed the modal → they opted out of the auto-jump
+            try {
+              // Cache-bust + no-store so we see the fresh deployment, not an edge-cached 404.
+              const r = await fetch(postUrl + '?_=' + Date.now(), { cache: 'no-store' });
+              if (r.ok) { status.textContent = "It's live — taking you there…"; location.href = postUrl; return; }
+            } catch { /* transient during rollout — keep polling */ }
+            if (Date.now() < deadline) { setTimeout(goWhenLive, 4000); return; }
+            // Build ran unusually long — hand back a manual link instead of hanging.
+            navigating = false;
+            $('pm-publish').disabled = false;
+            status.innerHTML = 'Published — still building. <a href="' + postUrl + '">Open it →</a>';
+          };
+          setTimeout(goWhenLive, 5000);
         } else {
           status.textContent = "Couldn't publish: " + (j.error || ('HTTP ' + res.status));
         }
       } catch (e) {
         status.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
       } finally {
-        $('pm-publish').disabled = false;
+        if (!navigating) $('pm-publish').disabled = false;
       }
     });
   }
