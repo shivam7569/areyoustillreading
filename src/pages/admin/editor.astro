@@ -551,7 +551,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     let pubTags = [];
     let slugEdited = false;
 
-    const openModal = () => { modal.hidden = false; refreshAuthView(); };
+    const openModal = () => {
+      modal.hidden = false;
+      // Show the sign-in view immediately so the card is never blank while the async
+      // session check runs; refreshAuthView() swaps to the form if already signed in.
+      $('pm-signin').hidden = false;
+      $('pm-form').hidden = true;
+      refreshAuthView();
+    };
     const closeModal = () => { modal.hidden = true; };
     $('publish-btn').addEventListener('click', openModal);
     $('pm-close').addEventListener('click', closeModal);
