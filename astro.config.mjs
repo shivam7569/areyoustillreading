@@ -32,7 +32,7 @@
  *   - astro/config           → defineConfig() type helper.
  *   - remark-math            → parses `$…$` / `$$…$$` math in Markdown ASTs.
  *   - rehype-katex           → renders that parsed math to static KaTeX HTML.
- *   - rehype-mermaid         → renders ```mermaid fences to inline SVG at build.
+ *   - ./plugins/rehype-d2    → renders ```d2 fences to inline SVG at build (no Chromium).
  *   - @astrojs/sitemap       → emits sitemap.xml / sitemap-index.xml.
  * NOTE: the project also uses Shiki, @astrojs/rss, Pagefind search, and
  * astro-og-canvas (OG images). Shiki is configured below (it is Astro's built-in
@@ -64,7 +64,7 @@
 import { defineConfig } from 'astro/config';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import rehypeMermaid from 'rehype-mermaid';
+import rehypeD2 from './plugins/rehype-d2.mjs';
 import sitemap from '@astrojs/sitemap';
 
 // https://astro.build/config
@@ -85,27 +85,26 @@ export default defineConfig({
 
   // Markdown/MDX compilation pipeline. Governs how post content becomes HTML.
   markdown: {
-    // Syntax highlighting via Shiki (Astro's built-in), BUT with ```mermaid
-    // fences excluded. WHY: if Shiki highlighted mermaid blocks it would wrap the
-    // diagram source in <pre><code> spans, and rehype-mermaid (a later rehype
-    // pass) would no longer see raw fence text to convert into an SVG. Excluding
-    // the lang lets the mermaid source pass through untouched to that pass.
-    syntaxHighlight: { type: 'shiki', excludeLangs: ['mermaid'] },
+    // Syntax highlighting via Shiki (Astro's built-in), BUT with ```d2 fences
+    // excluded. WHY: if Shiki highlighted d2 blocks it would wrap the diagram
+    // source in <pre><code> spans, and rehype-d2 (a later rehype pass) would no
+    // longer see raw fence text to convert into an SVG. Excluding the lang lets the
+    // d2 source pass through untouched to that pass.
+    syntaxHighlight: { type: 'shiki', excludeLangs: ['d2'] },
 
     // remark (Markdown-AST) plugins, run before rehype. remark-math tokenizes
     // `$…$` inline and `$$…$$` block math into math nodes for rehype-katex.
     remarkPlugins: [remarkMath],
 
     // rehype (HTML-AST) plugins, run in order:
-    //   1. rehype-katex   → converts the math nodes from remark-math into static,
+    //   1. rehype-katex → converts the math nodes from remark-math into static,
     //      pre-rendered KaTeX HTML (no client-side JS/math library shipped).
-    //   2. rehype-mermaid → finds the passed-through mermaid fences and renders
-    //      them. strategy 'inline-svg' embeds the diagram as an <svg> baked into
-    //      the HTML at BUILD time (no runtime mermaid.js, no client fetch, no
-    //      layout shift). This build-time rendering is why mermaid must dodge
-    //      Shiki above. Order matters: KaTeX before mermaid is intentional and
-    //      the two operate on disjoint node types, so they do not interfere.
-    rehypePlugins: [rehypeKatex, [rehypeMermaid, { strategy: 'inline-svg' }]],
+    //   2. rehype-d2 (local) → finds the passed-through ```d2 fences and renders
+    //      each to inline <svg> baked into the HTML at BUILD time via @terrastruct/d2's
+    //      WASM engine — no headless browser/Chromium, no runtime diagram JS, no
+    //      layout shift. This is why d2 must dodge Shiki above. KaTeX before d2 is
+    //      fine — they operate on disjoint node types.
+    rehypePlugins: [rehypeKatex, rehypeD2],
 
     // Shiki theme config: dual light/dark themes emitted as CSS-variable-driven
     // markup so code blocks follow the site's theme without re-highlighting.

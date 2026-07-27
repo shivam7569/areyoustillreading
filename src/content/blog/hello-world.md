@@ -29,10 +29,13 @@ $$
 
 Rendered to inline SVG at build time (no client-side JavaScript):
 
-```mermaid
-graph LR
-  A[Prompt] --> B[LLM]
-  B --> C[Response]
+```d2
+direction: right
+A: Prompt
+B: LLM
+C: Response
+A -> B
+B -> C
 ```
 
 ## Code

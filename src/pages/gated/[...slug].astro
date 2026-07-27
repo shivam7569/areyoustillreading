@@ -83,7 +83,7 @@ export async function getStaticPaths() {
 
 // `post` arrives from getStaticPaths props (no runtime query needed). render()
 // compiles the post's Markdown/MDX into an Astro <Content /> component using the
-// full pipeline (Shiki, KaTeX, build-time Mermaid, etc.) — the exact same body a
+// full pipeline (Shiki, KaTeX, build-time D2, etc.) — the exact same body a
 // paying reader is entitled to see.
 const { post } = Astro.props;
 const { Content } = await render(post);

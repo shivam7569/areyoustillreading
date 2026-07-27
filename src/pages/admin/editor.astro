@@ -54,9 +54,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 <!-- Global (unscoped) styles: the code-block preview DOM is created by Milkdown at
      runtime, so Astro's scoped styles never reach it — target these classes globally. -->
 <style is:global>
-  .mermaid-preview { display: flex; justify-content: center; padding: 1rem; overflow-x: auto; }
-  .mermaid-preview svg { max-width: 100%; height: auto; }
-  .mermaid-error {
+  .d2-preview { display: flex; justify-content: center; padding: 1rem; overflow-x: auto; }
+  .d2-preview svg { max-width: 100%; height: auto; }
+  .d2-error {
     padding: 1rem; color: #e5484d; white-space: pre-wrap;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
@@ -170,33 +170,30 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     },
   }));
 
-  // Lazy-load mermaid (a large lib) only when a diagram is first previewed, then
-  // reuse the one instance. Kept out of the initial editor bundle via import().
-  let mermaidPromise = null;
-  let mermaidSeq = 0;
-  function loadMermaid() {
-    if (!mermaidPromise) {
-      mermaidPromise = import('mermaid').then(({ default: mermaid }) => {
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: 'strict',
-          theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
-        });
-        return mermaid;
-      });
-    }
-    return mermaidPromise;
+  // Lazy-load D2 (@terrastruct/d2, WASM) only when a ```d2 diagram is first
+  // previewed, then reuse the one instance. Kept out of the initial editor bundle
+  // via import(). The published site renders the same fences at build time
+  // (plugins/rehype-d2), so editor preview and live output match.
+  let d2Promise = null;
+  function loadD2() {
+    if (!d2Promise) d2Promise = import('@terrastruct/d2').then(({ D2 }) => new D2());
+    return d2Promise;
+  }
+  async function renderD2(code) {
+    const d2 = await loadD2();
+    const res = await d2.compile(code, { pad: 20, noXMLTag: true });
+    return await d2.render(res.diagram, res.renderOptions);
   }
   function diagramEl(svg) {
     const el = document.createElement('div');
-    el.className = 'mermaid-preview';
+    el.className = 'd2-preview';
     el.innerHTML = svg;
     return el;
   }
   function errorEl(err) {
     const el = document.createElement('div');
-    el.className = 'mermaid-error';
-    el.textContent = 'Mermaid error: ' + (err && err.message ? err.message : String(err));
+    el.className = 'd2-error';
+    el.textContent = 'D2 error: ' + (err && err.message ? err.message : String(err));
     return el;
   }
 
@@ -401,21 +398,19 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           // Auto-close brackets/quotes: typing '(' inserts '()' with the cursor
           // between (i.e. '(|)'), and Backspace on the empty pair removes BOTH.
           extensions: [closeBrackets(), keymap.of(closeBracketsKeymap)],
-          // Live diagrams: for a ```mermaid block, render it client-side into the
-          // block's preview panel (a toggle appears in the block's toolbar).
+          // Live diagrams: for a ```d2 block, render it client-side (D2 WASM) into
+          // the block's preview panel (a toggle appears in the block's toolbar).
           // undefined return = async; applyPreview() swaps in the SVG when ready.
           // Any other language returns null -> no preview toggle, no overhead. On
-          // publish the same ```mermaid fence is rendered at build time by
-          // rehype-mermaid, so editor preview and live site stay identical.
+          // publish the same ```d2 fence is rendered at build time by
+          // plugins/rehype-d2, so editor preview and live site stay identical.
           renderPreview: (language, content, applyPreview) => {
             const lang = (language || '').toLowerCase();
             const code = content.trim();
             if (!code) return null;
-            if (lang === 'mermaid') {
-              const id = 'mmd-' + (++mermaidSeq);
-              loadMermaid()
-                .then((mermaid) => mermaid.render(id, code))
-                .then((res) => applyPreview(diagramEl(res.svg)))
+            if (lang === 'd2') {
+              renderD2(code)
+                .then((svg) => applyPreview(diagramEl(svg)))
                 .catch((err) => applyPreview(errorEl(err)));
               return undefined;
             }
@@ -423,7 +418,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             // (rendered below the block), not by this sanitized preview.
             return null;
           },
-          previewLabel: 'Output',
+          previewLabel: 'Diagram',
         },
       },
     });

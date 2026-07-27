@@ -37,7 +37,7 @@
  *   for the `blog` collection (including the `draft`, `gateable`, `preview`
  *   flags referenced here) is defined in src/content.config.* / a content schema.
  * - `../../layouts/BlogPost.astro`: the shared post chrome (title, meta, OG,
- *   KaTeX/Shiki/Mermaid-rendered markdown wrapper, Pagefind indexing, etc.).
+ *   KaTeX/Shiki/D2-rendered markdown wrapper, Pagefind indexing, etc.).
  * - `../../components/PaywallGate.astro`: the Merchant-of-Record (Dodo Payments)
  *   paywall component; owns token/entitlement checks and admin bypass.
  *
@@ -90,7 +90,7 @@ export async function getStaticPaths() {
 // The entry chosen for THIS page, forwarded from getStaticPaths via props.
 const { post } = Astro.props;
 // Compile the post's markdown/MDX into a renderable <Content /> component. This
-// runs the full markdown pipeline (Shiki, KaTeX, build-time Mermaid, etc.).
+// runs the full markdown pipeline (Shiki, KaTeX, build-time D2, etc.).
 // NOTE: <Content /> is the FULL body — for gated posts we deliberately do not
 // render it here (see the security note above); PaywallGate controls exposure.
 const { Content } = await render(post);

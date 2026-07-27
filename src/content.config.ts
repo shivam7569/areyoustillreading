@@ -25,7 +25,7 @@
  *   - Markdown lives in ./src/content/blog/**\/*.md (see loader `base` below).
  *   - Pages/components call getCollection('blog') to list, filter (e.g. drop
  *     `draft`), sort by `pubDate`, and render bodies through the Markdown
- *     pipeline (Shiki, KaTeX, build-time Mermaid, etc.).
+ *     pipeline (Shiki, KaTeX, build-time D2 diagrams, etc.).
  *   - RSS (@astrojs/rss), the sitemap, Pagefind search indexing, and
  *     astro-og-canvas OG-image generation all read from this same collection,
  *     so every field here is a contract those consumers rely on.
