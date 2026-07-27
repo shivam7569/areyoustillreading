@@ -25,6 +25,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       <span id="editor-status" class="muted"></span>
       <button id="new-draft" type="button">New</button>
       <button id="get-md" type="button">Preview Markdown</button>
+      <button id="publish-btn" type="button">Publish…</button>
+    </div>
+    <div id="publish-panel" hidden>
+      <label>Slug <input id="pub-slug" type="text" placeholder="my-post-slug" /></label>
+      <label>Title <input id="pub-title" type="text" placeholder="Post title" /></label>
+      <label>Description <input id="pub-desc" type="text" placeholder="Short summary (SEO / cards)" /></label>
+      <label>Tags <input id="pub-tags" type="text" placeholder="comma, separated" /></label>
+      <label class="pub-inline"><input id="pub-draft" type="checkbox" /> Draft (hidden from listings)</label>
+      <label>Publish key <input id="pub-secret" type="password" placeholder="PUBLISH_SECRET" /></label>
+      <div><button id="pub-go" type="button">Publish now</button> <span id="pub-status" class="muted"></span></div>
     </div>
     <div id="milkdown"></div>
     <pre id="md-out" hidden></pre>
@@ -48,6 +58,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #md-out {
     margin-top: 1rem; padding: 1rem; border: 1px solid var(--border);
     border-radius: 8px; background: var(--code-bg); overflow-x: auto; white-space: pre-wrap;
+  }
+  #publish-panel {
+    border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem; display: grid; gap: 0.5rem; max-width: 34rem;
+  }
+  #publish-panel label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85em; }
+  #publish-panel label.pub-inline { flex-direction: row; align-items: center; gap: 0.45rem; }
+  #publish-panel input[type="text"], #publish-panel input[type="password"] {
+    padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: inherit;
   }
 </style>
 
@@ -460,6 +480,74 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     document.getElementById('get-md').addEventListener('click', () => {
       out.hidden = false;
       out.textContent = crepe.getMarkdown();
+    });
+
+    // --- Publish: assemble frontmatter + body, POST to /api/publish, which commits
+    // the .md file to GitHub → Cloudflare Git-integration rebuilds the site. -------
+    const $ = (id) => document.getElementById(id);
+    const pubPanel = $('publish-panel');
+    const slugify = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+    const firstHeading = (md) => { const m = md.match(/^#\s+(.+)$/m); return m ? m[1].trim() : ''; };
+    const yaml = (v) => JSON.stringify(String(v == null ? '' : v)); // JSON-style scalar is valid YAML
+
+    $('publish-btn').addEventListener('click', () => {
+      const opening = pubPanel.hidden;
+      pubPanel.hidden = !opening;
+      if (opening) {
+        const title = firstHeading(crepe.getMarkdown());
+        if (!$('pub-title').value) $('pub-title').value = title;
+        if (!$('pub-slug').value) $('pub-slug').value = slugify(title);
+      }
+    });
+
+    $('pub-go').addEventListener('click', async () => {
+      const status = $('pub-status');
+      const slug = slugify($('pub-slug').value || '');
+      const title = $('pub-title').value.trim();
+      const description = $('pub-desc').value.trim();
+      const tags = $('pub-tags').value.split(',').map((t) => t.trim()).filter(Boolean);
+      const draft = $('pub-draft').checked;
+      const secret = $('pub-secret').value;
+      if (!slug) return void (status.textContent = 'Slug required.');
+      if (!title) return void (status.textContent = 'Title required.');
+      if (!description) return void (status.textContent = 'Description required.');
+      if (!secret) return void (status.textContent = 'Publish key required.');
+
+      // Title lives in frontmatter (the layout renders it as the <h1>), so drop a
+      // leading "# Title" from the body to avoid a duplicate heading.
+      const body = crepe.getMarkdown().replace(/^#\s+.+\n+/, '');
+      const today = new Date().toISOString().slice(0, 10);
+      const frontmatter = [
+        '---',
+        `title: ${yaml(title)}`,
+        `description: ${yaml(description)}`,
+        `pubDate: ${yaml(today)}`,
+        `tags: [${tags.map(yaml).join(', ')}]`,
+        `draft: ${draft}`,
+        '---',
+        '',
+      ].join('\n');
+
+      status.textContent = 'Publishing…';
+      $('pub-go').disabled = true;
+      try {
+        const res = await fetch('/api/publish', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ slug, content: frontmatter + body, secret }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (res.ok && j.ok) {
+          status.innerHTML = (j.updated ? 'Updated' : 'Published') + ' — committed to <code>' + j.branch +
+            '</code>. Site will rebuild. <a href="/blog/' + slug + '/" target="_blank" rel="noopener">View when live →</a>';
+        } else {
+          status.textContent = 'Failed: ' + (j.error || ('HTTP ' + res.status)) + (j.detail ? ' — ' + j.detail : '');
+        }
+      } catch (e) {
+        status.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
+      } finally {
+        $('pub-go').disabled = false;
+      }
     });
   }
 
