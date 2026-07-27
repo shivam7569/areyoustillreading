@@ -847,7 +847,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           // post URL and navigate to it the instant it goes live — so submitting the
           // form lands them on their real, published post.
           const postUrl = '/blog/' + slug + '/';
-          status.textContent = (j.updated ? 'Updated' : 'Published') + ' — building your post… (~1–2 min)';
+          status.textContent = (j.updated ? 'Updated' : 'Published') + ' — going live…';
           const deadline = Date.now() + 5 * 60 * 1000;
           const goWhenLive = async () => {
             if (modal.hidden) return; // author closed the modal → they opted out of the auto-jump
@@ -856,13 +856,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               const r = await fetch(postUrl + '?_=' + Date.now(), { cache: 'no-store' });
               if (r.ok) { status.textContent = "It's live — taking you there…"; location.href = postUrl; return; }
             } catch { /* transient during rollout — keep polling */ }
-            if (Date.now() < deadline) { setTimeout(goWhenLive, 4000); return; }
+            if (Date.now() < deadline) { setTimeout(goWhenLive, 1500); return; }
             // Build ran unusually long — hand back a manual link instead of hanging.
             navigating = false;
             $('pm-publish').disabled = false;
             status.innerHTML = 'Published — still building. <a href="' + postUrl + '">Open it →</a>';
           };
-          setTimeout(goWhenLive, 5000);
+          setTimeout(goWhenLive, 800);
         } else {
           status.textContent = "Couldn't publish: " + (j.error || ('HTTP ' + res.status));
         }
