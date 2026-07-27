@@ -18,9 +18,10 @@
 //   the Dodo webhook handler (a separate Function) once payment settles.
 //
 // HOW IT FITS THE ARCHITECTURE (Dodo = Merchant of Record per-post paywall)
-//   1. A post is marked paywalled via the `post_paywall` table (is_paid=true)
-//      and mapped to a Dodo product (product_id). See PaywallGate / the admin
-//      live-toggle table from Phase 3.
+//   1. A post is marked paywalled via the `post_paywall` table (is_paid=true) with a
+//      price (price_cents). There is NO per-post Dodo product — a single reusable
+//      "Pay What You Want" product (DODO_UNLOCK_PRODUCT_ID) is charged the post's
+//      price per checkout. See the Posts-page paywall toggle in the admin dashboard.
 //   2. The browser (Supabase JS client) sends the reader's access token in the
 //      Authorization header and POSTs { postId } here.
 //   3. This function validates and returns { url }; the client redirects the
@@ -40,6 +41,11 @@
 //                                   only for server-side reads of post_paywall /
 //                                   entitlements. Must never reach the browser.
 //   env.DODO_API_KEY              — Dodo secret API key. SECRET.
+//   env.DODO_UNLOCK_PRODUCT_ID    — id of ONE reusable Dodo product (Single Payment,
+//                                   "Pay What You Want" enabled, min ~$1 / max high).
+//                                   Every unlock uses this product and overrides the
+//                                   amount per session with the post's price, so there
+//                                   is NO per-post product to create.
 //   env.DODO_API_BASE             — optional Dodo API base; defaults to the TEST
 //                                   host, so production MUST set this to the live
 //                                   host or all charges stay in test mode.
@@ -145,13 +151,19 @@ export async function onRequestPost({ request, env }) {
   let row = null;
   try {
     const r = await fetch(
-      `${sb}/rest/v1/post_paywall?post_id=eq.${encodeURIComponent(postId)}&select=is_paid,product_id`,
+      `${sb}/rest/v1/post_paywall?post_id=eq.${encodeURIComponent(postId)}&select=is_paid,price_cents,currency`,
       { headers: svc }
     );
     if (r.ok) row = (await r.json())[0];
   } catch (e) {}
   if (!row || !row.is_paid) return json({ error: 'This post is not for sale.' }, 400);
-  if (!row.product_id) return json({ error: 'This post has no product configured yet.' }, 400);
+  // Price-only checkout: the admin-set price (integer cents) is the amount charged.
+  // No per-post product — one reusable "Pay What You Want" product takes this amount
+  // per session (step 5). The price must be a valid positive integer of cents.
+  const amount = Number(row.price_cents);
+  if (!Number.isInteger(amount) || amount < 1) return json({ error: 'This post has no price set.' }, 400);
+  const unlockProduct = env.DODO_UNLOCK_PRODUCT_ID;
+  if (!unlockProduct) return json({ error: 'Payments are not configured yet.' }, 500);
 
   // --- 4. Dupe guard: already purchased? ------------------------------------
   // UX guard only — stops a reader who already owns the post from paying twice.
@@ -186,8 +198,13 @@ export async function onRequestPost({ request, env }) {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        // One unit of the product mapped to this post.
-        product_cart: [{ product_id: row.product_id, quantity: 1 }],
+        // ONE reusable "Pay What You Want" product, charged the admin-set amount for
+        // this post: the cart item's `amount` (integer cents) overrides the price per
+        // session, so there is no per-post product. The product's PWYW min/max must
+        // span the price range, or Dodo rejects the checkout.
+        product_cart: [{ product_id: unlockProduct, quantity: 1, amount }],
+        // Charge in the post's configured currency (Dodo expects an uppercase ISO code).
+        billing_currency: (row.currency || 'usd').toUpperCase(),
         // Prefill the buyer's email from the authenticated Supabase user.
         customer: { email: user.email },
         // Where Dodo redirects the browser after payment. `?paid=1` is only a UX

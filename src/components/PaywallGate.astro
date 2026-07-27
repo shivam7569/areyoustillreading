@@ -301,19 +301,18 @@ const preview = post.data.preview ?? post.data.description;
           .update({ is_paid: false, updated_at: new Date().toISOString() })
           .eq('post_id', slug));
       } else {
-        // Gate: collect price and the Dodo product id (the product must already
-        // exist in Dodo — checkout later references it). `=== null` means the
-        // admin hit Cancel, so we abort without touching the DB.
+        // Gate: collect just the price. Price-only checkout means there is NO per-post
+        // Dodo product — a single reusable "Pay What You Want" product is charged this
+        // amount at checkout (functions/api/checkout.js). `=== null` means the admin hit
+        // Cancel, so we abort without touching the DB.
         const dollars = prompt('Price to unlock this post (USD):', '5');
         if (dollars === null) return;
-        const productId = prompt('Dodo product ID for this post (create the product in Dodo first):', '');
-        if (productId === null) return;
         // Store price as integer cents; floor at 50c and default to 500 (=$5)
         // when the input is blank/NaN, so we never write a zero/negative price.
         const cents = Math.max(50, Math.round(parseFloat(dollars) * 100) || 500);
         // upsert on post_id: first-time gating inserts, re-gating updates.
         ({ error } = await supabase.from('post_paywall').upsert(
-          { post_id: slug, is_paid: true, price_cents: cents, currency: 'usd', product_id: productId.trim(), updated_at: new Date().toISOString() },
+          { post_id: slug, is_paid: true, price_cents: cents, currency: 'usd', updated_at: new Date().toISOString() },
           { onConflict: 'post_id' }
         ));
       }
