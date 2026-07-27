@@ -636,12 +636,31 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
 
+    // Decide which of the two modal views to show. INVARIANT: exactly one of
+    // #pm-signin / #pm-form is visible at all times — the card must NEVER render
+    // empty (both hidden). Every failure mode below falls back to the sign-in
+    // view, so a thrown/hung/blocked session check (corrupt localStorage token, a
+    // privacy extension blocking Supabase, an offline refresh, etc.) can only ever
+    // land on "Sign in to publish", not a blank card.
     async function refreshAuthView() {
-      const { data } = await supabase.auth.getSession();
-      const signedIn = !!(data.session && data.session.user);
+      let signedIn = false;
+      try {
+        // Guard against a hang: getSession() can await a background token refresh,
+        // and if that network call is blocked it never resolves. Cap it so the UI
+        // always settles instead of leaving whatever view was up.
+        const withTimeout = Promise.race([
+          supabase.auth.getSession(),
+          new Promise((res) => setTimeout(() => res({ data: { session: null }, __timedOut: true }), 4000)),
+        ]);
+        const { data } = await withTimeout;
+        signedIn = !!(data && data.session && data.session.user);
+      } catch (err) {
+        console.error('[publish] session check failed; falling back to sign-in view', err);
+        signedIn = false;
+      }
       $('pm-signin').hidden = signedIn;
       $('pm-form').hidden = !signedIn;
-      if (signedIn) prefillForm();
+      if (signedIn) { try { prefillForm(); } catch (err) { console.error('[publish] prefill failed', err); } }
     }
     function prefillForm() {
       if (!$('pm-post-title').value) $('pm-post-title').value = firstHeading(crepe.getMarkdown());
