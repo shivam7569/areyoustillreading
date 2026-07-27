@@ -74,7 +74,7 @@ export async function onRequestPost({ request, env }) {
   // slug -> the .md filename; content -> full Markdown (frontmatter + body) for the
   // durable git commit; html -> the pre-assembled full page HTML (built in the editor
   // from the current /post-shell + the rendered body) for the instant KV overlay.
-  const { slug, content, html } = payload || {};
+  const { slug, content, html, title, description, pubDate, draft } = payload || {};
 
   // --- Auth: caller must be a signed-in admin (Supabase session) ------------
   const sb = env.SUPABASE_URL;
@@ -157,9 +157,30 @@ export async function onRequestPost({ request, env }) {
     // outcome via `instant` rather than failing the publish.
     let instant = false;
     if (env.POSTS_HTML && typeof html === 'string' && html.trim()) {
+      const publishedAt = Date.now();
       try {
-        await env.POSTS_HTML.put(slug, JSON.stringify({ html, publishedAt: Date.now() }));
+        await env.POSTS_HTML.put(slug, JSON.stringify({ html, publishedAt }));
         instant = true;
+        // Maintain a small recent-posts index so the /blog listing overlay can show
+        // this post immediately too (the static listing only refreshes on rebuild).
+        // Skip drafts — they must not appear in the public listing. Best-effort.
+        if (!draft && typeof title === 'string' && title) {
+          try {
+            const idxRaw = await env.POSTS_HTML.get('__index');
+            let idx = idxRaw ? JSON.parse(idxRaw) : [];
+            if (!Array.isArray(idx)) idx = [];
+            idx = idx.filter((p) => p && p.slug !== slug); // de-dupe this slug
+            idx.unshift({ slug, title, description: description || '', pubDate: pubDate || '', publishedAt });
+            await env.POSTS_HTML.put('__index', JSON.stringify(idx.slice(0, 30)));
+          } catch (e) { /* index update is best-effort */ }
+        } else if (draft) {
+          // A post re-saved as draft should drop out of the listing index.
+          try {
+            const idxRaw = await env.POSTS_HTML.get('__index');
+            const idx = idxRaw ? JSON.parse(idxRaw) : [];
+            if (Array.isArray(idx)) await env.POSTS_HTML.put('__index', JSON.stringify(idx.filter((p) => p && p.slug !== slug)));
+          } catch (e) {}
+        }
       } catch (e) { /* committed but not instant */ }
     }
 

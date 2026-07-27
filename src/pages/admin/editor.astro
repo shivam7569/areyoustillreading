@@ -836,7 +836,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         const res = await fetch('/api/publish', {
           method: 'POST',
           headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ slug, content, html: assembledHtml }),
+          body: JSON.stringify({ slug, content, html: assembledHtml, title, description, pubDate: today, tags: pubTags, draft }),
         });
         const j = await res.json().catch(() => ({}));
         if (res.ok && j.ok) {

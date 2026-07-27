@@ -57,19 +57,25 @@ export async function onRequest(context) {
 
   // Normalize `/blog/<slug>[/ | /index.html]` → `<slug>`. The listing resolves
   // to '' and tag pages contain a '/', so both are excluded from the overlay.
+  // `/^\/blog\/?/` matches BOTH `/blog` and `/blog/` so the listing normalizes to '';
+  // `/blog/<slug>` → '<slug>'; `/blog/tags/…` → 'tags/…' (has a '/').
   const slug = url.pathname
-    .replace(/^\/blog\//, '')
+    .replace(/^\/blog\/?/, '')
     .replace(/index\.html$/, '')
     .replace(/\/$/, '');
-  if (!slug || slug.includes('/')) return next();
 
-  // Overlay reads only. Writes/other verbs are handled elsewhere (or 405 by the
-  // underlying asset), never here.
+  // Overlay reads only. Writes/other verbs are handled elsewhere.
   if (request.method !== 'GET' && request.method !== 'HEAD') return next();
 
   // Missing binding or any KV error → behave exactly like today (static page).
   const kv = env.POSTS_HTML;
   if (!kv) return next();
+
+  // The blog LISTING (empty slug): inject any instantly-published posts this
+  // deployment's build doesn't include yet, so they show in the list immediately.
+  if (!slug) return listingOverlay(url, kv, next);
+  // Tag pages and other nested paths keep their static assets.
+  if (slug.includes('/')) return next();
 
   let raw;
   try {
@@ -119,5 +125,49 @@ async function getBuiltAt(url) {
     return typeof j.builtAt === 'number' ? j.builtAt : 0;
   } catch {
     return 0;
+  }
+}
+
+// --- Blog listing overlay ---------------------------------------------------
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// One <li> matching src/pages/blog/index.astro's static markup (same classes + date
+// format), so an injected entry is indistinguishable from a built one.
+function listingItem(p) {
+  const d = new Date(`${p.pubDate}T00:00:00.000Z`);
+  const ok = !isNaN(d.valueOf());
+  const iso = ok ? d.toISOString() : '';
+  const human = ok ? `${SHORT_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}` : '';
+  return `<li><h2><a href="/blog/${p.slug}">${escHtml(p.title)}</a></h2>` +
+    `<time datetime="${iso}">${human}</time><p>${escHtml(p.description)}</p></li>`;
+}
+
+// Serve the static /blog listing with instantly-published posts prepended: entries
+// from the __index KV key that are newer than this build AND not already in the list.
+// Any miss/error degrades to the plain static listing.
+async function listingOverlay(url, kv, next) {
+  const res = await next();
+  try {
+    if (!res.ok || !(res.headers.get('content-type') || '').includes('text/html')) return res;
+    const idxRaw = await kv.get('__index');
+    if (!idxRaw) return res;
+    const idx = JSON.parse(idxRaw);
+    if (!Array.isArray(idx) || !idx.length) return res;
+    const builtAt = await getBuiltAt(url);
+    const html = await res.text();
+    const fresh = idx.filter(
+      (p) => p && p.slug && p.publishedAt &&
+        (!builtAt || p.publishedAt > builtAt) &&   // published after this build
+        !html.includes(`/blog/${p.slug}"`)          // and not already in the static list
+    );
+    if (!fresh.length) return new Response(html, res);
+    const merged = html.replace('<ul class="post-list">', `<ul class="post-list">${fresh.map(listingItem).join('')}`);
+    const headers = new Headers(res.headers);
+    headers.set('x-served-by', 'kv-listing-overlay');
+    headers.set('cache-control', 'public, max-age=0, must-revalidate');
+    return new Response(merged, { status: 200, headers });
+  } catch {
+    return res;
   }
 }
