@@ -53,6 +53,11 @@
  *   GITHUB_REPO               — "owner/name" (default: shivam7569/areyoustillreading)
  *   GITHUB_BRANCH             — branch to commit to (default: main -> production build)
  */
+// Shared, fail-closed admin gate (validate Supabase Bearer token → confirm the
+// user has a public.admins row via the service-role key). Extracted so every
+// admin endpoint uses the exact same boundary. See lib/require-admin.js.
+import { requireAdmin } from '../../lib/require-admin.js';
+
 // Tiny helper to return a JSON Response with the right content-type. Every exit
 // path (success and error) goes through this so the client always gets JSON.
 const JSON_HEADERS = { 'content-type': 'application/json' };
@@ -77,21 +82,9 @@ export async function onRequestPost({ request, env }) {
   const { slug, content, html, title, description, pubDate, draft } = payload || {};
 
   // --- Auth: caller must be a signed-in admin (Supabase session) ------------
-  const sb = env.SUPABASE_URL;
-  const service = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!sb || !service) return json({ error: 'Server not configured (Supabase)' }, 500);
-  const authToken = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-  if (!authToken) return json({ error: 'Not signed in' }, 401);
-  // Validate the token → resolve the user (delegated to Supabase, never decoded here).
-  const userRes = await fetch(`${sb}/auth/v1/user`, { headers: { Authorization: `Bearer ${authToken}`, apikey: service } });
-  if (!userRes.ok) return json({ error: 'Session expired — sign in again' }, 401);
-  const user = await userRes.json();
-  // Is this user the site owner? public.admins has no RLS select policy → service role.
-  const adminRes = await fetch(`${sb}/rest/v1/admins?select=user_id&user_id=eq.${user.id}`, {
-    headers: { Authorization: `Bearer ${service}`, apikey: service },
-  });
-  const admins = adminRes.ok ? await adminRes.json() : [];
-  if (!admins.length) return json({ error: 'Not authorized to publish' }, 403);
+  // One shared, fail-closed gate for every admin endpoint (see lib/require-admin.js).
+  const gate = await requireAdmin(request, env);
+  if (!gate.ok) return json({ error: gate.error }, gate.status);
 
   // --- Validate -------------------------------------------------------------
   if (typeof slug !== 'string' || !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug)) {

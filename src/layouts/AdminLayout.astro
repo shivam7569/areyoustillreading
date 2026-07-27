@@ -1,0 +1,235 @@
+---
+/**
+ * AdminLayout.astro — the dashboard shell for every /admin/* page.
+ * =============================================================================
+ * WHAT THIS IS
+ *   The sibling of BaseLayout for the admin area. BaseLayout renders the public
+ *   site chrome inside a 68ch reading column — unusable for a dashboard — so the
+ *   admin section gets its own full-viewport shell here: a fixed sidebar (section
+ *   nav), a slim sticky topbar, and a fluid content column into which each page
+ *   projects its body via <slot />.
+ *
+ * ACCESS GATE (client-side UX only — NOT the security boundary)
+ *   This is a static build; the session lives in the browser (Supabase,
+ *   localStorage). So navigation gating is done in the browser: the shell starts
+ *   hidden behind a "checking" screen and is revealed only for a confirmed admin
+ *   (src/lib/admin-gate.ts → getSession + is_admin RPC). A returning admin is
+ *   revealed OPTIMISTICALLY from a localStorage flag while the check revalidates,
+ *   so section-to-section navigation feels instant. None of this authorizes
+ *   anything: every /api/admin/* endpoint independently calls requireAdmin()
+ *   (lib/require-admin.js), so a forged client reveal still cannot act.
+ *
+ * PROPS
+ *   - title    document <title> (via BaseHead)
+ *   - heading  short label shown in the topbar (defaults to title)
+ *   - active   which sidebar item to mark current: one of the nav keys below
+ * =============================================================================
+ */
+import '../styles/global.css';
+import '../styles/admin.css';
+import BaseHead from '../components/BaseHead.astro';
+
+interface Props {
+  title: string;
+  heading?: string;
+  active?: 'home' | 'posts' | 'write' | 'audience' | 'engagement' | 'revenue' | 'settings';
+}
+const { title, heading, active } = Astro.props;
+
+// Sidebar sections. Each icon is an inline stroke SVG (Feather-style) rendered
+// via set:html; admin.css sizes them to 18px. Labels are human words only — no
+// slugs, keys, or jargon (the "no plumbing leaked" rule).
+const icon = {
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
+  posts: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>',
+  write: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  audience: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg>',
+  engagement: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-9 8.3 8.5 8.5 0 0 1-3.9-.9L3 20l1.1-5.1A8.38 8.38 0 0 1 3.7 11 8.5 8.5 0 0 1 12 3a8.38 8.38 0 0 1 8.3 8.5Z"/></svg>',
+  revenue: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>',
+  settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
+  exit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>',
+};
+const nav = [
+  { key: 'home', href: '/admin', label: 'Home', icon: icon.home },
+  { key: 'posts', href: '/admin/posts', label: 'Posts', icon: icon.posts },
+  { key: 'write', href: '/admin/write', label: 'Write', icon: icon.write },
+  { key: 'audience', href: '/admin/audience', label: 'Audience', icon: icon.audience },
+  { key: 'engagement', href: '/admin/engagement', label: 'Engagement', icon: icon.engagement },
+  { key: 'revenue', href: '/admin/revenue', label: 'Revenue', icon: icon.revenue },
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead title={title} description="Admin dashboard." />
+    {/* The admin area must never be indexed or advertised to crawlers. */}
+    <meta name="robots" content="noindex, nofollow" />
+  </head>
+  {/* data-pagefind-ignore keeps the whole admin surface out of the on-site (Pagefind) search index. */}
+  <body data-pagefind-ignore>
+    {/* ---- Access gate: shown until a confirmed admin is revealed ---- */}
+    <div id="admin-gate-view" class="admin-gate">
+      {/* Checking state (default). */}
+      <div id="gate-checking" class="gate-card">
+        <div class="spinner"></div>
+        <p class="muted">Checking access…</p>
+      </div>
+      {/* Sign-in state (signed out). */}
+      <div id="gate-signin" class="gate-card" hidden>
+        <div class="card">
+          <h1>Sign in</h1>
+          <p>This is the studio. Sign in once and you'll stay signed in on this device.</p>
+          <div class="gate-actions">
+            <button class="btn btn-primary" id="gate-github" type="button">Continue with GitHub</button>
+            <div class="or">or</div>
+            <form class="magic" id="gate-magic">
+              <input class="input" id="gate-email" type="email" placeholder="you@example.com" required />
+              <button class="btn" type="submit">Email a link</button>
+            </form>
+            <p class="muted" id="gate-status" style="margin:0.6rem 0 0;font-size:0.85rem"></p>
+          </div>
+        </div>
+      </div>
+      {/* Signed in but not the owner. */}
+      <div id="gate-denied" class="gate-card" hidden>
+        <div class="card">
+          <h1>Owner only</h1>
+          <p>You're signed in, but this area is for the site owner.</p>
+          <div class="gate-actions">
+            <a class="btn btn-primary" href="/">Back to the site</a>
+            <button class="btn btn-ghost" id="gate-signout" type="button">Sign out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* ---- The dashboard shell: revealed only for an admin ---- */}
+    <div id="admin-shell" class="admin" hidden>
+      <aside class="admin-sidebar">
+        <div class="admin-brand">
+          <span class="dot"></span>
+          <span>areyoustillreading<small>Studio</small></span>
+        </div>
+        <nav class="admin-nav">
+          {nav.map((item) => (
+            <a href={item.href} class={active === item.key ? 'is-active' : undefined} aria-current={active === item.key ? 'page' : undefined}>
+              <Fragment set:html={item.icon} />
+              <span class="lbl">{item.label}</span>
+            </a>
+          ))}
+          <div class="admin-nav-spacer"></div>
+          <a href="/" target="_blank" rel="noopener">
+            <Fragment set:html={icon.exit} />
+            <span class="lbl">View site</span>
+          </a>
+          <a href="/admin/settings" class={active === 'settings' ? 'is-active' : undefined} aria-current={active === 'settings' ? 'page' : undefined}>
+            <Fragment set:html={icon.settings} />
+            <span class="lbl">Settings</span>
+          </a>
+        </nav>
+        <div class="admin-side-foot">
+          <div class="who" id="admin-who"></div>
+          <button class="btn btn-ghost btn-sm" id="admin-signout" type="button" style="width:100%">Sign out</button>
+        </div>
+      </aside>
+
+      <div class="admin-content">
+        <header class="admin-topbar">
+          <div class="tb-title">{heading ?? title}</div>
+          <div class="tb-actions">
+            <a class="btn btn-sm btn-ghost" href="/" target="_blank" rel="noopener">View site ↗</a>
+          </div>
+        </header>
+        <main class="admin-main">
+          <slot />
+        </main>
+      </div>
+    </div>
+
+    <script>
+      import { supabase } from '../lib/supabase';
+      import { checkAdmin, cachedAdmin, markAdmin } from '../lib/admin-gate';
+
+      const gateView = document.getElementById('admin-gate-view')!;
+      const shell = document.getElementById('admin-shell')!;
+      const vChecking = document.getElementById('gate-checking')!;
+      const vSignin = document.getElementById('gate-signin')!;
+      const vDenied = document.getElementById('gate-denied')!;
+
+      function show(el: HTMLElement | null) {
+        for (const v of [vChecking, vSignin, vDenied]) v.hidden = v !== el;
+      }
+      function reveal() {
+        gateView.hidden = true;
+        shell.hidden = false;
+      }
+      function gate(view: HTMLElement) {
+        shell.hidden = true;
+        gateView.hidden = false;
+        show(view);
+      }
+
+      // Optimistic reveal: a previously-confirmed admin sees the shell immediately
+      // while we revalidate in the background (safe — the reveal grants no authority).
+      if (cachedAdmin()) reveal();
+
+      function paintWho(email?: string) {
+        const who = document.getElementById('admin-who');
+        if (who && email) who.textContent = email;
+      }
+
+      async function run() {
+        const r = await checkAdmin(true);
+        if (r.state === 'admin') {
+          paintWho(r.email);
+          markAdmin(r);
+          reveal();
+        } else if (r.state === 'signed-out') {
+          gate(vSignin);
+        } else {
+          gate(vDenied);
+        }
+      }
+
+      // Sign-in actions (denied/sign-in view). Redirect back to THIS admin URL so
+      // the author lands exactly where they started once the session finalizes.
+      const here = window.location.href;
+      document.getElementById('gate-github')?.addEventListener('click', async () => {
+        const s = document.getElementById('gate-status');
+        if (s) s.textContent = 'Redirecting to GitHub…';
+        await supabase.auth.signInWithOAuth({ provider: 'github', options: { redirectTo: here } });
+      });
+      document.getElementById('gate-magic')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = (document.getElementById('gate-email') as HTMLInputElement).value.trim();
+        const s = document.getElementById('gate-status');
+        if (!email) return;
+        if (s) s.textContent = 'Sending…';
+        const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: here } });
+        if (s) s.textContent = error ? error.message : 'Check your email for the link.';
+      });
+
+      // Sign out from either the denied screen or the shell footer/topbar.
+      async function doSignOut() {
+        await supabase.auth.signOut();
+        window.location.href = '/';
+      }
+      document.getElementById('gate-signout')?.addEventListener('click', doSignOut);
+      document.getElementById('admin-signout')?.addEventListener('click', doSignOut);
+
+      // After an inline sign-in finalizes, re-check; a fresh admin gets a clean reload
+      // so every page script re-runs with the session in place.
+      supabase.auth.onAuthStateChange((event) => {
+        if (event === 'SIGNED_IN') {
+          checkAdmin(true).then((r) => {
+            if (r.state === 'admin') window.location.reload();
+            else if (r.state === 'not-admin') gate(vDenied);
+          });
+        }
+      });
+
+      run();
+    </script>
+  </body>
+</html>

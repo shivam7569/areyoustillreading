@@ -1,0 +1,118 @@
+---
+/**
+ * /admin/audience — the email audience.
+ * Status counts (confirmed / pending / unsubscribed) + a searchable, filterable
+ * list. Read-only in v1. Data from the admin-gated GET /api/admin/subscribers,
+ * which never exposes the confirm/unsubscribe tokens.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Audience — Studio" heading="Audience" active="audience">
+  <section>
+    <div class="page-head">
+      <div>
+        <h1>Audience</h1>
+        <p class="sub">The people who asked to hear from you.</p>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi card"><p class="kpi-label">Confirmed</p><div class="kpi-value loading" id="a-confirmed">—</div><div class="kpi-foot">opted in &amp; verified</div></div>
+      <div class="kpi card"><p class="kpi-label">Pending</p><div class="kpi-value loading" id="a-pending">—</div><div class="kpi-foot">awaiting confirmation</div></div>
+      <div class="kpi card"><p class="kpi-label">Unsubscribed</p><div class="kpi-value loading" id="a-unsub">—</div><div class="kpi-foot">opted out</div></div>
+      <div class="kpi card"><p class="kpi-label">Total</p><div class="kpi-value loading" id="a-total">—</div><div class="kpi-foot">all-time signups</div></div>
+    </div>
+
+    <div class="toolbar">
+      <input class="input search" id="q" type="search" placeholder="Search email…" autocomplete="off" />
+      <select class="select" id="filter">
+        <option value="confirmed">Confirmed</option>
+        <option value="pending">Pending</option>
+        <option value="unsubscribed">Unsubscribed</option>
+        <option value="">Everyone</option>
+      </select>
+      <span class="grow"></span>
+      <button class="btn btn-sm btn-ghost" id="refresh" type="button">↻ Refresh</button>
+    </div>
+
+    <div id="subs-host">
+      <div class="table-wrap"><div class="card-pad muted">Loading…</div></div>
+    </div>
+  </section>
+</AdminLayout>
+
+<script>
+  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { fmtNum, fmtDate, esc } from '../../lib/admin-format';
+
+  const host = document.getElementById('subs-host')!;
+  const qEl = document.getElementById('q') as HTMLInputElement;
+  const filterEl = document.getElementById('filter') as HTMLSelectElement;
+  let searchTimer: number | undefined;
+
+  function setKpi(id: string, n: number) {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = fmtNum(n); el.classList.remove('loading'); }
+  }
+
+  const statusBadge = (s: string) =>
+    s === 'confirmed' ? '<span class="badge confirmed">Confirmed</span>'
+    : s === 'pending' ? '<span class="badge pending">Pending</span>'
+    : '<span class="badge unsub">Unsubscribed</span>';
+
+  function renderRows(rows: any[]) {
+    if (!rows.length) {
+      host.innerHTML = '<div class="card"><div class="empty"><span class="emoji">📭</span><h3>No subscribers here</h3><p>Nobody matches this view yet.</p></div></div>';
+      return;
+    }
+    host.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>'
+      + '<th>Email</th><th>Status</th><th>Joined</th><th>Confirmed</th></tr></thead><tbody>'
+      + rows.map((s) => `<tr>
+          <td class="t-title mono">${esc(s.email)}</td>
+          <td>${statusBadge(s.status)}</td>
+          <td class="nowrap">${esc(fmtDate(s.created_at))}</td>
+          <td class="nowrap muted">${s.confirmed_at ? esc(fmtDate(s.confirmed_at)) : '—'}</td>
+        </tr>`).join('')
+      + '</tbody></table></div>';
+  }
+
+  async function loadCounts() {
+    try {
+      const r = await adminFetch('/api/admin/subscribers?limit=1');
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed');
+      setKpi('a-confirmed', d.counts.confirmed);
+      setKpi('a-pending', d.counts.pending);
+      setKpi('a-unsub', d.counts.unsubscribed);
+      setKpi('a-total', d.counts.total);
+    } catch {
+      for (const id of ['a-confirmed', 'a-pending', 'a-unsub', 'a-total']) setKpi(id, 0);
+    }
+  }
+
+  async function loadRows() {
+    host.innerHTML = '<div class="table-wrap"><div class="card-pad muted">Loading…</div></div>';
+    const params = new URLSearchParams();
+    if (filterEl.value) params.set('status', filterEl.value);
+    if (qEl.value.trim()) params.set('q', qEl.value.trim());
+    params.set('limit', '200');
+    try {
+      const r = await adminFetch(`/api/admin/subscribers?${params.toString()}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed');
+      renderRows(d.rows || []);
+    } catch (e: any) {
+      host.innerHTML = `<div class="card card-pad notice err">Couldn't load subscribers: ${esc(e.message || e)}</div>`;
+    }
+  }
+
+  filterEl.addEventListener('change', loadRows);
+  qEl.addEventListener('input', () => {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(loadRows, 300);
+  });
+  document.getElementById('refresh')!.addEventListener('click', () => { loadCounts(); loadRows(); });
+
+  whenAdmin.then(() => { loadCounts(); loadRows(); });
+</script>

@@ -1,0 +1,128 @@
+---
+/**
+ * /admin — the dashboard Home / overview.
+ * At-a-glance KPIs (posts · audience · revenue), quick actions, and a recent-posts
+ * preview. All data is loaded client-side from admin-gated Functions AFTER the
+ * shared gate confirms an admin (whenAdmin), so nothing here trusts the client.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Home — Studio" heading="Home" active="home">
+  <section>
+    <div class="page-head">
+      <div>
+        <h1>Overview</h1>
+        <p class="sub">Your writing, audience, and revenue at a glance.</p>
+      </div>
+      <div class="head-actions">
+        <a class="btn btn-primary" href="/admin/write">✍ Write a post</a>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <a class="kpi card" href="/admin/posts" style="text-decoration:none;color:inherit">
+        <p class="kpi-label">Posts</p>
+        <div class="kpi-value loading" id="k-posts">—</div>
+        <div class="kpi-foot" id="k-posts-foot"></div>
+      </a>
+      <a class="kpi card" href="/admin/audience" style="text-decoration:none;color:inherit">
+        <p class="kpi-label">Subscribers</p>
+        <div class="kpi-value loading" id="k-subs">—</div>
+        <div class="kpi-foot" id="k-subs-foot"></div>
+      </a>
+      <a class="kpi card" href="/admin/revenue" style="text-decoration:none;color:inherit">
+        <p class="kpi-label">Revenue</p>
+        <div class="kpi-value loading" id="k-rev">—</div>
+        <div class="kpi-foot" id="k-rev-foot"></div>
+      </a>
+      <a class="kpi card" href="/admin/revenue" style="text-decoration:none;color:inherit">
+        <p class="kpi-label">Paywalled</p>
+        <div class="kpi-value loading" id="k-paid">—</div>
+        <div class="kpi-foot">posts behind the paywall</div>
+      </a>
+    </div>
+
+    <div class="card" style="margin-bottom:1.4rem">
+      <div class="card-head">
+        <h2>Recent posts</h2>
+        <a class="btn btn-sm btn-ghost" href="/admin/posts">Manage all →</a>
+      </div>
+      <div id="recent"><div class="card-pad muted">Loading…</div></div>
+    </div>
+
+    <div class="card card-pad rowflex" style="justify-content:space-between">
+      <div>
+        <strong>Read-through analytics</strong>
+        <p class="muted" style="margin:0.2rem 0 0;font-size:0.9rem">See how far readers actually get — the whole point. Connect a privacy-friendly analytics source.</p>
+      </div>
+      <a class="btn btn-sm" href="/admin/settings">Set up</a>
+    </div>
+  </section>
+</AdminLayout>
+
+<script>
+  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { fmtNum, fmtMoney, fmtDate, esc } from '../../lib/admin-format';
+
+  function set(id: string, text: string) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = text;
+      el.classList.remove('loading');
+    }
+  }
+  function foot(id: string, html: string) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
+
+  async function loadKpis() {
+    try {
+      const r = await adminFetch('/api/admin/overview');
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed');
+      set('k-posts', fmtNum(d.posts.total));
+      foot('k-posts-foot', `${fmtNum(d.posts.published)} live · ${fmtNum(d.posts.drafts)} draft`);
+      set('k-subs', fmtNum(d.subscribers.confirmed));
+      foot('k-subs-foot', `${fmtNum(d.subscribers.confirmed)} confirmed · ${fmtNum(d.subscribers.pending)} pending`);
+      set('k-rev', fmtMoney(d.revenue.grossCents, d.revenue.currency));
+      foot('k-rev-foot', `${fmtNum(d.revenue.sales)} ${d.revenue.sales === 1 ? 'sale' : 'sales'}${d.revenue.estimated ? ' · estimated' : ''}`);
+      set('k-paid', fmtNum(d.posts.paywalled));
+    } catch (e) {
+      for (const id of ['k-posts', 'k-subs', 'k-rev', 'k-paid']) set(id, '—');
+    }
+  }
+
+  const badge = (p: any) => (p.draft ? '<span class="badge draft">Draft</span>' : '<span class="badge live">Live</span>')
+    + (p.paid ? ' <span class="badge paid">Paid</span>' : '');
+
+  async function loadRecent() {
+    const host = document.getElementById('recent')!;
+    try {
+      const r = await adminFetch('/api/admin/posts');
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed');
+      const posts = (d.posts || []).slice(0, 5);
+      if (!posts.length) {
+        host.innerHTML = '<div class="empty"><span class="emoji">✍️</span><h3>No posts yet</h3><p>Your first post is one click away.</p><a class="btn btn-primary" href="/admin/write">Write your first post</a></div>';
+        return;
+      }
+      host.innerHTML = '<div class="table-wrap" style="border:0;box-shadow:none;border-radius:0"><table class="table"><tbody>'
+        + posts.map((p: any) => `<tr>
+            <td><div class="t-title"><a href="/admin/write?slug=${encodeURIComponent(p.slug)}">${esc(p.title)}</a></div>
+              <div class="t-sub">${esc(fmtDate(p.pubDate))}</div></td>
+            <td class="num">${badge(p)}</td>
+            <td class="num"><a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a></td>
+          </tr>`).join('')
+        + '</tbody></table></div>';
+    } catch (e: any) {
+      host.innerHTML = `<div class="card-pad notice err">Couldn't load posts: ${esc(e.message || e)}</div>`;
+    }
+  }
+
+  whenAdmin.then(() => {
+    loadKpis();
+    loadRecent();
+  });
+</script>

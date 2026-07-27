@@ -1,0 +1,177 @@
+---
+/**
+ * /admin/posts — the unified Posts manager.
+ * Lists every post (drafts included) from the live content collection with
+ * filter/sort and per-row actions: edit, view, publish/unpublish, delete. Data
+ * comes from the admin-gated GET /api/admin/posts; mutations hit /api/admin/post.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Posts — Studio" heading="Posts" active="posts">
+  <section>
+    <div class="page-head">
+      <div>
+        <h1>Posts</h1>
+        <p class="sub" id="posts-sub">Everything you've written.</p>
+      </div>
+      <div class="head-actions">
+        <a class="btn btn-primary" href="/admin/write">✍ New post</a>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input class="input search" id="q" type="search" placeholder="Search posts…" autocomplete="off" />
+      <select class="select" id="filter">
+        <option value="all">All posts</option>
+        <option value="published">Published</option>
+        <option value="draft">Drafts</option>
+        <option value="paid">Paywalled</option>
+      </select>
+      <select class="select" id="sort">
+        <option value="new">Newest first</option>
+        <option value="old">Oldest first</option>
+        <option value="title">By title</option>
+      </select>
+      <span class="grow"></span>
+      <button class="btn btn-sm btn-ghost" id="refresh" type="button">↻ Refresh</button>
+    </div>
+
+    <div id="posts-host">
+      <div class="table-wrap"><div class="card-pad muted">Loading posts…</div></div>
+    </div>
+  </section>
+</AdminLayout>
+
+<script>
+  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { fmtDate, esc } from '../../lib/admin-format';
+
+  let all: any[] = [];
+  let armedDelete: string | null = null;
+  let armTimer: number | undefined;
+
+  const host = document.getElementById('posts-host')!;
+  const qEl = document.getElementById('q') as HTMLInputElement;
+  const filterEl = document.getElementById('filter') as HTMLSelectElement;
+  const sortEl = document.getElementById('sort') as HTMLSelectElement;
+
+  function view() {
+    const q = qEl.value.trim().toLowerCase();
+    const filter = filterEl.value;
+    const sort = sortEl.value;
+    let rows = all.slice();
+    if (filter === 'published') rows = rows.filter((p) => !p.draft);
+    else if (filter === 'draft') rows = rows.filter((p) => p.draft);
+    else if (filter === 'paid') rows = rows.filter((p) => p.paid);
+    if (q) rows = rows.filter((p) => (p.title || '').toLowerCase().includes(q) || (p.slug || '').includes(q));
+    if (sort === 'title') rows.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    else if (sort === 'old') rows.sort((a, b) => (a.pubDate || '').localeCompare(b.pubDate || ''));
+    else rows.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+    render(rows);
+  }
+
+  function stateBadges(p: any) {
+    let b = p.draft ? '<span class="badge draft">Draft</span>' : '<span class="badge live">Live</span>';
+    if (p.paid) b += ' <span class="badge paid">Paid</span>';
+    return b;
+  }
+
+  function render(rows: any[]) {
+    document.getElementById('posts-sub')!.textContent =
+      `${all.length} post${all.length === 1 ? '' : 's'}${rows.length !== all.length ? ` · ${rows.length} shown` : ''}`;
+    if (!all.length) {
+      host.innerHTML = '<div class="card"><div class="empty"><span class="emoji">✍️</span><h3>No posts yet</h3><p>Start writing — your first post publishes in seconds.</p><a class="btn btn-primary" href="/admin/write">Write your first post</a></div></div>';
+      return;
+    }
+    if (!rows.length) {
+      host.innerHTML = '<div class="card"><div class="empty"><span class="emoji">🔍</span><h3>No matches</h3><p>Try a different search or filter.</p></div></div>';
+      return;
+    }
+    host.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>'
+      + '<th>Title</th><th>Status</th><th class="num">Actions</th></tr></thead><tbody>'
+      + rows.map((p) => {
+        const tags = (p.tags || []).length ? `<span class="t-sub">${(p.tags || []).map((t: string) => '#' + esc(t)).join(' ')}</span>` : '';
+        const armed = armedDelete === p.slug;
+        const viewBtn = p.draft ? '' : `<a class="btn btn-sm btn-ghost" href="/blog/${encodeURIComponent(p.slug)}" target="_blank" rel="noopener">View</a>`;
+        const toggle = p.draft
+          ? `<button class="btn btn-sm" data-act="publish" data-slug="${esc(p.slug)}">Publish</button>`
+          : `<button class="btn btn-sm btn-ghost" data-act="unpublish" data-slug="${esc(p.slug)}">Unpublish</button>`;
+        const del = `<button class="btn btn-sm ${armed ? 'btn-danger' : 'btn-ghost'}" data-act="delete" data-slug="${esc(p.slug)}">${armed ? 'Confirm delete' : 'Delete'}</button>`;
+        return `<tr data-slug="${esc(p.slug)}">
+            <td>
+              <div class="t-title"><a href="/admin/write?slug=${encodeURIComponent(p.slug)}">${esc(p.title)}</a></div>
+              <div class="t-sub">${esc(fmtDate(p.pubDate))}${tags ? ' · ' : ''}${tags}</div>
+            </td>
+            <td>${stateBadges(p)}</td>
+            <td class="num"><div class="row-actions">
+              <a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a>
+              ${viewBtn}${toggle}${del}
+            </div></td>
+          </tr>`;
+      }).join('')
+      + '</tbody></table></div>';
+  }
+
+  async function load() {
+    try {
+      const r = await adminFetch('/api/admin/posts');
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed to load');
+      all = d.posts || [];
+      view();
+    } catch (e: any) {
+      host.innerHTML = `<div class="card card-pad notice err">Couldn't load posts: ${esc(e.message || e)}</div>`;
+    }
+  }
+
+  function disarm() {
+    armedDelete = null;
+    if (armTimer) clearTimeout(armTimer);
+  }
+
+  async function setDraft(slug: string, draft: boolean) {
+    const r = await adminFetch('/api/admin/post', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug, draft }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) alert(d.error || 'Action failed');
+    await load();
+  }
+
+  async function del(slug: string) {
+    const r = await adminFetch(`/api/admin/post?slug=${encodeURIComponent(slug)}`, { method: 'DELETE' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) alert(d.error || 'Delete failed');
+    disarm();
+    await load();
+  }
+
+  host.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
+    if (!btn) return;
+    const act = btn.dataset.act!;
+    const slug = btn.dataset.slug!;
+    if (act === 'publish') setDraft(slug, false);
+    else if (act === 'unpublish') setDraft(slug, true);
+    else if (act === 'delete') {
+      if (armedDelete === slug) {
+        del(slug);
+      } else {
+        disarm();
+        armedDelete = slug;
+        view(); // re-render so the button shows "Confirm delete"
+        armTimer = window.setTimeout(() => { armedDelete = null; view(); }, 3500);
+      }
+    }
+  });
+
+  qEl.addEventListener('input', view);
+  filterEl.addEventListener('change', view);
+  sortEl.addEventListener('change', view);
+  document.getElementById('refresh')!.addEventListener('click', load);
+
+  whenAdmin.then(load);
+</script>

@@ -1,0 +1,147 @@
+---
+/**
+ * /admin/revenue — paywall pricing + sales overview.
+ *   • KPIs + a by-post sales table from the admin-gated GET /api/admin/sales
+ *     (reads the entitlements ledger server-side; revenue is an ESTIMATE from
+ *     post_paywall prices — the ledger doesn't store the amount paid).
+ *   • A pricing table for paywall-eligible posts. Toggle/price/product write
+ *     straight to post_paywall with the anon client — the is_admin() RLS already
+ *     authorizes the owner to write that table, so no endpoint is needed.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Revenue — Studio" heading="Revenue" active="revenue">
+  <section>
+    <div class="page-head">
+      <div>
+        <h1>Revenue</h1>
+        <p class="sub">What your paywalled writing has earned.</p>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi card"><p class="kpi-label">Gross revenue</p><div class="kpi-value loading" id="r-gross">—</div><div class="kpi-foot" id="r-gross-foot"></div></div>
+      <div class="kpi card"><p class="kpi-label">Sales</p><div class="kpi-value loading" id="r-sales">—</div><div class="kpi-foot">unlocks purchased</div></div>
+      <div class="kpi card"><p class="kpi-label">Paywalled posts</p><div class="kpi-value loading" id="r-paid">—</div><div class="kpi-foot">currently earning</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:1.4rem">
+      <div class="card-head"><h2>Sales by post</h2></div>
+      <div id="bypost"><div class="card-pad muted">Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Paywall &amp; pricing</h2>
+        <span class="muted">only posts marked paywalled in the editor</span>
+      </div>
+      <div id="pricing"><div class="card-pad muted">Loading…</div></div>
+    </div>
+  </section>
+</AdminLayout>
+
+<style>
+  .price-row { display: grid; grid-template-columns: 1.4fr auto auto auto auto; gap: 0.75rem; align-items: center; padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--border); }
+  .price-row:last-child { border-bottom: 0; }
+  .price-row .pr-price { width: 6.5rem; }
+  .price-row .pr-prod { width: 12rem; }
+  .switch { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+  @media (max-width: 720px) { .price-row { grid-template-columns: 1fr 1fr; } .price-row .pr-prod { width: 100%; } }
+</style>
+
+<script>
+  import { supabase } from '../../lib/supabase';
+  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { fmtNum, fmtMoney, esc } from '../../lib/admin-format';
+
+  function setKpi(id: string, text: string) {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = text; el.classList.remove('loading'); }
+  }
+  const postLink = (slug: string) => `<a href="/blog/${encodeURIComponent(slug)}" target="_blank" rel="noopener">${esc(slug)}</a>`;
+
+  async function loadSales() {
+    try {
+      const r = await adminFetch('/api/admin/sales');
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed');
+      setKpi('r-gross', fmtMoney(d.totalCents, 'usd'));
+      document.getElementById('r-gross-foot')!.textContent = d.estimated ? 'estimated from prices' : 'captured at sale';
+      setKpi('r-sales', fmtNum(d.count));
+      const host = document.getElementById('bypost')!;
+      const byPost = d.byPost || [];
+      if (!byPost.length) {
+        host.innerHTML = '<div class="empty"><span class="emoji">💸</span><h3>No sales yet</h3><p>When a reader unlocks a post, it shows up here.</p></div>';
+      } else {
+        host.innerHTML = '<div class="table-wrap" style="border:0;box-shadow:none;border-radius:0"><table class="table"><thead><tr>'
+          + '<th>Post</th><th class="num">Sales</th><th class="num">Revenue</th></tr></thead><tbody>'
+          + byPost.map((b: any) => `<tr><td class="t-title">${postLink(b.post_id)}</td><td class="num">${fmtNum(b.count)}</td><td class="num">${fmtMoney(b.cents, 'usd')}</td></tr>`).join('')
+          + '</tbody></table></div>';
+      }
+    } catch (e: any) {
+      document.getElementById('bypost')!.innerHTML = `<div class="card-pad notice err">Couldn't load sales: ${esc(e.message || e)}</div>`;
+    }
+  }
+
+  async function loadPricing() {
+    const host = document.getElementById('pricing')!;
+    try {
+      const r = await adminFetch('/api/admin/posts');
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed');
+      const posts = (d.posts || []).filter((p: any) => p.gateable);
+      setKpi('r-paid', fmtNum((d.posts || []).filter((p: any) => p.paid).length));
+      if (!posts.length) {
+        host.innerHTML = '<div class="empty"><span class="emoji">🔓</span><h3>No paywalled posts</h3><p>Mark a post as paywalled in the editor, then price it here.</p></div>';
+        return;
+      }
+      host.innerHTML = posts.map((p: any) => {
+        const dollars = ((p.priceCents ?? 500) / 100).toFixed(2);
+        return `<div class="price-row" data-slug="${esc(p.slug)}">
+          <div class="t-title">${esc(p.title)}</div>
+          <label class="switch"><input type="checkbox" data-k="paid" ${p.paid ? 'checked' : ''}/> Paid</label>
+          <label class="switch">$ <input class="input pr-price" data-k="price" type="number" min="0" step="0.50" value="${dollars}"/></label>
+          <input class="input pr-prod" data-k="prod" type="text" placeholder="Product ID" value="${esc(p.hasProduct ? (p.productId || '') : '')}"/>
+          <button class="btn btn-sm btn-primary" data-save>Save</button>
+        </div>`;
+      }).join('');
+    } catch (e: any) {
+      host.innerHTML = `<div class="card-pad notice err">Couldn't load posts: ${esc(e.message || e)}</div>`;
+    }
+  }
+
+  async function save(row: HTMLElement, btn: HTMLButtonElement) {
+    const slug = row.dataset.slug!;
+    const paid = (row.querySelector('[data-k="paid"]') as HTMLInputElement).checked;
+    const dollars = parseFloat((row.querySelector('[data-k="price"]') as HTMLInputElement).value) || 0;
+    const product = (row.querySelector('[data-k="prod"]') as HTMLInputElement).value.trim();
+    const price_cents = Math.max(0, Math.round(dollars * 100));
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = 'Saving…';
+    try {
+      const { error } = await supabase.from('post_paywall').upsert(
+        { post_id: slug, is_paid: paid, price_cents, currency: 'usd', product_id: product || null, updated_at: new Date().toISOString() },
+        { onConflict: 'post_id' },
+      );
+      if (error) throw error;
+      btn.textContent = 'Saved ✓';
+      setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1400);
+      loadSales();
+    } catch (e: any) {
+      btn.textContent = 'Failed';
+      alert(e.message || 'Save failed');
+      setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1400);
+    }
+  }
+
+  document.getElementById('pricing')!.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('[data-save]') as HTMLButtonElement | null;
+    if (!btn) return;
+    const row = btn.closest('.price-row') as HTMLElement;
+    save(row, btn);
+  });
+
+  whenAdmin.then(() => { loadSales(); loadPricing(); });
+</script>

@@ -83,6 +83,10 @@ export default defineConfig({
   // image URLs). Must be the exact deployed origin, protocol included, no path.
   site: 'https://areyoustillreading.dev',
 
+  // The admin editor moved from /admin/editor into the dashboard at /admin/write.
+  // Keep the old path working (bookmarks) via a static redirect.
+  redirects: { '/admin/editor': '/admin/write' },
+
   // Integrations run during the build. Only the sitemap generator is registered
   // here (RSS, Pagefind, OG images live in their own files — see top doc block).
   // filter: predicate deciding which discovered pages get written to the sitemap.
@@ -90,7 +94,7 @@ export default defineConfig({
   //   public sitemap never advertises paywalled posts to crawlers. SECURITY: this
   //   is discoverability hygiene, not enforcement — the actual paywall is the
   //   token/entitlement middleware + Supabase RLS. See top doc block.
-  integrations: [sitemap({ filter: (page) => !page.includes('/gated/') && !page.includes('/post-shell') })],
+  integrations: [sitemap({ filter: (page) => !page.includes('/gated/') && !page.includes('/post-shell') && !page.includes('/admin') })],
 
   // Markdown/MDX compilation pipeline (Shiki syntax highlighting with ```d2
   // excluded, remark-math → rehype-katex, then rehype-d2 → inline SVG). Defined in

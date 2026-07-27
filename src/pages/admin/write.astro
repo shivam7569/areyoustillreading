@@ -84,13 +84,11 @@
  *     guard for user-supplied title/description/tags.
  * ============================================================================
  */
-import BaseLayout from '../../layouts/BaseLayout.astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
 
-<BaseLayout title="Editor — admin" description="Admin editor.">
-  <p id="admin-gate" class="muted">Checking access…</p>
-
-  <div id="editor-wrap" hidden>
+<AdminLayout title="Write — Studio" heading="Write" active="write">
+  <div id="editor-wrap">
     <div class="editor-bar">
       <strong>Draft</strong>
       <span id="editor-status" class="muted"></span>
@@ -115,7 +113,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         </div>
 
         <div id="pm-form" hidden>
-          <h2 class="pm-title">Ready to publish</h2>
+          <h2 class="pm-title" id="pm-form-title">Ready to publish</h2>
           <label class="pm-field"><span class="pm-label">Title</span>
             <input id="pm-post-title" type="text" placeholder="Your title" /></label>
           <label class="pm-field"><span class="pm-label">Description</span>
@@ -134,7 +132,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <div id="milkdown"></div>
     <pre id="md-out" hidden></pre>
   </div>
-</BaseLayout>
+</AdminLayout>
 
 <style>
   .muted { color: var(--muted); }
@@ -253,6 +251,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 <script>
   import { supabase } from '../../lib/supabase';
+  // The dashboard shell (AdminLayout) gates the whole /admin area; boot the editor
+  // once an admin is confirmed (or immediately for a returning, cached admin).
+  import { whenAdmin, cachedAdmin } from '../../lib/admin-gate';
   import { Crepe } from '@milkdown/crepe';
   import { languages } from '@codemirror/language-data';
   import { LanguageDescription, LanguageSupport, StreamLanguage } from '@codemirror/language';
@@ -599,30 +600,64 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     });
   });
 
-  const gate = document.getElementById('admin-gate');
   const wrap = document.getElementById('editor-wrap');
   const statusEl = document.getElementById('editor-status');
 
   async function init() {
-    // TEMP (dev): the editor is intentionally UNGATED so it can be built and tested
-    // from a general user's POV without an admin login. BEFORE LAUNCH, restore the
-    // gate here — require a session AND is_admin:
-    //   const { data } = await supabase.auth.getSession();
-    //   if (!data.session) { gate.innerHTML = 'Please <a href="/login">sign in</a> to write.'; return; }
-    //   const { data: a } = await supabase.rpc('is_admin');
-    //   if (a !== true) { gate.textContent = 'Admins only.'; return; }
-    gate.hidden = true;
+    // Access is handled by the dashboard shell (AdminLayout): it reveals /admin only
+    // for a confirmed admin, and every publish/edit is re-verified server-side
+    // (functions/api/publish.js + /api/admin/*). init() runs only after boot() below.
     wrap.hidden = false;
 
-    // Draft persistence (dev): autosave the Markdown to localStorage so work survives
-    // reloads. TODO: migrate to per-user Supabase drafts once the editor is re-gated.
+    // New post → restore the local autosaved draft. Editing an existing post
+    // (/admin/write?slug=<slug>) → load its Markdown from the content collection.
+    const editSlug = new URLSearchParams(location.search).get('slug');
     const DRAFT_KEY = 'aysr:editor-draft';
-    let savedDraft = null;
-    try { savedDraft = localStorage.getItem(DRAFT_KEY); } catch {}
+
+    let startDoc = '# New post\n\nStart writing.\n';
+    let restoredMsg = '';
+    // When editing, this carries the existing post's identity/metadata into the
+    // publish modal so the slug/date/tags are preserved (not re-derived).
+    let editing = null;
+
+    if (editSlug) {
+      statusEl.textContent = 'Loading…';
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session && data.session.access_token;
+        const res = await fetch(`/api/admin/post?slug=${encodeURIComponent(editSlug)}`, {
+          headers: token ? { Authorization: 'Bearer ' + token } : {},
+        });
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || 'Could not load post');
+        const fm = j.frontmatter || {};
+        // Strip the frontmatter block; re-add the title as an H1 so the editor shows
+        // it the way a new post starts (publish strips the leading H1 back out).
+        const bodyOnly = String(j.markdown || '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
+        const title = typeof fm.title === 'string' && fm.title ? fm.title : editSlug;
+        startDoc = `# ${title}\n\n${bodyOnly.replace(/^\n+/, '')}`;
+        editing = {
+          slug: editSlug,
+          title,
+          description: typeof fm.description === 'string' ? fm.description : '',
+          tags: Array.isArray(fm.tags) ? fm.tags.map(String) : [],
+          pubDate: typeof fm.pubDate === 'string' ? fm.pubDate.slice(0, 10) : '',
+          draft: fm.draft === true,
+        };
+        restoredMsg = 'Editing “' + title + '”';
+      } catch (e) {
+        console.error('[editor] load-for-edit failed', e);
+        statusEl.textContent = 'Could not load that post.';
+      }
+    } else {
+      let savedDraft = null;
+      try { savedDraft = localStorage.getItem(DRAFT_KEY); } catch {}
+      if (savedDraft != null) { startDoc = savedDraft; restoredMsg = 'Draft restored'; }
+    }
 
     const crepe = new Crepe({
       root: document.getElementById('milkdown'),
-      defaultValue: savedDraft != null ? savedDraft : '# New post\n\nStart writing.\n',
+      defaultValue: startDoc,
       featureConfigs: {
         // Language-aware code blocks: hand the CodeMirror feature the full
         // language set (from @codemirror/language-data) so a block tagged ts /
@@ -660,6 +695,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     let saveTimer = null;
     crepe.on((api) => {
       api.markdownUpdated((_ctx, md) => {
+        // Editing a published post doesn't autosave to the local draft slot (that's
+        // the new-post scratchpad) — edits are committed on Publish. New posts autosave.
+        if (editing) { statusEl.textContent = 'Unsaved edits — Publish to save'; return; }
         statusEl.textContent = 'Saving…';
         clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
@@ -673,7 +711,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     crepe.editor.use(fenceCodeBlock);
     crepe.editor.use(plotlyCells);
     await crepe.create();
-    if (savedDraft != null) statusEl.textContent = 'Draft restored';
+    if (restoredMsg) statusEl.textContent = restoredMsg;
 
     // WARM-UP: now that the editor is interactive, prefetch the heavy bits during idle
     // time — the browser's spare cycles while you read/type/navigate — so nothing is
@@ -704,7 +742,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         return;
       }
       try { localStorage.removeItem(DRAFT_KEY); } catch {}
-      location.reload();
+      // Start a genuinely fresh post: drop any ?slug= so we don't reload the edited post.
+      if (editing) location.href = '/admin/write';
+      else location.reload();
     });
 
     // "Preview Markdown" shows the serialized Markdown (temporary debug view — this
@@ -721,7 +761,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const slugify = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
     const firstHeading = (md) => { const m = md.match(/^#\s+(.+)$/m); return m ? m[1].trim() : ''; };
     const yaml = (v) => JSON.stringify(String(v == null ? '' : v)); // JSON-style scalar is valid YAML
-    let pubTags = [];
+    // Seed from the post being edited so its tags show as chips; empty for a new post.
+    let pubTags = editing && Array.isArray(editing.tags) ? editing.tags.slice(0, 5) : [];
     let slugEdited = false;
 
     const openModal = () => {
@@ -765,6 +806,19 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       if (signedIn) { try { prefillForm(); } catch (err) { console.error('[publish] prefill failed', err); } }
     }
     function prefillForm() {
+      if (editing) {
+        // Editing an existing post: preserve its identity — lock the slug, restore
+        // title/description/tags/draft, and show a heading so it's clearly an edit.
+        if (!$('pm-post-title').value) $('pm-post-title').value = editing.title || firstHeading(crepe.getMarkdown());
+        if (!$('pm-post-desc').value) $('pm-post-desc').value = editing.description || '';
+        $('pm-slug').textContent = editing.slug;
+        $('pm-draft').checked = !!editing.draft;
+        slugEdited = true; // don't let title edits rewrite an existing post's permalink
+        $('pm-form-title').textContent = 'Update post';
+        $('pm-publish').textContent = 'Update';
+        renderTags();
+        return;
+      }
       if (!$('pm-post-title').value) $('pm-post-title').value = firstHeading(crepe.getMarkdown());
       if (!$('pm-slug').textContent.trim()) $('pm-slug').textContent = slugify($('pm-post-title').value);
     }
@@ -833,12 +887,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       // Title lives in frontmatter (rendered as the page <h1>), so drop a leading
       // "# Title" from the body to avoid a duplicate heading.
       const body = crepe.getMarkdown().replace(/^#\s+.+\n+/, '');
-      const today = new Date().toISOString().slice(0, 10);
+      // Preserve the original publish date when updating an existing post; a brand-new
+      // post is dated today.
+      const pubDate = (editing && editing.pubDate) || new Date().toISOString().slice(0, 10);
       const content = [
         '---',
         `title: ${yaml(title)}`,
         `description: ${yaml(description)}`,
-        `pubDate: ${yaml(today)}`,
+        `pubDate: ${yaml(pubDate)}`,
         `tags: [${pubTags.map(yaml).join(', ')}]`,
         `draft: ${draft}`,
         '---',
@@ -862,7 +918,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         const bodyHtml = await renderPostBodyBrowser(body);
         const shellHtml = await (await fetch('/post-shell', { cache: 'no-store' })).text();
         assembledHtml = assemblePostHtml(shellHtml, {
-          slug, title, description, pubDate: today, tags: pubTags, bodyMarkdown: body, bodyHtml,
+          slug, title, description, pubDate, tags: pubTags, bodyMarkdown: body, bodyHtml,
         });
       } catch (e) {
         console.error('[publish] instant-assembly failed; committing rebuild-only', e);
@@ -876,7 +932,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         const res = await fetch('/api/publish', {
           method: 'POST',
           headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ slug, content, html: assembledHtml, title, description, pubDate: today, tags: pubTags, draft }),
+          body: JSON.stringify({ slug, content, html: assembledHtml, title, description, pubDate, tags: pubTags, draft }),
         });
         const j = await res.json().catch(() => ({}));
         if (res.ok && j.ok) {
@@ -914,5 +970,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     });
   }
 
-  init();
+  // Boot the editor once we know the visitor is the admin. A returning admin
+  // (cached) boots immediately so the studio feels instant; a first-time sign-in
+  // boots the moment AdminLayout's check confirms admin. Guarded so we boot once.
+  let booted = false;
+  function boot() { if (booted) return; booted = true; init(); }
+  whenAdmin.then(boot);
+  if (cachedAdmin()) boot();
 </script>
