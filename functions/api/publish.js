@@ -81,7 +81,14 @@ export async function onRequestPost({ request, env }) {
 
   // --- Auth: caller must be a signed-in admin (Supabase session) ------------
   // One shared, fail-closed gate for every admin endpoint (see lib/require-admin.js).
-  const gate = await requireAdmin(request, env);
+  // Wrapped so any unexpected throw here returns a readable JSON error instead of a
+  // bare 502 (the auth step runs before the main try/catch below).
+  let gate;
+  try {
+    gate = await requireAdmin(request, env);
+  } catch (e) {
+    return json({ error: 'Auth check failed: ' + String((e && e.message) || e) }, 500);
+  }
   if (!gate.ok) return json({ error: gate.error }, gate.status);
 
   // --- Validate -------------------------------------------------------------
