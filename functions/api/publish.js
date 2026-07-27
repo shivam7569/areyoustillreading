@@ -71,8 +71,10 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  // slug -> becomes the .md filename; content -> the full Markdown (frontmatter + body).
-  const { slug, content } = payload || {};
+  // slug -> the .md filename; content -> full Markdown (frontmatter + body) for the
+  // durable git commit; html -> the pre-assembled full page HTML (built in the editor
+  // from the current /post-shell + the rendered body) for the instant KV overlay.
+  const { slug, content, html } = payload || {};
 
   // --- Auth: caller must be a signed-in admin (Supabase session) ------------
   const sb = env.SUPABASE_URL;
@@ -145,11 +147,28 @@ export async function onRequestPost({ request, env }) {
     // `commit` is the new commit SHA, `fileUrl` links to the file on GitHub. Remember:
     // this means "committed", not "deployed" — the Pages rebuild happens afterward.
     const data = await put.json();
+
+    // INSTANT PUBLISH: write the pre-assembled full-page HTML to KV so the
+    // /blog/<slug> overlay (functions/blog/_middleware.js) serves it in seconds —
+    // no waiting for the git-commit rebuild. `publishedAt` (server clock) is what the
+    // overlay's staleness gate compares against the deployment build time, so this
+    // copy is served only until the rebuild lands. Best-effort: a KV failure still
+    // leaves the post committed (live after the rebuild ~1-2 min), so we report the
+    // outcome via `instant` rather than failing the publish.
+    let instant = false;
+    if (env.POSTS_HTML && typeof html === 'string' && html.trim()) {
+      try {
+        await env.POSTS_HTML.put(slug, JSON.stringify({ html, publishedAt: Date.now() }));
+        instant = true;
+      } catch (e) { /* committed but not instant */ }
+    }
+
     return json({
       ok: true,
       path,
       branch,
       updated: Boolean(sha),
+      instant,
       commit: data.commit?.sha,
       fileUrl: data.content?.html_url,
     });
