@@ -41,14 +41,15 @@ async function getFile(env, slug) {
   return { sha: j.sha, content: fromBase64Utf8(j.content) };
 }
 
-// Set (or insert) the `draft:` frontmatter flag via a targeted edit — never a
-// full re-serialize, so the rest of the file is preserved byte-for-byte.
-function setDraftFlag(raw, draft) {
+// Set (or insert) a boolean frontmatter flag (draft / gateable) via a targeted edit —
+// never a full re-serialize, so the rest of the file is preserved byte-for-byte.
+function setBoolFlag(raw, key, value) {
   const m = /^(---\r?\n)([\s\S]*?)(\r?\n---)/.exec(raw);
-  if (!m) return `---\ndraft: ${draft}\n---\n\n${raw}`;
+  if (!m) return `---\n${key}: ${value}\n---\n\n${raw}`;
   let fm = m[2];
-  if (/^draft:\s*.*$/m.test(fm)) fm = fm.replace(/^draft:\s*.*$/m, `draft: ${draft}`);
-  else fm = `${fm}\ndraft: ${draft}`;
+  const re = new RegExp(`^${key}:\\s*.*$`, 'm');
+  if (re.test(fm)) fm = fm.replace(re, `${key}: ${value}`);
+  else fm = `${fm}\n${key}: ${value}`;
   return m[1] + fm + m[3] + raw.slice(m[0].length);
 }
 
@@ -96,8 +97,13 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Invalid JSON body' }, 400);
   }
   const slug = body && body.slug;
-  const draft = Boolean(body && body.draft);
   if (typeof slug !== 'string' || !SLUG_RE.test(slug)) return json({ error: 'Invalid slug' }, 400);
+  // Flip whichever frontmatter booleans were provided: `draft` (publish/unpublish) and
+  // `gateable` (add/remove the post from the paywall — build-time body split). At least
+  // one must be present.
+  const hasDraft = typeof body.draft === 'boolean';
+  const hasGateable = typeof body.gateable === 'boolean';
+  if (!hasDraft && !hasGateable) return json({ error: 'Nothing to change' }, 400);
 
   let file;
   try {
@@ -108,14 +114,24 @@ export async function onRequestPost({ request, env }) {
   if (!file) return json({ error: 'Not found' }, 404);
 
   const { branch } = repoInfo(env);
+  let updated = file.content;
+  const actions = [];
+  if (hasDraft) {
+    updated = setBoolFlag(updated, 'draft', body.draft);
+    actions.push(body.draft ? 'unpublish' : 'publish');
+  }
+  if (hasGateable) {
+    updated = setBoolFlag(updated, 'gateable', body.gateable);
+    actions.push(body.gateable ? 'paywall' : 'unpaywall');
+  }
+
   let put;
   try {
-    const updated = setDraftFlag(file.content, draft);
     put = await fetch(fileApi(env, slug), {
       method: 'PUT',
       headers: ghHeaders(env),
       body: JSON.stringify({
-        message: `${draft ? 'Unpublish' : 'Publish'} post: ${slug}`,
+        message: `${actions.join(' + ')} post: ${slug}`,
         content: toBase64Utf8(updated),
         branch,
         sha: file.sha,
@@ -126,9 +142,11 @@ export async function onRequestPost({ request, env }) {
   }
   if (!put.ok) return json({ error: 'GitHub commit failed', detail: (await put.text()).slice(0, 300) }, 502);
 
-  // Unpublishing must also pull the post out of the instant overlay immediately.
-  if (draft) await kvUnpublish(env, slug);
-  return json({ ok: true, slug, draft });
+  // Drop the instant KV copy whenever visibility OR gating changes: the stored copy is
+  // the pre-change render, so serving it during the ~1-2 min rebuild would show stale
+  // (and for a newly-paywalled post, unsafe) content. Falling back to static is correct.
+  if ((hasDraft && body.draft) || hasGateable) await kvUnpublish(env, slug);
+  return json({ ok: true, slug, ...(hasDraft ? { draft: body.draft } : {}), ...(hasGateable ? { gateable: body.gateable } : {}) });
 }
 
 export async function onRequestDelete({ request, env }) {

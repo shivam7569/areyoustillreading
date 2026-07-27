@@ -126,12 +126,46 @@ const nav = [
         {/* Render the static `nav` array as anchors — one <a> per entry. Data-driven
             so adding/removing a link is a one-line edit above, not markup surgery. */}
         {nav.map((item) => <a href={item.href}>{item.label}</a>)}
+        {/* Studio (admin dashboard) entry — hidden by default; the script below reveals
+            it only for a signed-in admin (is_admin). Link visibility is UX only; the
+            /admin area and every mutation are enforced by the gate + requireAdmin. */}
+        <a href="/admin" id="nav-admin" class="nav-studio" hidden>Studio</a>
       </nav>
     </header>
     {/* Page-specific content is injected here by the wrapping page via the slot. */}
     <main>
       <slot />
     </main>
+    <script>
+      // Reveal the "Studio" nav link only for a signed-in admin. Fast path: if this
+      // browser was confirmed admin before, show it instantly from the cached flag.
+      // Then, ONLY if a Supabase session actually exists locally, dynamically import the
+      // gate to revalidate — so anonymous visitors never load Supabase for this at all.
+      const link = document.getElementById('nav-admin');
+      if (link) {
+        let cached = false, hasSession = false;
+        try {
+          cached = localStorage.getItem('aysr:admin-ok') === '1';
+          if (cached) link.hidden = false; // optimistic instant reveal for a known admin
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('sb-') && k.includes('auth-token')) { hasSession = true; break; }
+          }
+        } catch {}
+        // Revalidate whenever there's any hint of an account (cache flag OR a Supabase
+        // session). checkAdmin() reads the session locally first, so a signed-out visitor
+        // resolves without a network call. Purely-anonymous visitors skip the import
+        // entirely, so they never load Supabase just to evaluate this link.
+        if (cached || hasSession) {
+          import('../lib/admin-gate').then(async ({ checkAdmin }) => {
+            const r = await checkAdmin();
+            link.hidden = r.state !== 'admin';
+          }).catch(() => {});
+        } else {
+          link.hidden = true;
+        }
+      }
+    </script>
     <footer class="site-footer">
       {/* Copyright year computed at BUILD TIME (this is SSG, not SSR): the year is
           frozen to whenever the site was last built/deployed, not the visitor's

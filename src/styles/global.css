@@ -171,6 +171,8 @@ pre code { background: none; padding: 0; }
 .site-header nav { display: flex; gap: 1.1rem; }
 .site-header nav a { color: var(--muted); }
 .site-header nav a:hover { color: var(--fg); text-decoration: none; }
+/* The admin-only "Studio" entry (revealed by BaseLayout's script for admins). */
+.site-header nav a.nav-studio { color: var(--accent); font-weight: 600; }
 
 /* Footer */
 .site-footer {
