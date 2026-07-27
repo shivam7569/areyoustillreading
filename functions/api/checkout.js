@@ -220,10 +220,13 @@ export async function onRequestPost({ request, env }) {
     // Parse defensively — a non-JSON error body must not throw.
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      // Log full detail server-side (status + body) for debugging, but return a
-      // vague 502 to the client so we don't leak Dodo internals.
+      // Log full detail server-side (status + body) for debugging.
       console.error('dodo checkout failed', res.status, JSON.stringify(data));
-      return json({ error: 'Could not start checkout.' }, 502);
+      // TEMP (test-mode debugging): surface Dodo's actual reason to the tester so we can
+      // diagnose config issues (bad product id, amount out of PWYW bounds, etc.). Revert
+      // to a vague message before launch.
+      const detail = (data && (data.message || data.error || data.detail)) || (typeof data === 'string' ? data : JSON.stringify(data));
+      return json({ error: `Checkout failed [${res.status}]: ${String(detail).slice(0, 400)}` }, 502);
     }
     // Dodo has varied the URL field name across API versions; accept any of the
     // known aliases so a field rename doesn't break checkout.
