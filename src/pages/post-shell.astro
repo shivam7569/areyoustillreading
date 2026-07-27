@@ -1,0 +1,40 @@
+---
+/**
+ * src/pages/post-shell.astro — the "shell donor" for instant publishing.
+ * ============================================================================
+ * A real, built page that renders the full blog-post CHROME (BaseLayout head/nav/
+ * footer + BlogPost byline/tags/islands) around EMPTY placeholder content. It is
+ * NOT a reader-facing page; it exists so the admin editor can fetch it at publish
+ * time, DOM-inject the new post's title/meta/body into it, and store the assembled
+ * full-page HTML in KV — which the /blog/<slug> overlay then serves instantly.
+ *
+ * WHY A LIVE DONOR (not a captured template): because the editor fetches THIS page
+ * from the CURRENT deployment at publish time, the assembled HTML always references
+ * the current build's hashed CSS/JS assets. Combined with the overlay only serving
+ * KV until the next build lands, a stored page's asset URLs are always valid.
+ *
+ * Lives at /post-shell (NOT under /blog/) so the /blog/* overlay middleware never
+ * touches it and it can't collide with a real post slug. Excluded from the sitemap.
+ * The placeholder `post` below only needs the fields BlogPost reads (title,
+ * description, pubDate, tags, id, body); it is cast to satisfy the layout's type.
+ */
+import BlogPost from '../layouts/BlogPost.astro';
+
+const post = {
+  id: 'post-shell',
+  collection: 'blog',
+  data: {
+    title: 'Untitled',
+    description: '',
+    pubDate: new Date(0),
+    tags: [],
+    draft: false,
+    gateable: false,
+  },
+  body: '',
+};
+---
+<BlogPost post={post as any}>
+  {/* The editor replaces the contents of this marker with the rendered post body. */}
+  <div data-shell-body></div>
+</BlogPost>
