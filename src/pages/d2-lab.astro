@@ -1,0 +1,126 @@
+---
+// TEMPORARY D2 verification lab. Renders a spread of diagram types + styling via
+// @terrastruct/d2 (WASM) client-side — the same path the Milkdown editor preview
+// would use. Deleted once we've evaluated. Ungated.
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="D2 lab (temp)" description="temp">
+  <h1>D2 lab (temp)</h1>
+  <button id="run" type="button">Render all</button>
+  <p id="status" class="muted">Idle.</p>
+  <div id="out"></div>
+</BaseLayout>
+
+<style is:global>
+  .d2-item { margin: 1.5rem 0; }
+  .d2-item h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+  .d2-item .frame { border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem; overflow-x: auto; }
+  .d2-item svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+  .d2-item pre { color: #ef4444; white-space: pre-wrap; }
+</style>
+
+<script>
+  import { D2 } from '@terrastruct/d2';
+  const d2 = new D2();
+
+  const flow = `direction: down
+start: Start {shape: circle; style.fill: "#22c55e"; style.font-color: "#ffffff"}
+input: Read input {style.fill: "#3b82f6"; style.font-color: "#ffffff"}
+check: Valid? {shape: diamond; style.fill: "#f59e0b"}
+proc: Process {style.stroke: "#8b5cf6"; style.stroke-width: 3; style.border-radius: 8}
+err: Error {style.fill: "#ef4444"; style.font-color: "#ffffff"}
+done: Done {shape: circle; style.fill: "#22c55e"; style.font-color: "#ffffff"}
+start -> input -> check
+check -> proc: yes {style.stroke: "#16a34a"; style.stroke-width: 2}
+check -> err: no {style.stroke: "#dc2626"; style.stroke-width: 2}
+proc -> done
+err -> input: retry {style.stroke-dash: 3}`;
+
+  const arch = `direction: right
+client: Client {
+  browser: Browser
+  mobile: Mobile app
+}
+edge: Cloudflare {
+  style.fill: "#fff7ed"
+  cdn: CDN
+  fns: Pages Functions
+}
+back: Backend {
+  supabase: Supabase {
+    db: Postgres {shape: cylinder; style.fill: "#dbeafe"}
+    auth: Auth
+  }
+  gh: GitHub repo {shape: page}
+}
+client.browser -> edge.cdn: HTTPS
+client.mobile -> edge.fns: API
+edge.fns -> back.supabase.db: query
+edge.fns -> back.gh: publish commit`;
+
+  const seq = `shape: sequence_diagram
+reader: Reader
+site: Static site
+sb: Supabase
+reader -> site: GET /gated/post
+site -> sb: check entitlement
+sb -> site: has access?
+site -> reader: content or paywall`;
+
+  const er = `users: {
+  shape: sql_table
+  id: int {constraint: primary_key}
+  email: varchar
+  created_at: timestamp
+}
+posts: {
+  shape: sql_table
+  id: int {constraint: primary_key}
+  author_id: int {constraint: foreign_key}
+  title: varchar
+  body: text
+}
+posts.author_id -> users.id: author`;
+
+  const samples = [
+    { title: '1. Styled flowchart (custom colors, shapes, dashed edge)', code: flow, options: {} },
+    { title: '2. Same flowchart — sketch / hand-drawn mode', code: flow, options: { sketch: true } },
+    { title: '3. Architecture — nested containers + fills', code: arch, options: {} },
+    { title: '4. Sequence diagram', code: seq, options: {} },
+    { title: '5. ER — SQL tables with keys', code: er, options: {} },
+    { title: '6. Dark theme (themeID 200) + ELK layout', code: arch, options: { themeID: 200, layout: 'elk' } },
+  ];
+
+  async function renderOne(code, options) {
+    const r = await d2.compile(code, options);
+    return await d2.render(r.diagram, r.renderOptions);
+  }
+
+  const status = document.getElementById('status');
+  document.getElementById('run').addEventListener('click', async () => {
+    const out = document.getElementById('out');
+    out.innerHTML = '';
+    status.textContent = 'Rendering ' + samples.length + ' diagrams (first run loads the D2 WASM)…';
+    const t0 = performance.now();
+    for (const s of samples) {
+      const item = document.createElement('div');
+      item.className = 'd2-item';
+      const h = document.createElement('h3');
+      h.textContent = s.title;
+      item.appendChild(h);
+      const frame = document.createElement('div');
+      frame.className = 'frame';
+      try {
+        frame.innerHTML = await renderOne(s.code, s.options);
+      } catch (e) {
+        const pre = document.createElement('pre');
+        pre.textContent = String((e && e.message) || e);
+        frame.appendChild(pre);
+      }
+      item.appendChild(frame);
+      out.appendChild(item);
+    }
+    status.textContent = 'Done — ' + samples.length + ' diagrams in ' + Math.round(performance.now() - t0) + ' ms.';
+  });
+</script>
