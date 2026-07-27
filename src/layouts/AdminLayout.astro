@@ -107,10 +107,10 @@ const nav = [
     {/* ---- The dashboard shell: revealed only for an admin ---- */}
     <div id="admin-shell" class="admin" hidden>
       <aside class="admin-sidebar">
-        <div class="admin-brand">
+        <a class="admin-brand" href="/" title="Back to the site">
           <span class="dot"></span>
           <span>areyoustillreading<small>Studio</small></span>
-        </div>
+        </a>
         <nav class="admin-nav">
           {nav.map((item) => (
             <a href={item.href} class={active === item.key ? 'is-active' : undefined} aria-current={active === item.key ? 'page' : undefined}>
@@ -119,9 +119,9 @@ const nav = [
             </a>
           ))}
           <div class="admin-nav-spacer"></div>
-          <a href="/" target="_blank" rel="noopener">
+          <a href="/">
             <Fragment set:html={icon.exit} />
-            <span class="lbl">View site</span>
+            <span class="lbl">Back to site</span>
           </a>
           <a href="/admin/settings" class={active === 'settings' ? 'is-active' : undefined} aria-current={active === 'settings' ? 'page' : undefined}>
             <Fragment set:html={icon.settings} />

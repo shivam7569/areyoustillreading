@@ -78,7 +78,9 @@
   display: flex; align-items: center; gap: 0.55rem;
   padding: 0.35rem 0.6rem 0.85rem; margin-bottom: 0.35rem;
   font-weight: 700; color: var(--fg); letter-spacing: -0.01em;
+  text-decoration: none; /* it's a link back to the site */
 }
+.admin-brand:hover { text-decoration: none; opacity: 0.8; }
 .admin-brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; }
 .admin-brand small { display: block; font-weight: 500; font-size: 0.7rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
 
