@@ -122,6 +122,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
             <div class="pm-tags" id="pm-tags"><input id="pm-tag-input" type="text" placeholder="Add a tag…" /></div></div>
           <p class="pm-permalink">areyoustillreading.dev/blog/<span id="pm-slug" class="pm-slug" contenteditable="true" spellcheck="false"></span></p>
           <label class="pm-toggle"><input id="pm-draft" type="checkbox" /> <span>Save as a draft — only you can see it</span></label>
+          <label class="pm-toggle"><input id="pm-email-subs" type="checkbox" /> <span id="pm-email-subs-label">Email subscribers about this post</span></label>
           <div class="pm-actions">
             <button class="pm-btn pm-btn-primary" id="pm-publish" type="button">Publish</button>
             <span class="pm-status" id="pm-form-status"></span>
@@ -816,7 +817,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       }
       $('pm-signin').hidden = signedIn;
       $('pm-form').hidden = !signedIn;
-      if (signedIn) { try { prefillForm(); } catch (err) { console.error('[publish] prefill failed', err); } }
+      if (signedIn) { try { prefillForm(); updateEmailToggle(); } catch (err) { console.error('[publish] prefill failed', err); } }
     }
     function prefillForm() {
       if (editing) {
@@ -842,6 +843,45 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // Keep the permalink synced to the title until the author edits it directly.
     $('pm-slug').addEventListener('input', () => { slugEdited = true; });
     $('pm-post-title').addEventListener('input', () => { if (!slugEdited) $('pm-slug').textContent = slugify($('pm-post-title').value); });
+
+    // --- "Email subscribers" toggle -----------------------------------------
+    // Opt-in per publish. Labelled with the LIVE confirmed-subscriber count so the
+    // author knows exactly who'll get mail, and disabled when there's no one to
+    // email or when saving a draft (a draft is never announced).
+    const emailChk = $('pm-email-subs');
+    const emailLbl = $('pm-email-subs-label');
+    async function updateEmailToggle() {
+      if ($('pm-draft').checked) {
+        emailChk.checked = false;
+        emailChk.disabled = true;
+        emailLbl.textContent = "Drafts aren't emailed to subscribers";
+        return;
+      }
+      emailChk.disabled = true; // until we know the count
+      emailLbl.textContent = 'Email subscribers about this post';
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session && data.session.access_token;
+        if (!token) return;
+        const r = await fetch('/api/admin/subscribers?limit=1', { headers: { Authorization: 'Bearer ' + token } });
+        const j = await r.json().catch(() => ({}));
+        const n = (j.counts && j.counts.confirmed) || 0;
+        if (n > 0) {
+          emailChk.disabled = false;
+          emailLbl.textContent = 'Email ' + n + ' subscriber' + (n === 1 ? '' : 's') + ' about this post';
+        } else {
+          emailChk.checked = false;
+          emailChk.disabled = true;
+          emailLbl.textContent = 'No confirmed subscribers to email yet';
+        }
+      } catch {
+        // Count unavailable — leave the toggle usable with a generic label; the
+        // server re-checks the real list on send, so nothing is lost.
+        emailChk.disabled = false;
+        emailLbl.textContent = 'Email subscribers about this post';
+      }
+    }
+    $('pm-draft').addEventListener('change', updateEmailToggle);
 
     // Sign-in (one-time; the session persists after).
     $('pm-github').addEventListener('click', async () => {
@@ -896,6 +936,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       // the (locked) permalink field — so an update can't fork into a new file.
       const slug = editing ? editing.slug : slugify($('pm-slug').textContent || title);
       const draft = $('pm-draft').checked;
+      // Opt-in per publish; forced off for drafts (you never announce a draft).
+      const emailSubs = $('pm-email-subs').checked && !draft;
       if (!title) return void (status.textContent = 'Add a title.');
       if (!description) return void (status.textContent = 'Add a description.');
       if (!slug) return void (status.textContent = 'Need a permalink.');
@@ -956,6 +998,37 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         const j = await res.json().catch(() => ({}));
         if (res.ok && j.ok) {
           navigating = true;
+          // Optionally announce the post to confirmed subscribers — only for a real
+          // publish (never a draft) and only if the author opted in. AWAITED (not
+          // fire-and-forget) so the "emailed N" count is shown before the live-jump
+          // below navigates the modal away. The server re-checks the real list and
+          // guards against double-sends, so this is safe to call on every publish.
+          if (emailSubs) {
+            status.textContent = 'Published — emailing subscribers…';
+            try {
+              const br = await fetch('/api/admin/broadcast', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
+                body: JSON.stringify({ slug, title, description }),
+              });
+              const bj = await br.json().catch(() => ({}));
+              if (br.ok && bj.ok) {
+                if (bj.skipped === 'already-sent') status.textContent = 'Published — subscribers were already emailed for this post.';
+                else if (bj.skipped === 'in-progress') status.textContent = 'Published — an email send for this post is already in progress.';
+                else if (bj.sent > 0 && bj.failed > 0) status.textContent = 'Published — emailed ' + bj.sent + ", but " + bj.failed + " couldn't be delivered.";
+                else if (bj.sent > 0) status.textContent = 'Published — emailed ' + bj.sent + ' subscriber' + (bj.sent === 1 ? '' : 's') + '.';
+                else status.textContent = 'Published — no confirmed subscribers to email yet.';
+              } else {
+                // A total send failure now comes back as a 4xx with a clear reason
+                // (never silently as "no subscribers"), so this branch is honest.
+                status.textContent = "Published — but the email didn't send: " + (bj.error || ('HTTP ' + br.status));
+              }
+            } catch (e) {
+              status.textContent = 'Published — email failed: ' + (e && e.message ? e.message : String(e));
+            }
+            // Let the author read the result before the live-jump navigates away.
+            await new Promise((r) => setTimeout(r, 1600));
+          }
           // Publishing is a git commit that triggers a fresh site build (~1-2 min); the
           // post's page does not exist until that build finishes. Rather than leave the
           // author on a "rebuilding" note (and a link that 404s until then), poll the
