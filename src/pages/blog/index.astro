@@ -64,6 +64,7 @@
  */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
+import { getSeriesLookup } from '../../lib/series';
 
 // Build-time query of the `blog` collection.
 //   - Filter callback `!data.draft` excludes any post flagged draft:true so
@@ -75,6 +76,9 @@ import { getCollection } from 'astro:content';
 const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
   (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()
 );
+// Per-post series label (only for posts in a multi-post series), so the listing
+// shows which entries belong to a series and where they sit. See src/lib/series.ts.
+const seriesLookup = await getSeriesLookup();
 ---
 
 {/* BaseLayout provides <head>, nav, theme, and OG/meta tags. `title` and
@@ -108,18 +112,44 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
   {/* Static, build-time-rendered list of published posts (newest first).
       Iterates the pre-sorted, draft-filtered `posts` array from frontmatter. */}
   <ul class="post-list">
-    {posts.map((post) => (
-      <li>
-        {/* `post.id` is the collection entry id (slug/path); it forms the
-            canonical URL of the post's own page. Title is escaped JSX text. */}
-        <h2><a href={`/blog/${post.id}`}>{post.data.title}</a></h2>
-        {/* Machine-readable ISO timestamp in the datetime attribute (for
-            crawlers/feeds); human-friendly localized date as the visible text. */}
-        <time datetime={post.data.pubDate.toISOString()}>
-          {post.data.pubDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-        </time>
-        <p>{post.data.description}</p>
-      </li>
-    ))}
+    {posts.map((post) => {
+      const s = seriesLookup[post.id];
+      return (
+        <li>
+          {/* `post.id` is the collection entry id (slug/path); it forms the
+              canonical URL of the post's own page. Title is escaped JSX text. */}
+          <h2><a href={`/blog/${post.id}`}>{post.data.title}</a></h2>
+          {/* Series label: shows which series this post belongs to (and its part),
+              linking to the intro/index — so series are visible from the listing.
+              Only rendered for posts in a multi-post series. */}
+          {s && (
+            <a class="series-label" href={`/blog/${s.introSlug}`}>
+              {s.title} · {s.isIntro ? `${s.total}-part series` : `Part ${s.part} of ${s.total}`}
+            </a>
+          )}
+          {/* Machine-readable ISO timestamp in the datetime attribute (for
+              crawlers/feeds); human-friendly localized date as the visible text. */}
+          <time datetime={post.data.pubDate.toISOString()}>
+            {post.data.pubDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+          </time>
+          <p>{post.data.description}</p>
+        </li>
+      );
+    })}
   </ul>
 </BaseLayout>
+
+<style>
+  .series-label {
+    display: block;
+    width: fit-content;
+    margin: 0.15rem 0 0.1rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .series-label::before { content: '◆ '; opacity: 0.7; }
+  .series-label:hover { text-decoration: underline; }
+</style>

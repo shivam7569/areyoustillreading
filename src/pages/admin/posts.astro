@@ -139,6 +139,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       + '<th>Title</th><th>Status</th><th>Paywall</th><th class="num">Actions</th></tr></thead><tbody>'
       + rows.map((p) => {
         const tags = (p.tags || []).length ? `<span class="t-sub">${(p.tags || []).map((t: string) => '#' + esc(t)).join(' ')}</span>` : '';
+        // Series indicator (shown in the row subline) so series membership is
+        // visible at a glance in the Studio, not just in the publish form.
+        const seriesInfo = p.series
+          ? `<span style="color:var(--accent);font-weight:600">◆ ${esc(p.seriesTitle || p.series)}${p.seriesOrder ? ' · Part ' + p.seriesOrder : ''}</span>`
+          : '';
         const armed = armedDelete === p.slug;
         const viewBtn = p.draft ? '' : `<a class="btn btn-sm btn-ghost" href="/blog/${encodeURIComponent(p.slug)}" target="_blank" rel="noopener">View</a>`;
         // Email-subscribers action: hidden for drafts (never announce a draft);
@@ -156,7 +161,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         return `<tr data-slug="${esc(p.slug)}">
             <td>
               <div class="t-title"><a href="/admin/write?slug=${encodeURIComponent(p.slug)}">${esc(p.title)}</a></div>
-              <div class="t-sub">${esc(fmtDate(p.pubDate))}${tags ? ' · ' : ''}${tags}</div>
+              <div class="t-sub">${esc(fmtDate(p.pubDate))}${tags ? ' · ' : ''}${tags}${seriesInfo ? ' · ' + seriesInfo : ''}</div>
             </td>
             <td>${stateBadges(p)}</td>
             <td>${pwCell(p)}</td>

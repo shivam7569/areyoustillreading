@@ -45,6 +45,69 @@ function prettify(slug: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+// Shared reading order for a series' members: by seriesOrder ascending; posts
+// without an explicit order fall to the back; ties break by publish date (oldest
+// first). Used by every series consumer so the numbering is identical everywhere.
+export function bySeriesOrder(
+  a: CollectionEntry<'blog'>,
+  b: CollectionEntry<'blog'>,
+): number {
+  const oa = a.data.seriesOrder;
+  const ob = b.data.seriesOrder;
+  const hasA = typeof oa === 'number';
+  const hasB = typeof ob === 'number';
+  if (hasA && hasB && oa !== ob) return (oa as number) - (ob as number);
+  if (hasA !== hasB) return hasA ? -1 : 1;
+  return a.data.pubDate.getTime() - b.data.pubDate.getTime();
+}
+
+// Pick a series' display title: the first non-empty seriesTitle among its
+// members, else the prettified slug.
+function seriesTitleOf(slug: string, members: CollectionEntry<'blog'>[]): string {
+  return (
+    members.map((p) => p.data.seriesTitle).find((t) => t && t.trim())?.trim() ||
+    prettify(slug)
+  );
+}
+
+export type SeriesLabel = {
+  slug: string; // series slug
+  title: string; // display name
+  part: number; // 1-based position of this post
+  total: number; // parts in the series
+  introSlug: string; // first part (the author-written index)
+  isIntro: boolean; // is this post the first part?
+};
+
+/**
+ * Build a lookup of postId -> SeriesLabel for EVERY published post that belongs
+ * to a multi-post series. Computed once from the whole collection, so a listing
+ * (public /blog or the Studio) can annotate each row with its series + part in a
+ * single call. Posts not in a (multi-post) series are simply absent from the map.
+ */
+export async function getSeriesLookup(): Promise<Record<string, SeriesLabel>> {
+  const all = await getCollection(
+    'blog',
+    ({ data }) => !data.draft && !!data.series,
+  );
+  const bySeries = new Map<string, CollectionEntry<'blog'>[]>();
+  for (const p of all) {
+    const s = p.data.series as string;
+    (bySeries.get(s) ?? bySeries.set(s, []).get(s)!).push(p);
+  }
+  const out: Record<string, SeriesLabel> = {};
+  for (const [slug, members] of bySeries) {
+    if (members.length < 2) continue; // a series of one isn't navigable
+    members.sort(bySeriesOrder);
+    const title = seriesTitleOf(slug, members);
+    const introSlug = members[0].id;
+    members.forEach((m, i) => {
+      out[m.id] = { slug, title, part: i + 1, total: members.length, introSlug, isIntro: i === 0 };
+    });
+  }
+  return out;
+}
+
 /**
  * Build the series navigation context for `post`, or null if it isn't part of a
  * (multi-post) series. Drafts are excluded from the parts list — matching the
@@ -65,17 +128,8 @@ export async function getSeriesNav(
   // second part is published.
   if (members.length < 2) return null;
 
-  // Order by seriesOrder ascending; posts without an explicit order fall to the
-  // back, then break ties by publish date (oldest first) for a stable reading order.
-  members.sort((a, b) => {
-    const oa = a.data.seriesOrder;
-    const ob = b.data.seriesOrder;
-    const hasA = typeof oa === 'number';
-    const hasB = typeof ob === 'number';
-    if (hasA && hasB && oa !== ob) return (oa as number) - (ob as number);
-    if (hasA !== hasB) return hasA ? -1 : 1; // ordered ones first
-    return a.data.pubDate.getTime() - b.data.pubDate.getTime();
-  });
+  // Order by seriesOrder ascending (shared comparator), for a stable reading order.
+  members.sort(bySeriesOrder);
 
   const parts: SeriesPart[] = members.map((p, i) => ({
     slug: p.id,
@@ -85,10 +139,7 @@ export async function getSeriesNav(
   }));
 
   const idx = parts.findIndex((p) => p.current);
-  // Display title: first non-empty seriesTitle across the series, else prettified slug.
-  const title =
-    members.map((p) => p.data.seriesTitle).find((t) => t && t.trim())?.trim() ||
-    prettify(seriesSlug);
+  const title = seriesTitleOf(seriesSlug, members);
 
   return {
     slug: seriesSlug,
