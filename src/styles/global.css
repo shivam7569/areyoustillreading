@@ -144,6 +144,17 @@ pre {
 }
 pre code { background: none; padding: 0; }
 
+/* D2 diagrams — rendered to inline SVG at build time (rehype-d2) AND at publish time
+   (rehype-d2-browser). Published pages had no styling for these (only the editor's
+   live `.d2-preview` was styled); mirror it here so diagrams are centered, scale to
+   the column, and scroll if wider. `.d2-error` styles the fallback box on a bad diagram. */
+.d2-diagram { display: flex; justify-content: center; margin: 1.25rem 0; overflow-x: auto; }
+.d2-diagram svg { max-width: 100%; height: auto; }
+.d2-error {
+  padding: 1rem; color: #e5484d; white-space: pre-wrap; overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em;
+}
+
 /* Header / nav */
 .site-header {
   display: flex;
