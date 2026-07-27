@@ -27,14 +27,38 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       <button id="get-md" type="button">Preview Markdown</button>
       <button id="publish-btn" type="button">Publish…</button>
     </div>
-    <div id="publish-panel" hidden>
-      <label>Slug <input id="pub-slug" type="text" placeholder="my-post-slug" /></label>
-      <label>Title <input id="pub-title" type="text" placeholder="Post title" /></label>
-      <label>Description <input id="pub-desc" type="text" placeholder="Short summary (SEO / cards)" /></label>
-      <label>Tags <input id="pub-tags" type="text" placeholder="comma, separated" /></label>
-      <label class="pub-inline"><input id="pub-draft" type="checkbox" /> Draft (hidden from listings)</label>
-      <label>Publish key <input id="pub-secret" type="password" placeholder="PUBLISH_SECRET" /></label>
-      <div><button id="pub-go" type="button">Publish now</button> <span id="pub-status" class="muted"></span></div>
+    <div id="publish-modal" class="pm-overlay" hidden>
+      <div class="pm-card" role="dialog" aria-modal="true" aria-label="Publish">
+        <button class="pm-close" id="pm-close" type="button" aria-label="Close">&times;</button>
+
+        <div id="pm-signin" hidden>
+          <h2 class="pm-title">Sign in to publish</h2>
+          <p class="pm-sub">Your draft is saved on this device. Sign in once to publish it to the world.</p>
+          <button class="pm-btn pm-btn-primary" id="pm-github" type="button">Continue with GitHub</button>
+          <div class="pm-or">or</div>
+          <form id="pm-magic" class="pm-magic">
+            <input id="pm-email" type="email" placeholder="you@example.com" required />
+            <button class="pm-btn" type="submit">Email me a link</button>
+          </form>
+          <p class="pm-status" id="pm-signin-status"></p>
+        </div>
+
+        <div id="pm-form" hidden>
+          <h2 class="pm-title">Ready to publish</h2>
+          <label class="pm-field"><span class="pm-label">Title</span>
+            <input id="pm-post-title" type="text" placeholder="Your title" /></label>
+          <label class="pm-field"><span class="pm-label">Description</span>
+            <textarea id="pm-post-desc" rows="2" placeholder="One sentence that makes people want to read."></textarea></label>
+          <div class="pm-field"><span class="pm-label">Tags</span>
+            <div class="pm-tags" id="pm-tags"><input id="pm-tag-input" type="text" placeholder="Add a tag…" /></div></div>
+          <p class="pm-permalink">areyoustillreading.dev/blog/<span id="pm-slug" class="pm-slug" contenteditable="true" spellcheck="false"></span></p>
+          <label class="pm-toggle"><input id="pm-draft" type="checkbox" /> <span>Save as a draft — only you can see it</span></label>
+          <div class="pm-actions">
+            <button class="pm-btn pm-btn-primary" id="pm-publish" type="button">Publish</button>
+            <span class="pm-status" id="pm-form-status"></span>
+          </div>
+        </div>
+      </div>
     </div>
     <div id="milkdown"></div>
     <pre id="md-out" hidden></pre>
@@ -59,16 +83,52 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     margin-top: 1rem; padding: 1rem; border: 1px solid var(--border);
     border-radius: 8px; background: var(--code-bg); overflow-x: auto; white-space: pre-wrap;
   }
-  #publish-panel {
-    border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 1rem;
-    margin-bottom: 0.75rem; display: grid; gap: 0.5rem; max-width: 34rem;
+  .pm-overlay {
+    position: fixed; inset: 0; z-index: 100; display: flex; align-items: center;
+    justify-content: center; padding: 1.5rem; background: rgba(12, 14, 18, 0.55);
+    backdrop-filter: blur(4px); animation: pm-fade 0.15s ease;
   }
-  #publish-panel label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85em; }
-  #publish-panel label.pub-inline { flex-direction: row; align-items: center; gap: 0.45rem; }
-  #publish-panel input[type="text"], #publish-panel input[type="password"] {
-    padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 6px;
-    background: var(--bg); color: inherit;
+  @keyframes pm-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pm-pop { from { transform: translateY(10px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
+  .pm-card {
+    position: relative; width: 100%; max-width: 30rem; background: var(--bg); color: inherit;
+    border: 1px solid var(--border); border-radius: 16px; padding: 2rem 2rem 1.75rem;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35); animation: pm-pop 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+  .pm-close {
+    position: absolute; top: 0.85rem; right: 1rem; border: 0; background: transparent;
+    color: var(--muted); font-size: 1.7rem; line-height: 1; cursor: pointer; padding: 0;
+  }
+  .pm-title { margin: 0 0 0.35rem; font-size: 1.45rem; letter-spacing: -0.01em; }
+  .pm-sub { margin: 0 0 1.35rem; color: var(--muted); font-size: 0.95rem; line-height: 1.5; }
+  .pm-field { display: block; margin-bottom: 1rem; }
+  .pm-label { display: block; margin-bottom: 0.35rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+  .pm-card input[type="text"], .pm-card input[type="email"], .pm-card textarea {
+    width: 100%; padding: 0.6rem 0.75rem; font: inherit; color: inherit;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--code-bg, transparent);
+  }
+  .pm-card textarea { resize: vertical; line-height: 1.5; }
+  .pm-card input:focus, .pm-card textarea:focus, .pm-slug:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  .pm-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.4rem; border: 1px solid var(--border); border-radius: 10px; }
+  .pm-tags input { flex: 1; min-width: 6rem; border: 0 !important; padding: 0.25rem 0.35rem !important; background: transparent !important; box-shadow: none !important; }
+  .pm-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.85em; background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .pm-chip button { border: 0; background: transparent; color: var(--muted); font-size: 1.05em; line-height: 1; cursor: pointer; padding: 0; }
+  .pm-permalink { margin: 0.1rem 0 1.1rem; font-size: 0.85rem; color: var(--muted); }
+  .pm-slug { color: var(--accent); border-radius: 4px; padding: 0 0.15rem; outline: none; }
+  .pm-toggle { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 1.35rem; font-size: 0.9rem; color: var(--muted); cursor: pointer; }
+  .pm-actions { display: flex; align-items: center; gap: 1rem; }
+  .pm-btn { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+  .pm-btn:disabled { opacity: 0.6; cursor: default; }
+  .pm-btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #pm-signin .pm-btn-primary { width: 100%; }
+  #pm-form .pm-btn-primary { padding-inline: 1.6rem; }
+  .pm-or { margin: 0.9rem 0; text-align: center; font-size: 0.8rem; color: var(--muted); }
+  .pm-magic { display: flex; gap: 0.5rem; }
+  .pm-magic input { flex: 1; }
+  .pm-status { font-size: 0.85rem; color: var(--muted); }
 </style>
 
 <!-- Global (unscoped) styles: the code-block preview DOM is created by Milkdown at
@@ -482,71 +542,129 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       out.textContent = crepe.getMarkdown();
     });
 
-    // --- Publish: assemble frontmatter + body, POST to /api/publish, which commits
-    // the .md file to GitHub → Cloudflare Git-integration rebuilds the site. -------
+    // --- Publish (premium modal) --------------------------------------------
     const $ = (id) => document.getElementById(id);
-    const pubPanel = $('publish-panel');
+    const modal = $('publish-modal');
     const slugify = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
     const firstHeading = (md) => { const m = md.match(/^#\s+(.+)$/m); return m ? m[1].trim() : ''; };
     const yaml = (v) => JSON.stringify(String(v == null ? '' : v)); // JSON-style scalar is valid YAML
+    let pubTags = [];
+    let slugEdited = false;
 
-    $('publish-btn').addEventListener('click', () => {
-      const opening = pubPanel.hidden;
-      pubPanel.hidden = !opening;
-      if (opening) {
-        const title = firstHeading(crepe.getMarkdown());
-        if (!$('pub-title').value) $('pub-title').value = title;
-        if (!$('pub-slug').value) $('pub-slug').value = slugify(title);
+    const openModal = () => { modal.hidden = false; refreshAuthView(); };
+    const closeModal = () => { modal.hidden = true; };
+    $('publish-btn').addEventListener('click', openModal);
+    $('pm-close').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
+
+    async function refreshAuthView() {
+      const { data } = await supabase.auth.getSession();
+      const signedIn = !!(data.session && data.session.user);
+      $('pm-signin').hidden = signedIn;
+      $('pm-form').hidden = !signedIn;
+      if (signedIn) prefillForm();
+    }
+    function prefillForm() {
+      if (!$('pm-post-title').value) $('pm-post-title').value = firstHeading(crepe.getMarkdown());
+      if (!$('pm-slug').textContent.trim()) $('pm-slug').textContent = slugify($('pm-post-title').value);
+    }
+    // Keep the permalink synced to the title until the author edits it directly.
+    $('pm-slug').addEventListener('input', () => { slugEdited = true; });
+    $('pm-post-title').addEventListener('input', () => { if (!slugEdited) $('pm-slug').textContent = slugify($('pm-post-title').value); });
+
+    // Sign-in (one-time; the session persists after).
+    $('pm-github').addEventListener('click', async () => {
+      $('pm-signin-status').textContent = 'Redirecting to GitHub…';
+      await supabase.auth.signInWithOAuth({ provider: 'github', options: { redirectTo: location.href } });
+    });
+    $('pm-magic').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = $('pm-email').value.trim();
+      if (!email) return;
+      $('pm-signin-status').textContent = 'Sending…';
+      const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href } });
+      $('pm-signin-status').textContent = error ? ('Error: ' + error.message) : 'Check your inbox for the magic link.';
+    });
+    supabase.auth.onAuthStateChange(() => { if (!modal.hidden) refreshAuthView(); });
+
+    // Tags as chips.
+    const tagInput = $('pm-tag-input');
+    function renderTags() {
+      $('pm-tags').querySelectorAll('.pm-chip').forEach((c) => c.remove());
+      pubTags.forEach((t, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'pm-chip';
+        chip.textContent = t;
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.textContent = '×';
+        x.addEventListener('click', () => { pubTags.splice(i, 1); renderTags(); });
+        chip.appendChild(x);
+        $('pm-tags').insertBefore(chip, tagInput);
+      });
+    }
+    tagInput.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ',') && tagInput.value.trim()) {
+        e.preventDefault();
+        const t = tagInput.value.trim().replace(/,+$/, '');
+        if (t && !pubTags.includes(t) && pubTags.length < 5) pubTags.push(t);
+        tagInput.value = '';
+        renderTags();
+      } else if (e.key === 'Backspace' && !tagInput.value && pubTags.length) {
+        pubTags.pop();
+        renderTags();
       }
     });
 
-    $('pub-go').addEventListener('click', async () => {
-      const status = $('pub-status');
-      const slug = slugify($('pub-slug').value || '');
-      const title = $('pub-title').value.trim();
-      const description = $('pub-desc').value.trim();
-      const tags = $('pub-tags').value.split(',').map((t) => t.trim()).filter(Boolean);
-      const draft = $('pub-draft').checked;
-      const secret = $('pub-secret').value;
-      if (!slug) return void (status.textContent = 'Slug required.');
-      if (!title) return void (status.textContent = 'Title required.');
-      if (!description) return void (status.textContent = 'Description required.');
-      if (!secret) return void (status.textContent = 'Publish key required.');
+    // Publish.
+    $('pm-publish').addEventListener('click', async () => {
+      const status = $('pm-form-status');
+      const title = $('pm-post-title').value.trim();
+      const description = $('pm-post-desc').value.trim();
+      const slug = slugify($('pm-slug').textContent || title);
+      const draft = $('pm-draft').checked;
+      if (!title) return void (status.textContent = 'Add a title.');
+      if (!description) return void (status.textContent = 'Add a description.');
+      if (!slug) return void (status.textContent = 'Need a permalink.');
+      const { data } = await supabase.auth.getSession();
+      const token = data.session && data.session.access_token;
+      if (!token) { status.textContent = 'Please sign in again.'; refreshAuthView(); return; }
 
-      // Title lives in frontmatter (the layout renders it as the <h1>), so drop a
-      // leading "# Title" from the body to avoid a duplicate heading.
+      // Title lives in frontmatter (rendered as the page <h1>), so drop a leading
+      // "# Title" from the body to avoid a duplicate heading.
       const body = crepe.getMarkdown().replace(/^#\s+.+\n+/, '');
       const today = new Date().toISOString().slice(0, 10);
-      const frontmatter = [
+      const content = [
         '---',
         `title: ${yaml(title)}`,
         `description: ${yaml(description)}`,
         `pubDate: ${yaml(today)}`,
-        `tags: [${tags.map(yaml).join(', ')}]`,
+        `tags: [${pubTags.map(yaml).join(', ')}]`,
         `draft: ${draft}`,
         '---',
         '',
-      ].join('\n');
+      ].join('\n') + body;
 
       status.textContent = 'Publishing…';
-      $('pub-go').disabled = true;
+      $('pm-publish').disabled = true;
       try {
         const res = await fetch('/api/publish', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ slug, content: frontmatter + body, secret }),
+          headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ slug, content }),
         });
         const j = await res.json().catch(() => ({}));
         if (res.ok && j.ok) {
-          status.innerHTML = (j.updated ? 'Updated' : 'Published') + ' — committed to <code>' + j.branch +
-            '</code>. Site will rebuild. <a href="/blog/' + slug + '/" target="_blank" rel="noopener">View when live →</a>';
+          status.innerHTML = (j.updated ? 'Updated' : 'Published') + ' — the site is rebuilding, live shortly. ' +
+            '<a href="/blog/' + slug + '/" target="_blank" rel="noopener">View →</a>';
         } else {
-          status.textContent = 'Failed: ' + (j.error || ('HTTP ' + res.status)) + (j.detail ? ' — ' + j.detail : '');
+          status.textContent = "Couldn't publish: " + (j.error || ('HTTP ' + res.status));
         }
       } catch (e) {
         status.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
       } finally {
-        $('pub-go').disabled = false;
+        $('pm-publish').disabled = false;
       }
     });
   }

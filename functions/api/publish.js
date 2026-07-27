@@ -2,16 +2,17 @@
  * POST /api/publish — commit a post's Markdown file to the GitHub repo so the
  * Cloudflare Pages Git-integration rebuilds and deploys it (Option B publishing).
  *
- * The admin editor is currently UNGATED (single-user dev), so this endpoint — which
- * has write access to the repo via GITHUB_TOKEN — MUST NOT be open. It requires a
- * shared secret (PUBLISH_SECRET) that the author enters at publish time; the secret
- * is never embedded in the client bundle.
+ * This endpoint has write access to the repo via GITHUB_TOKEN, so it MUST NOT be
+ * open: the caller must present a valid Supabase session (Authorization: Bearer
+ * <access_token>) belonging to an admin (public.admins). No secret is ever typed by
+ * the author or embedded in the client — auth is the normal one-time sign-in.
  *
  * Env (Cloudflare Pages project settings):
- *   GITHUB_TOKEN   — fine-grained PAT with Contents: write on the repo (required)
- *   PUBLISH_SECRET — shared secret the editor must send (required)
- *   GITHUB_REPO    — "owner/name" (default: shivam7569/areyoustillreading)
- *   GITHUB_BRANCH  — branch to commit to (default: main → production build)
+ *   GITHUB_TOKEN              — fine-grained PAT with Contents: write on the repo
+ *   SUPABASE_URL              — Supabase project base URL (auth + admin check)
+ *   SUPABASE_SERVICE_ROLE_KEY — service role (validates token, reads public.admins)
+ *   GITHUB_REPO               — "owner/name" (default: shivam7569/areyoustillreading)
+ *   GITHUB_BRANCH             — branch to commit to (default: main → production build)
  */
 const JSON_HEADERS = { 'content-type': 'application/json' };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -27,11 +28,24 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { slug, content, secret } = payload || {};
+  const { slug, content } = payload || {};
 
-  // --- Auth: shared secret --------------------------------------------------
-  if (!env.PUBLISH_SECRET) return json({ error: 'Server not configured (PUBLISH_SECRET)' }, 500);
-  if (typeof secret !== 'string' || secret !== env.PUBLISH_SECRET) return json({ error: 'Unauthorized' }, 401);
+  // --- Auth: caller must be a signed-in admin (Supabase session) ------------
+  const sb = env.SUPABASE_URL;
+  const service = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!sb || !service) return json({ error: 'Server not configured (Supabase)' }, 500);
+  const authToken = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!authToken) return json({ error: 'Not signed in' }, 401);
+  // Validate the token → resolve the user (delegated to Supabase, never decoded here).
+  const userRes = await fetch(`${sb}/auth/v1/user`, { headers: { Authorization: `Bearer ${authToken}`, apikey: service } });
+  if (!userRes.ok) return json({ error: 'Session expired — sign in again' }, 401);
+  const user = await userRes.json();
+  // Is this user the site owner? public.admins has no RLS select policy → service role.
+  const adminRes = await fetch(`${sb}/rest/v1/admins?select=user_id&user_id=eq.${user.id}`, {
+    headers: { Authorization: `Bearer ${service}`, apikey: service },
+  });
+  const admins = adminRes.ok ? await adminRes.json() : [];
+  if (!admins.length) return json({ error: 'Not authorized to publish' }, 403);
 
   // --- Validate -------------------------------------------------------------
   if (typeof slug !== 'string' || !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug)) {
