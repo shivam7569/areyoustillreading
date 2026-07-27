@@ -76,11 +76,12 @@ describe('homepage', () => {
     // The "Latest posts" section heading must render — proves the homepage's
     // content-collection-driven feed block was emitted at all.
     expect(home).toContain('Latest posts');
-    // The canonical seed post's URL must appear — proves the feed is actually
-    // populated with real entries (not an empty list) and that the
-    // `hello-world` slug still resolves. A renamed slug or a broken collection
-    // query trips this assertion.
-    expect(home).toContain('/blog/hello-world');
+    // The feed must contain at least one real post link — proves it's actually
+    // populated (not an empty list) and the collection query works. Matched by
+    // shape (`/blog/<slug>`), not a specific slug, so adding/removing posts
+    // doesn't make this brittle (it used to hardcode `hello-world`, which broke
+    // the moment newer posts pushed it off the homepage's latest list).
+    expect(home).toMatch(/href="\/blog\/[a-z0-9][a-z0-9-]*"/);
   });
 
   it('includes the subscribe form', () => {
