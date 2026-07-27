@@ -57,6 +57,19 @@
 // loads its script; when absent (e.g. local dev without keys), both are skipped and
 // the form still works, deferring bot policy to the server.
 const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
+
+// Optional copy overrides so the SAME form can read differently per placement
+// (the homepage's plain "Subscribe" vs. a warmer end-of-post note) without
+// duplicating the security-sensitive markup/script below. Defaults reproduce the
+// original homepage wording exactly, so existing usage is unchanged.
+interface Props {
+  heading?: string;
+  blurb?: string;
+}
+const {
+  heading = 'Subscribe',
+  blurb = 'New posts by email. Double opt-in, one-click unsubscribe, no spam.',
+} = Astro.props;
 ---
 
 {/*
@@ -66,8 +79,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
   an inline status message instead of a full page navigation.
 */}
 <section class="subscribe">
-  <h2>Subscribe</h2>
-  <p>New posts by email. Double opt-in, one-click unsubscribe, no spam.</p>
+  <h2>{heading}</h2>
+  <p>{blurb}</p>
   <form id="subscribe-form" method="POST" action="/api/subscribe">
     {/* required + type=email gives free browser-level validation before submit. */}
     <input

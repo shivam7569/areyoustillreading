@@ -72,6 +72,7 @@ import BaseLayout from './BaseLayout.astro';
 import Comments from '../components/Comments.astro';
 import Highlights from '../components/Highlights.astro';
 import Notes from '../components/Notes.astro';
+import SubscribeForm from '../components/SubscribeForm.astro';
 import 'katex/dist/katex.min.css';
 
 // The only prop: a fully-loaded 'blog' collection entry. The rendered Markdown
@@ -139,6 +140,17 @@ const minutes = Math.max(1, Math.round(words / 200));
     */}
     <slot />
   </article>
+  {/*
+    End-of-post subscribe note. Placed right after the article body — the moment a
+    reader has just finished — so a post reached directly (not via the homepage)
+    still has a clear way to subscribe. Same self-contained component as the
+    homepage widget (double opt-in, Turnstile, honeypot all server-enforced); only
+    the copy is warmer here via props. One instance per page, so its fixed id is safe.
+  */}
+  <SubscribeForm
+    heading="Enjoyed this? Get the next one by email."
+    blurb="I'll send new posts straight to your inbox — no spam, unsubscribe in one click."
+  />
   {/*
     Interactive per-post islands, all keyed by post.id. Each is a self-contained
     client component that talks to Supabase (via the browser JS client) under
