@@ -344,6 +344,39 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     },
   }));
 
+  // Typed-fence → code block. Milkdown's built-in rule converts ```ts but SKIPS
+  // languages its letter-only matcher rejects (notably ```d2 — the digit trips it),
+  // leaving them as plain text. This catches that: on Enter, if the current paragraph
+  // is exactly a ```<lang> fence, replace it with an empty code block of that language.
+  // Languages the built-in rule already handles convert BEFORE Enter (so the paragraph
+  // is no longer a fence by the time this runs), so the two don't collide.
+  const FENCE_RE = /^```([A-Za-z0-9_+#.-]+)$/;
+  const fenceCodeBlock = $prose(() => new Plugin({
+    props: {
+      handleKeyDown(view, event) {
+        if (event.key !== 'Enter') return false;
+        const { state } = view;
+        const { $from, empty } = state.selection;
+        if (!empty) return false;
+        const parent = $from.parent;
+        if (parent.type.name !== 'paragraph') return false;
+        const m = FENCE_RE.exec(parent.textContent);
+        if (!m) return false;
+        const codeType = state.schema.nodes.code_block || state.schema.nodes.codeBlock;
+        if (!codeType) return false;
+        let node;
+        try { node = codeType.create({ language: m[1] }); }
+        catch { try { node = codeType.create(); } catch { return false; } }
+        const start = $from.before();
+        const end = $from.after();
+        const tr = state.tr.replaceRangeWith(start, end, node);
+        tr.setSelection(TextSelection.create(tr.doc, start + 1));
+        view.dispatch(tr.scrollIntoView());
+        return true;
+      },
+    },
+  }));
+
   // Lazy-load D2 (@terrastruct/d2, WASM) only when a ```d2 diagram is first
   // previewed, then reuse the one instance. Kept out of the initial editor bundle
   // via import(). The published site renders the same fences at build time
@@ -609,6 +642,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     });
 
     crepe.editor.use(bracketPairing);
+    crepe.editor.use(fenceCodeBlock);
     crepe.editor.use(plotlyCells);
     await crepe.create();
     if (savedDraft != null) statusEl.textContent = 'Draft restored';
