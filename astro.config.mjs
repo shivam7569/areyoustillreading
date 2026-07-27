@@ -96,4 +96,17 @@ export default defineConfig({
   // src/lib/markdown-config.mjs and shared verbatim with the render-at-publish path
   // so instantly-published posts render identically to this build. Edit it there.
   markdown: markdownConfig,
+
+  vite: {
+    // The render-at-publish engine (src/lib/render-post-browser.mjs) runs
+    // @astrojs/markdown-remark IN THE BROWSER. That package reads a Node global at
+    // module load — `Boolean(process.env.ASTRO_PERFORMANCE_BENCHMARK)` — which is a
+    // ReferenceError in the browser (and, once thrown, poisons the cached module).
+    // Replace that token at bundle time so the browser build never touches `process`
+    // during import. (Any later/runtime process access is covered by a small shim in
+    // render-post-browser.mjs.) Harmless for the Node build — it's only a perf flag.
+    define: {
+      'process.env.ASTRO_PERFORMANCE_BENCHMARK': 'undefined',
+    },
+  },
 });
