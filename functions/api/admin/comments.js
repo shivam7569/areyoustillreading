@@ -45,10 +45,15 @@ export async function onRequestDelete({ request, env }) {
   // Comment ids are UUIDs; validate shape before interpolating into the filter.
   if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'Invalid id' }, 400);
 
-  const r = await fetch(`${sb}/rest/v1/comments?id=eq.${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${service}`, apikey: service, Prefer: 'return=minimal' },
-  });
+  let r;
+  try {
+    r = await fetch(`${sb}/rest/v1/comments?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${service}`, apikey: service, Prefer: 'return=minimal' },
+    });
+  } catch (e) {
+    return json({ error: 'Delete failed: ' + String((e && e.message) || e) }, 502);
+  }
   if (!r.ok) return json({ error: 'Delete failed', detail: (await r.text()).slice(0, 200) }, 502);
   return json({ ok: true, id });
 }

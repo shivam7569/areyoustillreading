@@ -11,14 +11,10 @@
  */
 import { requireAdmin, json } from '../../../lib/require-admin.js';
 import { parseFrontmatter } from '../../../lib/list-posts.js';
+import { toBase64Utf8, fromBase64Utf8 } from '../../../lib/base64.js';
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
-const toBase64Utf8 = (str) => btoa(String.fromCharCode(...new TextEncoder().encode(str)));
-function decodeBase64Utf8(b64) {
-  const bin = atob(String(b64 || '').replace(/\s+/g, ''));
-  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
-}
 function ghHeaders(env) {
   return {
     Authorization: `Bearer ${env.GITHUB_TOKEN}`,
@@ -42,7 +38,7 @@ async function getFile(env, slug) {
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`GitHub lookup failed (${r.status})`);
   const j = await r.json();
-  return { sha: j.sha, content: decodeBase64Utf8(j.content) };
+  return { sha: j.sha, content: fromBase64Utf8(j.content) };
 }
 
 // Set (or insert) the `draft:` frontmatter flag via a targeted edit — never a
@@ -112,17 +108,22 @@ export async function onRequestPost({ request, env }) {
   if (!file) return json({ error: 'Not found' }, 404);
 
   const { branch } = repoInfo(env);
-  const updated = setDraftFlag(file.content, draft);
-  const put = await fetch(fileApi(env, slug), {
-    method: 'PUT',
-    headers: ghHeaders(env),
-    body: JSON.stringify({
-      message: `${draft ? 'Unpublish' : 'Publish'} post: ${slug}`,
-      content: toBase64Utf8(updated),
-      branch,
-      sha: file.sha,
-    }),
-  });
+  let put;
+  try {
+    const updated = setDraftFlag(file.content, draft);
+    put = await fetch(fileApi(env, slug), {
+      method: 'PUT',
+      headers: ghHeaders(env),
+      body: JSON.stringify({
+        message: `${draft ? 'Unpublish' : 'Publish'} post: ${slug}`,
+        content: toBase64Utf8(updated),
+        branch,
+        sha: file.sha,
+      }),
+    });
+  } catch (e) {
+    return json({ error: 'Commit failed: ' + String((e && e.message) || e) }, 502);
+  }
   if (!put.ok) return json({ error: 'GitHub commit failed', detail: (await put.text()).slice(0, 300) }, 502);
 
   // Unpublishing must also pull the post out of the instant overlay immediately.
@@ -149,11 +150,16 @@ export async function onRequestDelete({ request, env }) {
   }
 
   const { branch } = repoInfo(env);
-  const del = await fetch(fileApi(env, slug), {
-    method: 'DELETE',
-    headers: ghHeaders(env),
-    body: JSON.stringify({ message: `Delete post: ${slug}`, branch, sha: file.sha }),
-  });
+  let del;
+  try {
+    del = await fetch(fileApi(env, slug), {
+      method: 'DELETE',
+      headers: ghHeaders(env),
+      body: JSON.stringify({ message: `Delete post: ${slug}`, branch, sha: file.sha }),
+    });
+  } catch (e) {
+    return json({ error: 'Delete failed: ' + String((e && e.message) || e) }, 502);
+  }
   if (!del.ok) return json({ error: 'GitHub delete failed', detail: (await del.text()).slice(0, 300) }, 502);
 
   await kvUnpublish(env, slug);

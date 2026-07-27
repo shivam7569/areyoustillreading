@@ -1,7 +1,7 @@
 ---
 /*
  * ============================================================================
- * src/pages/admin/editor.astro  —  the admin-only writing surface (Phase 4)
+ * src/pages/admin/write.astro  —  the admin-only writing surface (the dashboard's "Write")
  * ============================================================================
  *
  * WHAT THIS FILE IS / SINGLE RESPONSIBILITY
@@ -45,7 +45,8 @@
  *   - ../../lib/plotly                runs author ```python via Pyodide + renders with plotly.js,
  *                                     plus makeRotatingGif() for 3D-figure GIF export
  *   - ../../lib/supabase             browser Supabase client (session, OAuth, magic-link, JWT)
- *   - ../../layouts/BaseLayout.astro  page chrome
+ *   - ../../lib/admin-gate           whenAdmin/cachedAdmin — boot the editor only for an admin
+ *   - ../../layouts/AdminLayout.astro dashboard shell + client access gate
  * WHAT DEPENDS ON THIS FILE: nothing imports it (it is a leaf route). It is the
  * sole producer of requests to functions/api/publish.js.
  *
@@ -70,13 +71,12 @@
  *
  * SECURITY / CORRECTNESS CAVEATS  (READ BEFORE SHIPPING)
  * ------------------------------------------------------
- *   - !!! THE ADMIN GATE IS CURRENTLY DISABLED FOR DEV !!!  init() below has the
- *     session + is_admin() check commented out, so ANYONE can open this editor.
- *     That is intentional for building/testing without an admin login, but it
- *     MUST be restored before launch (the commented block shows exactly how).
- *     Even ungated, this is only UX exposure: the REAL protection is server-side
- *     at publish time — functions/api/publish.js re-verifies is_admin before it
- *     will commit anything, so a non-admin opening the editor still cannot ship.
+ *   - ACCESS: this page renders inside AdminLayout, whose client gate reveals the
+ *     /admin shell only for a confirmed admin; the editor here boots via
+ *     whenAdmin/cachedAdmin (bottom of the script), so init() runs only for an admin.
+ *     That gate is UX only. The REAL protection is server-side: functions/api/publish.js
+ *     (and /api/admin/*) re-verify is_admin via lib/require-admin.js before committing
+ *     anything, so a non-admin who forced the UI open still cannot ship.
  *   - Publish auth rides on the Supabase access_token sent as a Bearer header;
  *     the Function trusts that token, not the client's claims.
  *   - Frontmatter scalars are emitted via JSON.stringify (yaml() helper) because
@@ -619,6 +619,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // When editing, this carries the existing post's identity/metadata into the
     // publish modal so the slug/date/tags are preserved (not re-derived).
     let editing = null;
+    // Set if an edit-load was requested but failed — we must NOT silently fall back to
+    // a blank new post (which would clobber the local draft and, on publish, create a
+    // new file instead of updating). Autosave stays off and Publish is disabled.
+    let editLoadFailed = false;
 
     if (editSlug) {
       statusEl.textContent = 'Loading…';
@@ -647,7 +651,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         restoredMsg = 'Editing “' + title + '”';
       } catch (e) {
         console.error('[editor] load-for-edit failed', e);
-        statusEl.textContent = 'Could not load that post.';
+        editLoadFailed = true;
+        statusEl.textContent = 'Couldn’t load that post — refresh to retry.';
       }
     } else {
       let savedDraft = null;
@@ -695,8 +700,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     let saveTimer = null;
     crepe.on((api) => {
       api.markdownUpdated((_ctx, md) => {
-        // Editing a published post doesn't autosave to the local draft slot (that's
-        // the new-post scratchpad) — edits are committed on Publish. New posts autosave.
+        // Editing a published post doesn't autosave to the local draft slot (that's the
+        // new-post scratchpad) — edits are committed on Publish. A failed edit-load must
+        // also never write the draft slot. New posts autosave.
+        if (editLoadFailed) return;
         if (editing) { statusEl.textContent = 'Unsaved edits — Publish to save'; return; }
         statusEl.textContent = 'Saving…';
         clearTimeout(saveTimer);
@@ -712,6 +719,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     crepe.editor.use(plotlyCells);
     await crepe.create();
     if (restoredMsg) statusEl.textContent = restoredMsg;
+    // A failed edit-load must not let the author publish (that would create a new post
+    // and orphan the one they meant to edit). Block publishing until they refresh.
+    if (editLoadFailed) {
+      const pb = document.getElementById('publish-btn');
+      if (pb) pb.disabled = true;
+    }
 
     // WARM-UP: now that the editor is interactive, prefetch the heavy bits during idle
     // time — the browser's spare cycles while you read/type/navigate — so nothing is
@@ -812,6 +825,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         if (!$('pm-post-title').value) $('pm-post-title').value = editing.title || firstHeading(crepe.getMarkdown());
         if (!$('pm-post-desc').value) $('pm-post-desc').value = editing.description || '';
         $('pm-slug').textContent = editing.slug;
+        // Lock the permalink for an existing post: editing it would fork the post into a
+        // NEW file (create-not-update) and orphan the original. Publish forces this slug too.
+        $('pm-slug').contentEditable = 'false';
+        $('pm-slug').style.color = 'var(--muted)';
         $('pm-draft').checked = !!editing.draft;
         slugEdited = true; // don't let title edits rewrite an existing post's permalink
         $('pm-form-title').textContent = 'Update post';
@@ -875,7 +892,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       const status = $('pm-form-status');
       const title = $('pm-post-title').value.trim();
       const description = $('pm-post-desc').value.trim();
-      const slug = slugify($('pm-slug').textContent || title);
+      // When updating, the slug is FIXED to the existing post's — never re-derived from
+      // the (locked) permalink field — so an update can't fork into a new file.
+      const slug = editing ? editing.slug : slugify($('pm-slug').textContent || title);
       const draft = $('pm-draft').checked;
       if (!title) return void (status.textContent = 'Add a title.');
       if (!description) return void (status.textContent = 'Add a description.');

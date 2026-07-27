@@ -37,6 +37,11 @@
   --admin-sidebar-w: 248px;
   --admin-topbar-h: 60px;
   --admin-content-max: 1120px;
+  /* Filled-button background. In light mode --accent (#2f5bff) carries white text at
+     ~5.2:1; in dark mode --accent lightens to #7aa2ff where white would be ~2.5:1, so
+     the dark override below darkens the FILL (not the link accent) back to legible. */
+  --btn-fill: var(--accent);
+  --btn-fill-hover: color-mix(in srgb, var(--accent) 88%, #000);
 
   /* Semantic state colors (light). Each has a dark override below. */
   --ok: #1a7f37;      --ok-bg: color-mix(in srgb, #1a7f37 14%, transparent);
@@ -50,6 +55,9 @@
     --ok: #3fb950;    --ok-bg: color-mix(in srgb, #3fb950 18%, transparent);
     --warn: #d29922;  --warn-bg: color-mix(in srgb, #d29922 20%, transparent);
     --danger: #f85149; --danger-bg: color-mix(in srgb, #f85149 16%, transparent);
+    /* Darken the button fill so white text stays legible (WCAG AA) on dark backgrounds. */
+    --btn-fill: color-mix(in srgb, var(--accent) 58%, #06080d);
+    --btn-fill-hover: color-mix(in srgb, var(--accent) 66%, #06080d);
   }
 }
 
@@ -120,7 +128,9 @@
 .card-head h2 { font-size: 1.05rem; margin: 0; }
 .card-head .muted { font-size: 0.85rem; }
 
-.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.4rem; }
+/* auto-fit (not auto-fill): collapse empty trailing tracks so present tiles stretch to
+   fill the row — e.g. Revenue's 3 KPIs don't leave a dead 4th column. */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.4rem; }
 .kpi { padding: 1.05rem 1.15rem; }
 .kpi .kpi-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.5rem; }
 .kpi .kpi-value { font-size: 1.9rem; font-weight: 680; letter-spacing: -0.02em; line-height: 1.05; }
@@ -142,8 +152,10 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
 .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover td { background: var(--admin-hover); }
 .table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
-.table .t-title { font-weight: 600; color: var(--fg); }
-.table .t-title a { color: inherit; }
+/* Scope-independent so a title reads the same in a table cell OR a plain div
+   (e.g. the Revenue "Paywall & pricing" rows, which aren't a table). */
+.t-title { font-weight: 600; color: var(--fg); }
+.t-title a { color: inherit; }
 .table .t-sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.1rem; }
 .row-actions { display: flex; gap: 0.4rem; justify-content: flex-end; flex-wrap: wrap; }
 
@@ -157,8 +169,8 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
 .btn:hover { background: var(--admin-hover); text-decoration: none; }
 .btn:disabled { opacity: 0.55; cursor: default; }
 .btn-sm { padding: 0.35rem 0.65rem; font-size: 0.82rem; }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+.btn-primary { background: var(--btn-fill); border-color: var(--btn-fill); color: #fff; }
+.btn-primary:hover { background: var(--btn-fill-hover); border-color: var(--btn-fill-hover); }
 .btn-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
 .btn-danger:hover { background: var(--danger-bg); }
 .btn-ghost { background: transparent; border-color: transparent; }

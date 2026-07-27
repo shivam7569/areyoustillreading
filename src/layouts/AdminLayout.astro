@@ -218,15 +218,15 @@ const nav = [
       document.getElementById('gate-signout')?.addEventListener('click', doSignOut);
       document.getElementById('admin-signout')?.addEventListener('click', doSignOut);
 
-      // After an inline sign-in finalizes, re-check; a fresh admin gets a clean reload
-      // so every page script re-runs with the session in place.
+      // React to auth changes WITHOUT reloading. supabase-js fires SIGNED_IN on every
+      // page load AND on every tab refocus for an already-established session, so
+      // reloading on it would loop on load and thrash on tab-switch (losing unsaved
+      // editor content). Instead: on sign-out, leave the studio; on a sign-in that
+      // arrives while the gate is still up (e.g. the inline sign-in flow), re-check and
+      // reveal in place. When the shell is already showing, ignore the noise.
       supabase.auth.onAuthStateChange((event) => {
-        if (event === 'SIGNED_IN') {
-          checkAdmin(true).then((r) => {
-            if (r.state === 'admin') window.location.reload();
-            else if (r.state === 'not-admin') gate(vDenied);
-          });
-        }
+        if (event === 'SIGNED_OUT') { window.location.href = '/'; return; }
+        if (event === 'SIGNED_IN' && shell.hidden) run();
       });
 
       run();

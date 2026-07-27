@@ -57,16 +57,14 @@
 // user has a public.admins row via the service-role key). Extracted so every
 // admin endpoint uses the exact same boundary. See lib/require-admin.js.
 import { requireAdmin } from '../../lib/require-admin.js';
+// Chunked UTF-8 base64 (shared) — a plain String.fromCharCode(...bytes) spread throws
+// RangeError on large posts (e.g. embedded data-URI images); see lib/base64.js.
+import { toBase64Utf8 } from '../../lib/base64.js';
 
 // Tiny helper to return a JSON Response with the right content-type. Every exit
 // path (success and error) goes through this so the client always gets JSON.
 const JSON_HEADERS = { 'content-type': 'application/json' };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-
-// Base64 of a UTF-8 string. btoa() alone throws/garbles on codepoints > 0xFF, so we
-// first turn the string into its UTF-8 byte sequence, then to a Latin1 string btoa
-// can encode. GitHub's Contents API wants file `content` as base64.
-const toBase64Utf8 = (str) => btoa(String.fromCharCode(...new TextEncoder().encode(str)));
 
 export async function onRequestPost({ request, env }) {
   let payload;

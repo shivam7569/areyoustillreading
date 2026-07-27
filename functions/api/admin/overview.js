@@ -28,7 +28,17 @@ export async function onRequestGet({ request, env }) {
     result.posts.total = posts.length;
     result.posts.drafts = posts.filter((p) => p.draft).length;
     result.posts.published = result.posts.total - result.posts.drafts;
-    result.posts.paywalled = posts.filter((p) => p.gateable).length;
+    // "Paywalled" = posts actually behind the paywall now (post_paywall.is_paid) — the
+    // same definition the Posts manager badge and Revenue page use — NOT merely the
+    // `gateable` frontmatter intent flag, so the three views agree.
+    const paidSlugs = new Set();
+    try {
+      const r = await fetch(`${sb}/rest/v1/post_paywall?select=post_id,is_paid`, { headers: auth });
+      if (r.ok) for (const row of await r.json()) if (row.is_paid === true) paidSlugs.add(row.post_id);
+    } catch {
+      /* paid annotation best-effort */
+    }
+    result.posts.paywalled = posts.filter((p) => paidSlugs.has(p.slug)).length;
   } catch {
     result.posts.error = true;
   }

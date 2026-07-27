@@ -17,9 +17,15 @@ export function fmtMoney(cents: number, currency = 'usd'): string {
 
 export function fmtDate(s?: string): string {
   if (!s) return '';
-  const d = new Date(s.length <= 10 ? `${s}T00:00:00Z` : s);
+  const dateOnly = s.length <= 10;
+  const d = new Date(dateOnly ? `${s}T00:00:00Z` : s);
   if (isNaN(d.valueOf())) return s;
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  // For a date-only value (a calendar date like a pubDate), render it in UTC so the
+  // displayed day matches the stored date for every viewer — otherwise a viewer west
+  // of UTC sees the previous day (UTC midnight is the prior evening locally).
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric', month: 'short', day: 'numeric', ...(dateOnly ? { timeZone: 'UTC' } : {}),
+  });
 }
 
 export function relTime(s?: string): string {
