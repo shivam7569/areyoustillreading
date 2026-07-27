@@ -104,7 +104,18 @@ function json(obj, status = 200) {
  *        Cloudflare-injected context. `env` carries the secrets/bindings above.
  * @returns {Promise<Response>}
  */
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost(ctx) {
+  // Top-level guard: any unexpected throw returns a readable JSON error instead of a
+  // bare Cloudflare 502 "Bad gateway" (which the client can't parse). TEMP: the message
+  // includes the reason while we diagnose the production checkout hang.
+  try {
+    return await handleCheckout(ctx);
+  } catch (e) {
+    return json({ error: 'Checkout crashed: ' + String((e && e.message) || e) }, 500);
+  }
+}
+
+async function handleCheckout({ request, env }) {
   const sb = env.SUPABASE_URL;
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   // `svc` = service-role auth headers for PostgREST. This bypasses RLS, so the
@@ -191,6 +202,9 @@ export async function onRequestPost({ request, env }) {
   try {
     const res = await fetch(`${base}/checkouts`, {
       method: 'POST',
+      // Abort a hung Dodo call after 10s so it surfaces as a clean error instead of a
+      // Cloudflare edge 502 (the current production symptom).
+      signal: AbortSignal.timeout(10000),
       headers: {
         // Dodo secret key — server-only. Authorises us to create a session on
         // the reader's behalf.
@@ -223,7 +237,8 @@ export async function onRequestPost({ request, env }) {
       // Log full detail server-side (status + body) for debugging, but return a
       // vague message to the client so we don't leak Dodo internals.
       console.error('dodo checkout failed', res.status, JSON.stringify(data));
-      return json({ error: 'Could not start checkout. Please try again.' }, 502);
+      // TEMP diagnostic: surface Dodo's status + reason to the tester.
+      return json({ error: 'Dodo ' + res.status + ': ' + JSON.stringify(data).slice(0, 300) }, 502);
     }
     // Dodo has varied the URL field name across API versions; accept any of the
     // known aliases so a field rename doesn't break checkout.
@@ -234,6 +249,7 @@ export async function onRequestPost({ request, env }) {
     // Network failure or unexpected throw reaching Dodo — log and surface a
     // generic retryable error.
     console.error('checkout error', (e && e.message) || e);
-    return json({ error: 'Checkout failed. Try again later.' }, 500);
+    // TEMP diagnostic: surface the actual failure (e.g. a Dodo timeout/abort) to the tester.
+    return json({ error: 'Checkout error: ' + String((e && e.message) || e) }, 500);
   }
 }
