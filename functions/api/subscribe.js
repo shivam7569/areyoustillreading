@@ -8,8 +8,9 @@
  * visitor typed into a subscribe form, validates it, screens for bots, and — if
  * the address is new or still unconfirmed — stores a "pending" record and mails
  * a confirmation link. The *second* leg (the visitor clicking that link and
- * flipping the record to `confirmed`) lives in a separate confirm endpoint and
- * is NOT handled here.
+ * flipping the record to `confirmed`) lives in the sibling endpoint
+ * `functions/api/confirm.js` (GET /api/confirm) and is NOT handled here.
+ * (Opting back out lives in `functions/api/unsubscribe.js`.)
  *
  * File-based routing: because this file sits at `functions/api/subscribe.js`,
  * Cloudflare Pages automatically wires it to the URL path `/api/subscribe`.
@@ -29,7 +30,7 @@
  *   THIS FUNCTION ──▶ Turnstile (Cloudflare bot check, via lib/email.js)
  *   THIS FUNCTION ──▶ Supabase/Postgres (subscribers table, via PostgREST)
  *   THIS FUNCTION ──▶ Resend (transactional confirmation email)
- *   Confirmation link  ──▶  (separate confirm endpoint, not in this file)
+ *   Confirmation link  ──▶  functions/api/confirm.js (GET /api/confirm)
  *
  * IMPORTS / DEPENDENCIES (all from ../../lib/email.js)
  * -----------------------------------------------------------------------------

@@ -14,9 +14,15 @@
  *   shares a post URL. That is the ONLY thing this file does.
  *
  * WHEN IT RUNS  (important — this is NOT a runtime endpoint)
- *   Everything here executes at BUILD TIME. The project is a static Astro site
- *   deployed to Cloudflare Pages via Wrangler direct upload (`npm run deploy`),
- *   so `getStaticPaths` is evaluated during `astro build` and the resulting
+ *   Everything here executes at BUILD TIME, during `astro build`. That build is
+ *   triggered by EITHER of the project's two deploy paths, and this file behaves
+ *   identically for both:
+ *     1. Manual Wrangler direct upload — `npm run deploy` runs the build locally
+ *        then `wrangler pages deploy dist` uploads the static output.
+ *     2. The publish pipeline — functions/api/publish.js commits a post's
+ *        Markdown to GitHub, and Cloudflare Pages' Git integration rebuilds the
+ *        site (running this file again to (re)generate the OG PNGs).
+ *   Either way `getStaticPaths` is evaluated during the build and the resulting
  *   PNGs are written out as static assets. No Cloudflare Pages Function, no
  *   Supabase, no request-time code path touches this file. Consequently there
  *   are NO auth, RLS, token, entitlement, signature, or honeypot concerns in

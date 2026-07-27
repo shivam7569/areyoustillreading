@@ -91,6 +91,10 @@ const ogImage = new URL(image ?? '/favicon.svg', Astro.site);
     viewport enables responsive layout on mobile. */}
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+{/* Astro.generator resolves to a string like "Astro vX.Y.Z". This intentionally
+    discloses the framework + version (Astro's default). Harmless here, but if
+    version fingerprinting ever becomes a concern, this single line is the tag to
+    drop. */}
 <meta name="generator" content={Astro.generator} />
 <title>{title}</title>
 <meta name="description" content={description} />

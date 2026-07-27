@@ -16,19 +16,25 @@
  *
  * HOW IT FITS THE ARCHITECTURE
  *   This is a 100% STATIC page. Everything here runs at BUILD time (during
- *   `astro build` / `npm run deploy`), never in the browser and never in a
- *   Cloudflare Pages Function. getStaticPaths() enumerates every tag up front,
- *   and Astro emits one pre-rendered .html file per tag into the deploy output
- *   that Wrangler direct-uploads to Cloudflare Pages. There is therefore no
- *   runtime cost, no database, and no way for a request to inject a tag that
- *   was not known at build time (an unknown /blog/tags/foo simply 404s because
- *   no file was generated for it).
+ *   `astro build`), never in the browser and never in a Cloudflare Pages
+ *   Function. getStaticPaths() enumerates every tag up front, and Astro emits
+ *   one pre-rendered .html file per tag into the deploy output. That output
+ *   reaches Cloudflare Pages by either of two build triggers, both of which run
+ *   the same `astro build`: a manual `npm run deploy` (Wrangler direct-upload of
+ *   dist/), or the publish pipeline (functions/api/publish.js commits a new
+ *   Markdown post to GitHub, and Cloudflare Pages Git-integration rebuilds).
+ *   There is therefore no runtime cost, no database, and no way for a request to
+ *   inject a tag that was not known at build time (an unknown /blog/tags/foo
+ *   simply 404s because no file was generated for it).
  *
  * DEPENDENCIES (imports)
  *   - BaseLayout.astro  — the shared HTML shell (head, nav, footer, styling).
  *   - astro:content getCollection — the type-safe content-collection API that
- *     reads the `blog` collection (Markdown/MDX files + frontmatter validated
- *     against the collection's Zod schema in src/content/config.*).
+ *     reads the `blog` collection (Markdown files + frontmatter validated
+ *     against the collection's Zod schema in src/content.config.ts). Note: the
+ *     glob loader there matches only **-slash-*.md, so posts are .md, not .mdx,
+ *     and each entry is keyed by `id` (the slug) — hence `post.id` in the
+ *     template below rather than the older Astro `post.slug`.
  *
  * WHAT DEPENDS ON THIS
  *   - /blog/tags (the tag index page) links here via `/blog/tags/${tag}`.

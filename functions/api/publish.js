@@ -2,22 +2,65 @@
  * POST /api/publish — commit a post's Markdown file to the GitHub repo so the
  * Cloudflare Pages Git-integration rebuilds and deploys it (Option B publishing).
  *
- * This endpoint has write access to the repo via GITHUB_TOKEN, so it MUST NOT be
- * open: the caller must present a valid Supabase session (Authorization: Bearer
- * <access_token>) belonging to an admin (public.admins). No secret is ever typed by
- * the author or embedded in the client — auth is the normal one-time sign-in.
+ * WHAT / RESPONSIBILITY
+ *   A single Cloudflare Pages Function (deployed from this file's path as the route
+ *   /api/publish). Its one job: take a { slug, content } pair from an authenticated
+ *   admin, authenticate the caller, and write src/content/blog/<slug>.md into the
+ *   GitHub repo via the GitHub Contents API. It does NOT render or deploy anything
+ *   itself — the commit is the whole product.
+ *
+ * WHERE IT SITS (end-to-end publish pipeline)
+ *   Admin editor (src/pages/admin/editor.astro, the sign-in-gated "publish" modal)
+ *     -> POST /api/publish with the author's Supabase access token in the
+ *        Authorization header and the built Markdown (frontmatter + body) as `content`
+ *     -> THIS function commits src/content/blog/<slug>.md to GitHub (create or update)
+ *     -> Cloudflare Pages' GitHub Git-integration sees the push and triggers a fresh
+ *        static Astro build, which turns the .md into a real published page.
+ *   So this file is the ONE bridge between the live client-side editor and the
+ *   git-backed content collection Astro builds from. The rebuild is async and owned
+ *   by Cloudflare — a 200 here means "committed", NOT "already live" (build lag of
+ *   ~1-2 min before the post appears).
+ *
+ * WHO DEPENDS ON IT
+ *   Only the admin editor's publish modal (src/pages/admin/editor.astro) calls this.
+ *   It is not a general content API — the slug maps directly to a file in Astro's
+ *   `blog` content collection (src/content/config.* schema governs valid frontmatter).
+ *
+ * SECURITY (critical — this endpoint can write to the source repo)
+ *   Because it holds GITHUB_TOKEN (repo write), it MUST NOT be open. Every request is
+ *   gated by a valid Supabase session (Authorization: Bearer <access_token>) that must
+ *   belong to a row in public.admins. No publish secret is ever typed by the author or
+ *   embedded in the client — auth is the author's normal one-time Supabase sign-in.
+ *   The token is validated by Supabase (GET /auth/v1/user), never decoded here, so we
+ *   never trust client-supplied identity. The admin lookup uses the service-role key
+ *   because public.admins intentionally has no RLS SELECT policy (not readable by
+ *   ordinary users). Failing to configure Supabase env => 500 and refuse (fail closed).
+ *
+ * GOTCHAS
+ *   - Create vs. update: GitHub's Contents API requires the existing blob `sha` to
+ *     overwrite a file; a missing file (404) means create with no sha. We look it up
+ *     first (see below). A concurrent edit can make the sha stale => GitHub 409 =>
+ *     surfaced here as a 502 "GitHub commit failed".
+ *   - Base64: content must be base64 of UTF-8 bytes; plain btoa() corrupts non-Latin1
+ *     characters, hence toBase64Utf8() (encode to bytes first).
+ *   - Slug is validated against a strict pattern before it becomes a file path, so a
+ *     caller cannot traverse out of src/content/blog/ or inject odd path characters.
  *
  * Env (Cloudflare Pages project settings):
  *   GITHUB_TOKEN              — fine-grained PAT with Contents: write on the repo
  *   SUPABASE_URL              — Supabase project base URL (auth + admin check)
  *   SUPABASE_SERVICE_ROLE_KEY — service role (validates token, reads public.admins)
  *   GITHUB_REPO               — "owner/name" (default: shivam7569/areyoustillreading)
- *   GITHUB_BRANCH             — branch to commit to (default: main → production build)
+ *   GITHUB_BRANCH             — branch to commit to (default: main -> production build)
  */
+// Tiny helper to return a JSON Response with the right content-type. Every exit
+// path (success and error) goes through this so the client always gets JSON.
 const JSON_HEADERS = { 'content-type': 'application/json' };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 
-// Base64 of a UTF-8 string (btoa alone mangles non-Latin1).
+// Base64 of a UTF-8 string. btoa() alone throws/garbles on codepoints > 0xFF, so we
+// first turn the string into its UTF-8 byte sequence, then to a Latin1 string btoa
+// can encode. GitHub's Contents API wants file `content` as base64.
 const toBase64Utf8 = (str) => btoa(String.fromCharCode(...new TextEncoder().encode(str)));
 
 export async function onRequestPost({ request, env }) {
@@ -28,6 +71,7 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
+  // slug -> becomes the .md filename; content -> the full Markdown (frontmatter + body).
   const { slug, content } = payload || {};
 
   // --- Auth: caller must be a signed-in admin (Supabase session) ------------
@@ -57,8 +101,12 @@ export async function onRequestPost({ request, env }) {
   if (!token) return json({ error: 'Server not configured (GITHUB_TOKEN)' }, 500);
   const repo = env.GITHUB_REPO || 'shivam7569/areyoustillreading';
   const branch = env.GITHUB_BRANCH || 'main';
+  // Target file inside Astro's `blog` content collection; slug was strictly validated
+  // above, so it is safe to interpolate into the path (no traversal / odd chars).
   const path = `src/content/blog/${slug}.md`;
   const api = `https://api.github.com/repos/${repo}/contents/${path}`;
+  // Headers required by the GitHub REST API: a User-Agent is mandatory or GitHub 403s,
+  // and pinning X-GitHub-Api-Version guards against future breaking changes.
   const gh = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
@@ -67,7 +115,9 @@ export async function onRequestPost({ request, env }) {
   };
 
   try {
-    // If the file already exists on this branch we need its blob SHA to update it.
+    // Look up the current file: 200 => it exists, capture its blob `sha` (needed to
+    // overwrite); 404 => new file, leave sha undefined; anything else => real GitHub
+    // error, bail out as 502 (upstream failure) with a truncated detail for debugging.
     let sha;
     const head = await fetch(`${api}?ref=${encodeURIComponent(branch)}`, { headers: gh });
     if (head.status === 200) sha = (await head.json()).sha;
@@ -75,6 +125,9 @@ export async function onRequestPost({ request, env }) {
       return json({ error: 'GitHub lookup failed', status: head.status, detail: (await head.text()).slice(0, 300) }, 502);
     }
 
+    // Single PUT creates or updates the file (commit message reflects which). Including
+    // `sha` turns it into an overwrite; omitting it creates. This one call is the push
+    // that Cloudflare Pages' Git integration observes and rebuilds from.
     const put = await fetch(api, {
       method: 'PUT',
       headers: gh,
@@ -88,6 +141,9 @@ export async function onRequestPost({ request, env }) {
     if (!put.ok) {
       return json({ error: 'GitHub commit failed', status: put.status, detail: (await put.text()).slice(0, 400) }, 502);
     }
+    // Success payload for the editor: `updated` distinguishes edit vs. first publish,
+    // `commit` is the new commit SHA, `fileUrl` links to the file on GitHub. Remember:
+    // this means "committed", not "deployed" — the Pages rebuild happens afterward.
     const data = await put.json();
     return json({
       ok: true,
@@ -98,6 +154,7 @@ export async function onRequestPost({ request, env }) {
       fileUrl: data.content?.html_url,
     });
   } catch (e) {
+    // Network/unexpected failure (fetch threw, JSON parse, etc.) -> generic 500.
     return json({ error: String((e && e.message) || e) }, 500);
   }
 }

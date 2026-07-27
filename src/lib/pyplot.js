@@ -1,12 +1,50 @@
 /*
  * Client-side Python plotting via Pyodide (CPython compiled to WebAssembly).
  *
- * Runs a reader/author's matplotlib script *in the browser* and returns the
- * figure(s) as inline SVG, so a Python code block in the editor can render its
- * plot right below the code — a mini notebook cell. Pyodide and its scientific
- * packages are large, so the whole runtime is lazy-loaded from the jsDelivr CDN
- * on first use and reused for every later render. This only ever runs on the
- * admin editor page; published pages get a pre-baked static image instead.
+ * WHAT / single responsibility
+ *   Runs an author's matplotlib script *in the browser* and returns the
+ *   figure(s) as inline SVG (or a base64 GIF for saved animations), so a Python
+ *   code block in the editor can render its plot right below the code — a mini
+ *   notebook cell. Exactly one public export: renderPythonPlot(code).
+ *
+ * WHERE it sits in the architecture
+ *   This project is a static Astro site built and served on Cloudflare Pages,
+ *   with a few Pages Functions for the API (e.g. functions/api/publish.js →
+ *   commits Markdown to GitHub → Git-integration rebuild), Supabase for auth,
+ *   and Dodo for payments. This module is PURELY CLIENT-SIDE and EDITOR-ONLY:
+ *   it never runs at build time and never runs in a Pages Function. It executes
+ *   only in the admin editor (src/pages/admin/editor.astro), i.e. on the
+ *   author's own machine after sign-in. Published/reader pages ship a pre-baked
+ *   static asset instead of any Python — Pyodide is far too heavy to load per
+ *   visitor.
+ *
+ * KEY dependencies
+ *   - Pyodide (PYODIDE_VERSION below), lazy-loaded as a remote ESM module from
+ *     the jsDelivr CDN — NOT an npm dependency and NOT bundled by Vite (see the
+ *     @vite-ignore on the dynamic import). matplotlib is loaded on top; numpy
+ *     comes along as its transitive dependency.
+ *   - No imports from elsewhere in this repo; this file stands alone.
+ *
+ * WHAT depends on this file (IMPORTANT / possibly-stale caveat)
+ *   As of this writing NOTHING in the repo imports renderPythonPlot. The
+ *   editor's live "python" plot cells were migrated to the sibling module
+ *   src/lib/plotly.js (renderPlotlyFigure), which runs plotly.py under the same
+ *   Pyodide runtime and renders an INTERACTIVE plotly.js figure (rotatable/
+ *   zoomable 3D) instead of a flat matplotlib SVG. This file is the earlier
+ *   matplotlib-to-static-SVG renderer, kept as a standalone module. If you are
+ *   wiring Python plotting into the editor, check which of the two is imported
+ *   in src/pages/admin/editor.astro before assuming this one is active.
+ *
+ * SECURITY / correctness caveats
+ *   - It runs arbitrary author-supplied Python, but only ever the signed-in
+ *     author's own code, and inside Pyodide's WASM sandbox (its own virtual
+ *     filesystem, no direct host FS or network). exec runs in a fresh namespace
+ *     per call, not the module globals.
+ *   - matplotlib is forced to the non-interactive 'AGG' backend and
+ *     svg.fonttype='none' so the SVG is safe to embed and survives the editor's
+ *     SVG sanitizer (see the inline note in HARNESS).
+ *   - Pyodide is a heavyweight singleton: the first render pays the full
+ *     download + init cost; every later render reuses it (pyodidePromise).
  */
 const PYODIDE_VERSION = '0.28.3';
 const CDN = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
@@ -58,6 +96,8 @@ def __run_user_plot(src):
     return json.dumps(result)
 `;
 
+// Module-level singleton: caches the *promise*, not the resolved runtime, so
+// concurrent first calls share one in-flight load rather than starting several.
 let pyodidePromise = null;
 
 function initPyodide() {
@@ -87,6 +127,10 @@ export async function renderPythonPlot(code) {
   try {
     await pyodide.loadPackagesFromImports(code);
   } catch {}
+  // Hand the source across the JS↔Python boundary via a global rather than
+  // string-interpolating it into the exec call, so quotes/newlines can't break
+  // the harness. The harness swallows script errors into res.error (a traceback
+  // string), so runPythonAsync itself resolves normally on user-code failures.
   pyodide.globals.set('__user_src', code);
   const raw = await pyodide.runPythonAsync('__run_user_plot(__user_src)');
   const res = JSON.parse(raw);

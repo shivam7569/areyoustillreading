@@ -58,8 +58,10 @@ export default defineConfig({
     testTimeout: 20000,
     // Hook budget: 120s. This is deliberately much larger than testTimeout
     // because it covers the globalSetup hook — i.e. the full `astro build`,
-    // which (Shiki, KaTeX, build-time Mermaid, Pagefind, OG image generation)
-    // can take tens of seconds cold. A short hook timeout here would flakily
+    // which (Shiki syntax highlighting, KaTeX math, build-time D2 diagram
+    // rendering via @terrastruct/d2 — which replaced the older Mermaid setup —
+    // Pagefind indexing, astro-og-canvas OG image generation) can take tens of
+    // seconds cold. A short hook timeout here would flakily
     // abort the build and fail the whole suite spuriously. Do NOT lower this to
     // match testTimeout; they measure different things.
     hookTimeout: 120000,

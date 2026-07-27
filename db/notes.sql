@@ -34,10 +34,11 @@
 --   - Supabase `auth` schema (provides auth.users + auth.uid()).
 --   - `gen_random_uuid()` — pgcrypto/pg extension, enabled by default on
 --     Supabase.
---   - public.is_admin() — a SECURITY DEFINER SQL function created in
---     db/highlights.sql that returns true iff the caller's uid is in the
---     `admins` table. MUST be run BEFORE this file, or the policy creation on
---     lines below will fail with "function public.is_admin() does not exist".
+--   - public.is_admin() — a STABLE, SECURITY DEFINER PL/pgSQL function (with a
+--     pinned `search_path = public`) created in db/highlights.sql that returns
+--     true iff the caller's uid is in the `admins` table. MUST be run BEFORE
+--     this file, or the policy creation on the lines below will fail with
+--     "function public.is_admin() does not exist".
 --
 -- WHAT DEPENDS ON THIS FILE
 --   - The client-side notes UI (Astro components / Supabase JS calls) that lets

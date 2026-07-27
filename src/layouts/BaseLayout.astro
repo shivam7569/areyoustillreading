@@ -15,10 +15,17 @@
  *   (title/description/image) or rendered through the slot by the calling page.
  *
  * HOW IT FITS THE ARCHITECTURE
- *   This is a static Astro 7 build (SSG) deployed to Cloudflare Pages via
- *   Wrangler direct upload (`npm run deploy`). This layout runs at BUILD TIME
- *   only — the frontmatter below (the `---` fence) is server/build-side JS that
- *   is fully evaluated during `astro build` and never ships to the browser.
+ *   This is a static Astro 7 build (SSG) deployed to Cloudflare Pages. TWO
+ *   things trigger a (re)build/deploy: (1) a manual `npm run deploy`, which runs
+ *   the build then a Wrangler DIRECT UPLOAD of `dist/`; and (2) the in-app
+ *   publish pipeline (functions/api/publish.js) committing a Markdown post to
+ *   GitHub, after which the Cloudflare Pages GIT INTEGRATION rebuilds the site.
+ *   The dynamic behaviour this static shell deliberately omits — auth, payments,
+ *   gated content — lives at the edges: Cloudflare Pages Functions, Supabase
+ *   (+ Row-Level Security), and Dodo payments (webhook at
+ *   functions/api/dodo-webhook.js). This layout runs at BUILD TIME only — the
+ *   frontmatter below (the `---` fence) is server/build-side JS that is fully
+ *   evaluated during `astro build` and never ships to the browser.
  *   Individual pages (`src/pages/**`) and content collections wrap their output
  *   in `<BaseLayout title=... >...</BaseLayout>`; whatever they nest becomes the
  *   `<slot />` payload. `<head>` composition is delegated wholesale to
@@ -44,8 +51,10 @@
  *   - This layout is intentionally "dumb chrome": it performs NO auth checks, NO
  *     admin detection (`is_admin()`), NO entitlement/paywall gating, and NO
  *     token/signature verification. All of that lives elsewhere — in Cloudflare
- *     Pages Functions, Supabase Row-Level Security, the Supabase JS client on
- *     the relevant pages, and components like PaywallGate. Do NOT be tempted to
+ *     Pages Functions (including the gated-content middleware and the Dodo
+ *     payments webhook at functions/api/dodo-webhook.js), Supabase Row-Level
+ *     Security, the Supabase JS client on the relevant pages, and components
+ *     like PaywallGate. Do NOT be tempted to
  *     add access control here: it is static HTML emitted at build time and is
  *     identical for every visitor, so any gating placed here would be trivially
  *     bypassable and would leak into the shared shell. Treat this file as
@@ -126,7 +135,10 @@ const nav = [
     <footer class="site-footer">
       {/* Copyright year computed at BUILD TIME (this is SSG, not SSR): the year is
           frozen to whenever the site was last built/deployed, not the visitor's
-          current date. A rebuild/redeploy is what rolls it over each January. */}
+          current date. Any rebuild rolls it over — a manual `npm run deploy` OR
+          the publish pipeline committing a post and triggering a Pages Git
+          rebuild — so in practice it advances the next time anything ships, not
+          punctually on Jan 1. */}
       <p>&copy; {new Date().getFullYear()} areyoustillreading</p>
     </footer>
   </body>

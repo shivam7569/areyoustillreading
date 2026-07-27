@@ -68,6 +68,16 @@
  *   - This gate protects the /gated fragment ONLY. It assumes the public teaser
  *     page never inlines the paid body. If a build ever leaks full content into
  *     the public page, this middleware cannot help — the boundary is bypassed.
+ *   - PERFORMANCE: a paid request for a paying customer costs up to FOUR
+ *     SEQUENTIAL round-trips to Supabase from the edge (paywall lookup → token
+ *     validation → admin check → entitlement check), each gating the next. This
+ *     is deliberate — every step short-circuits (free post, no token, admin hit)
+ *     to avoid unnecessary calls — but it does add per-request latency, so the
+ *     client PaywallGate fetches this fragment once and caches the rendered body
+ *     rather than re-hitting `/gated/*` on every view.
+ *   - METHOD SCOPE: the handler is `onRequest` (not `onRequestGet`), so it fires
+ *     for ALL HTTP methods on `/gated/*`. In practice only GETs reach here, and
+ *     every method is gated identically; there is no method-specific bypass.
  * ============================================================================
  */
 

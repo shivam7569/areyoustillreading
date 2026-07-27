@@ -41,8 +41,8 @@
  *     - SELECT: a reader may read only their own rows; admins may read all.
  *     - INSERT/UPDATE/DELETE: a reader may write only rows where
  *       user_id = auth.uid().
- *   If those policies are wrong, the `.select(...)` on line ~64 (which has no
- *   user_id filter) would leak every reader's private note to everyone. The
+ *   If those policies are wrong, the `.select(...)` in load() below (which has
+ *   no user_id filter) would leak every reader's private note to everyone. The
  *   client filters `mine` / `readers` AFTER the fetch precisely because RLS is
  *   expected to have already trimmed the result set to what this user may see.
  *   The `is_admin()` RPC must likewise verify identity server-side; trusting a

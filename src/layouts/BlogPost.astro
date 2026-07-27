@@ -125,10 +125,17 @@ const minutes = Math.max(1, Math.round(words / 200));
       </p>
     )}
     {/*
-      The compiled Markdown body is injected here by the caller
-      (<BlogPost post={entry}><Content /></BlogPost>). Shiki-highlighted code,
-      KaTeX math, and build-time D2 diagrams all arrive as pre-rendered
-      HTML through this slot.
+      The compiled Markdown body is injected here by the caller. For a normal
+      post that is <Content /> (<BlogPost post={entry}><Content /></BlogPost>);
+      for a `gateable` post the [...slug] route instead passes <PaywallGate>,
+      which only emits preview-safe HTML statically and fetches the paid body
+      per-request. Either way, this layout is agnostic to what fills the slot.
+      Content that can arrive through this slot includes: Shiki-highlighted
+      code, KaTeX math, and build-time D2 diagrams (all pre-rendered to HTML at
+      build), plus the outputs of "python" plot cells — a pre-baked static
+      matplotlib SVG, or an interactive Plotly figure that ships as figure JSON
+      hydrated client-side by plotly.js (see src/lib/pyplot.js & src/lib/plotly.js;
+      note Pyodide runs only in the admin editor, never on published pages).
     */}
     <slot />
   </article>

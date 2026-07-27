@@ -37,9 +37,15 @@
  *
  * DEPENDED ON BY
  * --------------
- *   - Every `.astro` page/component that queries the `blog` collection.
- *   - The Phase 3 paywall/gating layer (Pages Functions + Supabase RLS), which
- *     keys off the `gateable` / `preview` fields declared here.
+ *   - Every `.astro` page/component that queries the `blog` collection — as of
+ *     this writing: src/pages/blog/index.astro (listing), blog/[...slug].astro
+ *     (public post render), blog/tags/* (tag pages), src/pages/index.astro
+ *     (home), src/pages/rss.xml.js (feed), src/pages/og/[...route].ts (OG
+ *     images), and src/layouts/BlogPost.astro.
+ *   - The Phase 3 paywall/gating layer, whose concrete entry point is
+ *     src/pages/gated/[...slug].astro (Pages Functions + Supabase RLS): that
+ *     route is what actually keys off the `gateable` / `preview` fields declared
+ *     here to decide what to ship statically vs. release only to entitled users.
  *
  * SECURITY / GATING ASSUMPTION (READ BEFORE EDITING)
  * --------------------------------------------------
@@ -51,7 +57,8 @@
  * is what authorizes release of that body. If a build step ever fails to honor
  * `gateable`, the paywalled content leaks into static output regardless of what
  * this file says. Treat the enforcement of these flags as belonging to the
- * build/render/entitlement code — this file only names the flags.
+ * build/render/entitlement code (src/pages/gated/[...slug].astro plus the
+ * Pages Functions it calls) — this file only names the flags.
  */
 import { defineCollection, z } from 'astro:content';
 import { glob } from 'astro/loaders';

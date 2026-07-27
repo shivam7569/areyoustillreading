@@ -74,7 +74,7 @@ import { getCollection } from 'astro:content';
 // Build the "Latest posts" teaser list. This executes ONCE at build time.
 //   1. getCollection('blog', filter) loads every entry in the blog collection,
 //      applying the predicate as a PUBLICATION GUARD: `!data.draft` drops any
-//      entry marked dra:true so unfinished posts are never baked into the
+//      entry marked draft:true so unfinished posts are never baked into the
 //      public homepage (there is no runtime gate on a static page — see header).
 //   2. .sort() orders newest-first. pubDate is a Date (coerced by the collection
 //      schema); .valueOf() compares epoch millis, and b - a yields descending order.

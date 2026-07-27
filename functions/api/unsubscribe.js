@@ -93,6 +93,10 @@ export async function onRequestGet({ request, env }) {
       // The actual state change. Runs server-side with the service-role key,
       // the only credential that can bypass the subscribers table's RLS. A
       // valid-but-unknown token simply matches no rows and is a no-op.
+      // NOTE: unsubscribeByToken returns a boolean (true = a row matched), but
+      // we intentionally DISCARD it and never branch on it. Reacting to that
+      // result — e.g. a different page when no row matched — would leak whether
+      // a token exists, defeating the non-enumeration guarantee below.
       await unsubscribeByToken(env, token);
     } catch {
       // Deliberately swallow ALL errors: never leak DB/internal failure to the

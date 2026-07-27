@@ -169,6 +169,11 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
       try {
         // Send JSON (native fallback would send form-encoded); the endpoint accepts
         // this shape. website=honeypot value, forwarded so the server can reject bots.
+        // form.email / form.website are HTMLFormElement "named control" shortcuts:
+        // each input's name= attribute becomes a property on the form element, so
+        // form.email is the <input name="email"> node. Note the transport divergence
+        // the server must handle: JSON callers send turnstileToken, but the no-JS
+        // native POST sends Turnstile's own field name cf-turnstile-response instead.
         var res = await fetch('/api/subscribe', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },

@@ -1,4 +1,71 @@
+/*
+ * global.css — the ONE global stylesheet for the whole site
+ * =========================================================================
+ * WHAT THIS FILE IS
+ *   The single, hand-written global stylesheet for areyoustillreading.dev.
+ *   It defines the design tokens (CSS custom properties), the base element
+ *   resets/typography, and the class-based styles for the shared chrome
+ *   (header/nav, footer, hero) plus the blog post + listing pages. There is
+ *   NO CSS framework (no Tailwind, no CSS-in-JS): everything the reader sees
+ *   is either declared here or is scoped <style> inside an individual .astro
+ *   component/page.
+ *
+ * WHERE IT SITS IN THE ARCHITECTURE
+ *   Stack: static Astro build deployed to Cloudflare Pages, with Pages
+ *   Functions (functions/api/...) for dynamic bits, Supabase for auth/data,
+ *   and Dodo for payments. This file is a pure build-time asset — it ships
+ *   as static CSS, runs entirely in the reader's browser, and touches none
+ *   of the server/functions/payment layers.
+ *   It is pulled in ONCE by the site-wide layout (see src/layouts/*.astro,
+ *   which imports "../styles/global.css"). Because Astro bundles/hashes the
+ *   import, every page that uses that layout inherits these styles. Anything
+ *   NOT here is expected to live in a component's own scoped <style> block.
+ *
+ * KEY DEPENDENCIES / WHAT DEPENDS ON THIS
+ *   - Consumed by: the base layout .astro file (via `import`), and therefore
+ *     transitively by essentially every rendered page.
+ *   - The markup class names below (.site-header, .brand, .site-footer,
+ *     .hero, .cta, .post-list, .lede, .tags, .tag, .count) are contracts:
+ *     the .astro templates emit exactly these classes. Renaming a selector
+ *     here silently unstyles that markup — grep the .astro files before you
+ *     touch a class name.
+ *   - Shiki (Astro's built-in Markdown syntax highlighter) emits .astro-code
+ *     elements and inline CSS variables; the dark-mode block near the bottom
+ *     depends on Shiki's dual-theme output. See "Shiki dual-theme" below.
+ *
+ * DESIGN DECISIONS & NON-OBVIOUS GOTCHAS
+ *   - Theming is OS-driven only. Colors are tokens on :root and are
+ *     overridden inside `@media (prefers-color-scheme: dark)`. There is NO
+ *     manual light/dark toggle and no data-theme attribute — the browser's
+ *     system preference is the single source of truth. Add new colors as
+ *     tokens and give them a dark override, or they will look wrong in dark
+ *     mode.
+ *   - `--measure: 68ch` is the reading-measure token. Both `main` and the
+ *     header/footer clamp to it so body text and chrome stay visually
+ *     aligned on one column. Change it in one place to reflow the whole site.
+ *   - Sticky footer: `body` is a flex column with `min-height: 100vh`, `main`
+ *     uses `flex: 1 0 auto`, and `.site-footer` uses `flex-shrink: 0`. This
+ *     is what keeps the footer at the bottom on short pages. Do not drop the
+ *     flex layout on body or the footer will float up.
+ *   - This global sheet is deliberately small. Rich, page-specific UI — the
+ *     admin Milkdown/Crepe editor and its publish modal (src/pages/admin/
+ *     editor.astro), interactive Pyodide/Plotly "python" plot cells
+ *     (src/lib/plotly.js), notebook-style stdout output, and D2 diagrams
+ *     (rendered by @terrastruct/d2 via plugins/rehype-d2.mjs; D2 REPLACED the
+ *     old Mermaid pipeline) — is styled by those components' own scoped CSS,
+ *     NOT here. Do not expect editor/plot/diagram styling in this file.
+ *
+ * SECURITY / CORRECTNESS CAVEATS
+ *   - No user data, secrets, or logic here — pure presentation.
+ *   - The only `!important` in the file is in the Shiki dark-mode block and
+ *     is intentional (see that comment). Avoid adding more `!important`;
+ *     specificity wars here are hard to unwind because this sheet is global.
+ * =========================================================================
+ */
 :root {
+  /* Design tokens (light theme defaults). Every color has a dark override in
+     the prefers-color-scheme block below. --measure is the reading width;
+     --space is the base spacing unit that most padding/margins derive from. */
   --measure: 68ch;
   --bg: #ffffff;
   --fg: #1a1a1a;
@@ -11,6 +78,8 @@
   --space: 1rem;
 }
 
+/* Dark theme: same token names, remapped values. Triggered purely by the
+   OS/browser "prefers dark" setting — there is no in-page toggle. */
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0f1115;
@@ -38,6 +107,9 @@ body {
   min-height: 100vh;
 }
 
+/* Main content column: clamped to the reading measure and centered.
+   `flex: 1 0 auto` lets it grow to fill vertical space so the footer is
+   pushed to the bottom on short pages (see sticky-footer note in header). */
 main {
   width: 100%;
   max-width: var(--measure);
@@ -110,7 +182,13 @@ article time { color: var(--muted); font-size: 0.95rem; }
 .post-list li { padding: 1rem 0; border-bottom: 1px solid var(--border); }
 .post-list h2 { margin: 0 0 0.25rem; font-size: 1.25rem; }
 
-/* Shiki dual-theme: switch to the dark palette when the OS prefers dark. */
+/* Shiki dual-theme code blocks.
+   Astro's Markdown highlighter (Shiki) renders fenced code as `.astro-code`
+   and inlines BOTH palettes as CSS variables on each token: --shiki-light /
+   --shiki-light-bg (used by default) and --shiki-dark / --shiki-dark-bg. In
+   dark mode we swap every token and its background to the dark vars. The
+   `!important` is required to beat Shiki's own inline styles on those spans;
+   without it the light palette wins and code is unreadable on dark bg. */
 @media (prefers-color-scheme: dark) {
   .astro-code,
   .astro-code span {

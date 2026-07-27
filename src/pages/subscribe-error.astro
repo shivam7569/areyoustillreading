@@ -28,8 +28,10 @@
  *     - the email address is malformed / fails validation
  *     - Turnstile bot verification failed
  *     - a transient backend error (Supabase/Resend) aborted the write
- *   The happy-path counterpart is the success page the flow redirects to
- *   instead; this file is only ever reached on the failure branch.
+ *   The happy-path counterpart is the "/subscribed" success page the flow
+ *   redirects to instead (see functions/api/confirm.js, whose only two exits
+ *   are /subscribed and /subscribe-error); this file is only ever reached on
+ *   the failure branch.
  *
  * WHY THE ERROR TEXT IS INTENTIONALLY VAGUE (SECURITY)
  *   The copy says "may be invalid or expired, or the email was malformed"

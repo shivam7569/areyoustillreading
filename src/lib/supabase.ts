@@ -48,6 +48,23 @@
  *     defeat RLS entirely. Service-role usage belongs only in Pages Functions.
  *   - Because `PUBLIC_*` vars are inlined at build time (not read at runtime),
  *     changing them requires a rebuild/redeploy to take effect.
+ *
+ * DEFAULT CLIENT BEHAVIOR (no options object is passed below — this matters)
+ * -------------------------------------------------------------------------
+ *   `createClient` is called with only URL + anon key and NO third `options`
+ *   argument, so supabase-js applies its defaults, all of which are relied on:
+ *     - persistSession: true  -> the session (JWT + refresh token) is saved to
+ *       browser localStorage, so a signed-in visitor stays signed in across
+ *       page loads and full reloads. This is what makes the Astro-island /
+ *       multi-page-app auth feel continuous despite each page being static.
+ *     - autoRefreshToken: true -> access tokens are refreshed in the background
+ *       before expiry, so long-lived tabs don't silently lose auth.
+ *     - autoDetectSessionInUrl: true -> after a magic-link email click or a
+ *       GitHub OAuth redirect, supabase-js reads the auth params from the URL
+ *       and finalizes the session automatically. The email/OAuth sign-in flows
+ *       depend on this default; do NOT disable it without reworking callbacks.
+ *   Because the session lives in localStorage, it is per-browser/per-device and
+ *   is cleared by `supabase.auth.signOut()` (and by the user clearing storage).
  * ============================================================================
  */
 import { createClient } from '@supabase/supabase-js';

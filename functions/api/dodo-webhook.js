@@ -56,6 +56,16 @@
 //   - We return 200 for events we cannot act on (wrong type / missing metadata)
 //     so Dodo stops retrying — retrying would never help those cases. We only
 //     return non-2xx for authenticity/parse failures, where a retry might.
+//   - No replay-window / freshness check: the `webhook-timestamp` header is folded
+//     into the signed content (so it can't be tampered with) but we do NOT reject
+//     old timestamps. A returning dev might expect Standard Webhooks' recommended
+//     "reject if timestamp is outside +/- N minutes" guard here; it is intentionally
+//     absent. Replaying a captured, still-valid event is nonetheless harmless because
+//     the entitlement insert is an idempotent upsert (a repeat is a no-op).
+//   - The signature comparison (`provided.includes(expected)`) is an ordinary string
+//     compare, not constant-time — hence the "constant-ish" hedge on signatureValid.
+//     Low risk here (the attacker must already produce a full valid HMAC), but note
+//     it if you ever harden this endpoint.
 // ============================================================================
 
 // --- Base64 <-> byte-array helpers (Workers has atob/btoa but no Buffer) -----

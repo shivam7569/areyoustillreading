@@ -30,6 +30,10 @@
 --     true only for the authenticated owner (looked up against the `admins`
 --     table). ALL write protection here delegates to it. If that function is
 --     missing, every policy below fails to create and the migration errors.
+--     Non-obvious: is_admin() is SECURITY DEFINER (see highlights.sql), so it
+--     can read the `admins` table even though that table is itself RLS-locked.
+--     That is WHY the write policies below work — the anon caller cannot read
+--     `admins` directly, but the definer-rights function can answer on its behalf.
 --   - The `admins` table (transitively, via is_admin()).
 --
 -- WHAT DEPENDS ON THIS FILE

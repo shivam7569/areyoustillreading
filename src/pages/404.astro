@@ -30,7 +30,14 @@
  *     site nav/footer, meta tags, and the OG/SEO scaffolding. `title` and
  *     `description` are forwarded to BaseLayout, which owns the <title> and
  *     <meta name="description">. Keep those props in sync with BaseLayout's
- *     prop contract; if BaseLayout's signature changes, this page must follow.
+ *     prop contract (title: string, description?: string, image?: string); if
+ *     BaseLayout's signature changes, this page must follow.
+ *   - The optional `image` prop is deliberately NOT passed, so BaseHead (via
+ *     BaseLayout) falls back to its default OG/social share image for this page.
+ *   - BaseLayout also renders the shared header nav, which already links to Home
+ *     and Blog. The two links in the body below are therefore SUPPLEMENTARY,
+ *     in-content escape hatches — intentionally redundant with the nav so a lost
+ *     visitor has an obvious next step without hunting for the header.
  *
  * DEPENDED ON BY
  *   - Nothing imports this file. Its only "consumer" is Cloudflare Pages' static

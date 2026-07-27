@@ -1,9 +1,76 @@
 /*
- * Client-side Plotly plotting: the author writes plotly.py, it runs in the browser
- * via Pyodide (CPython in WASM), and we return the figure as a plain JS object.
- * That object is rendered *interactively* with plotly.js (loaded separately from
- * plotly's CDN) — so 3D plots are natively rotatable/zoomable. Pyodide runs only
- * in the editor; published pages ship the figure JSON + plotly.js, no Python.
+ * src/lib/plotly.js — client-side Plotly plotting for the admin editor.
+ * ===========================================================================
+ * WHAT / SINGLE RESPONSIBILITY
+ *   A browser-only helper module that turns author-written plotly.py source into
+ *   an interactive plot, plus a rotating-GIF exporter for 3D figures. The author
+ *   writes Python, it runs in the browser via Pyodide (CPython compiled to WASM),
+ *   and we hand back the figure as a plain JS object ({data, layout}). That object
+ *   is rendered *interactively* with plotly.js (a separate CDN library) — so 3D
+ *   plots are natively rotatable/zoomable, not static images. This file owns three
+ *   things and nothing else: running the Python (renderPlotlyFigure), loading
+ *   plotly.js (loadPlotlyJs), and encoding a 360-degree camera sweep to GIF
+ *   (makeRotatingGif).
+ *
+ * WHERE IT SITS IN THE ARCHITECTURE
+ *   Project = a static Astro site built on Cloudflare Pages, with Pages Functions
+ *   (functions/api/*) for the dynamic bits, Supabase for auth/data, and Dodo for
+ *   payments. THIS module is none of that: it is a pure client-side src/lib helper
+ *   bundled into ONE page — the admin Milkdown/Crepe editor. Everything here runs
+ *   in the author's browser at edit time; there is no server round-trip, no Pages
+ *   Function, and no build-time step involved. Pyodide, plotly.js, and gifenc all
+ *   load from public CDNs on first use (see the pinned version constants below).
+ *
+ * WHO DEPENDS ON THIS (and who does NOT)
+ *   The ONLY importer is src/pages/admin/editor.astro, which imports all three
+ *   exports. In the editor, each ```python fenced code block gets a live plot
+ *   rendered right below it (notebook-style cell); renderPlotlyFigure runs the
+ *   cell, loadPlotlyJs draws it, and 3D cells expose a "Download GIF" control that
+ *   calls makeRotatingGif. NOTE: this is an EDIT-TIME PREVIEW only. The publish
+ *   pipeline (functions/api/publish.js) commits the raw Markdown to GitHub, so a
+ *   published post keeps the python source as an ordinary code fence — there is
+ *   currently NO code anywhere that re-runs Pyodide or embeds figure JSON on public
+ *   pages. If you came here expecting published-page rendering, it does not exist
+ *   yet; wiring it up would mean serializing res.figure at publish time and adding
+ *   a client that calls plotly.js on the reader's page.
+ *
+ * KEY DEPENDENCIES (all remote, all lazy)
+ *   - Pyodide v0.28.3 (CDN, dynamic import of pyodide.mjs) — the WASM Python.
+ *   - plotly (Python pkg) installed at init via micropip; numpy + pandas are
+ *     preloaded because plotly.express needs pandas even for bundled datasets.
+ *   - plotly.js 2.35.2 (CDN <script> tag) — the interactive renderer, window.Plotly.
+ *   - gifenc 1.0.3 (CDN ESM) — client-side GIF encoder for makeRotatingGif.
+ *
+ * IMPORTANT DESIGN DECISIONS / NON-OBVIOUS GOTCHAS
+ *   - Everything is lazy + memoized behind module-level promise singletons
+ *     (pyodidePromise, plotlyJsPromise, gifencPromise): nothing downloads until the
+ *     author first runs a cell, and each heavy asset loads exactly once per session.
+ *   - Pyodide is a SINGLE shared interpreter. Concurrent cell runs would clobber the
+ *     __user_src global and race, so renderPlotlyFigure funnels every call through a
+ *     serial promise queue (renderQueue) — strictly one run at a time. See the note
+ *     there about keeping the chain alive past a rejected run.
+ *   - The Python HARNESS deliberately recovers a figure even when exec() raised
+ *     AFTER building it — a trailing fig.show() throws under Pyodide (no renderer),
+ *     but the figure is already valid, so we return it and clear the error. It
+ *     prefers a Figure named `fig`, else falls back to the last go.Figure in scope.
+ *   - The /* @vite-ignore *(slash) hints on the dynamic CDN imports stop Vite/Astro
+ *     from trying to bundle those remote URLs at build time. (Written literally in
+ *     the code below; do not remove them.)
+ *   - Hard CDN dependency: with no network, an offline build, or a Content-Security
+ *     -Policy that blocks cdn.jsdelivr.net / cdn.plot.ly, every export here fails.
+ *   - makeRotatingGif mutates then RESTORES the live plot's camera; if it throws
+ *     mid-sweep the restore in the finally-less path may be skipped, leaving the
+ *     plot rotated (caller currently swallows errors in the editor UI).
+ *
+ * SECURITY / CORRECTNESS CAVEATS
+ *   - renderPlotlyFigure exec()s arbitrary Python. The blast radius is bounded by
+ *     the Pyodide WASM sandbox (no host filesystem/network beyond what Pyodide
+ *     grants), and the only person who can type that code is the signed-in admin
+ *     author — the editor page is admin-gated. Do NOT wire this to untrusted input
+ *     without reconsidering that trust boundary.
+ *   - Loading executable code from third-party CDNs (Pyodide, plotly.js, gifenc) is
+ *     a supply-chain trust assumption; versions are pinned to reduce drift, but a
+ *     compromised CDN would run in the author's browser.
  */
 const PYODIDE_VERSION = '0.28.3';
 const CDN = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;

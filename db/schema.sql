@@ -21,6 +21,11 @@
 --   change columns here, apply the delta manually in the same editor.
 --
 -- WHERE IT FITS IN THE ARCHITECTURE
+--   This table is the newsletter slice of a larger stack: a static Astro build
+--   on Cloudflare Pages, backed by Cloudflare Pages Functions, Supabase
+--   (Postgres + this schema), and Dodo payments (the premium/entitlement side —
+--   gated posts, sign-in-gated publishing — which lives in OTHER tables, not
+--   here). For THIS table specifically:
 --   Static Astro site on Cloudflare Pages. The public/anon Supabase key is NOT
 --   used to touch this table (see RLS note below). Instead, a Cloudflare Pages
 --   Function (server-side) holds the Supabase SERVICE-ROLE key and performs all

@@ -68,8 +68,9 @@
 -- ============================================================================
 
 -- Per-post purchase entitlements (one-time, unlock-for-life).
--- Rows are written ONLY by the Stripe webhook (service-role key, bypasses RLS).
--- Run once in the Supabase SQL editor.
+-- Rows are written ONLY by the payment webhook handler (Dodo Payments today;
+-- "Stripe" in older comments) using the Supabase service-role key, which
+-- bypasses RLS. Run once in the Supabase SQL editor.
 
 create table if not exists public.entitlements (
   -- Surface key; not exposed in app logic, but handy for admin/debug references.

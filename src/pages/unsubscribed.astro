@@ -9,14 +9,21 @@
  *   database write, no auth check. It is pure confirmation copy.
  *
  * WHERE IT FITS IN THE ARCHITECTURE
- *   The actual unsubscribe mutation (flipping a subscriber's status / deleting
- *   their row in Supabase) happens elsewhere — typically a Cloudflare Pages
- *   Function (an /api/... endpoint) that validates a signed, single-use
- *   unsubscribe token embedded in the "unsubscribe" link of a Resend email.
- *   That Function does the security-sensitive work (signature/token check +
- *   RLS-guarded Postgres write) and then redirects the browser here on success.
- *   Because this page is served statically by Cloudflare Pages, it must be
- *   treated as PUBLIC and UNAUTHENTICATED: anyone can open /unsubscribed
+ *   The actual unsubscribe mutation (flipping a subscriber's status to
+ *   'unsubscribed' in Supabase) happens elsewhere: the Cloudflare Pages Function
+ *   at functions/api/unsubscribe.js (route GET /api/unsubscribe?token=<uuid>).
+ *   That endpoint is what the "unsubscribe" link in every Resend email points
+ *   at. The token is an OPAQUE per-recipient UUID (the subscriber row's
+ *   unsubscribe_token) — not a cryptographically signed token, and not
+ *   single-use: unsubscribing is idempotent, so the same link can be hit
+ *   repeatedly (mail scanners, re-clicks) with no additional effect. The
+ *   Function does the security-sensitive work — it matches the token against the
+ *   subscribers table using the Supabase SERVICE-ROLE key (which bypasses the
+ *   table's Row-Level Security; RLS is enabled with no policies so the public
+ *   anon key can touch nothing) — then ALWAYS 302-redirects the browser here,
+ *   whether or not a row matched (a non-enumeration guarantee; see that file's
+ *   header). Because this page is served statically by Cloudflare Pages, it must
+ *   be treated as PUBLIC and UNAUTHENTICATED: anyone can open /unsubscribed
  *   directly. That is fine precisely because the page reveals nothing and does
  *   nothing — see the security note below.
  *

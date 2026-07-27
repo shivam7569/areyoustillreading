@@ -17,11 +17,16 @@
  *
  * WHERE IT SITS IN THE ARCHITECTURE
  * ---------------------------------
- * This is a STATIC Astro build. `npm run build` reads this file, produces a
- * `dist/` folder of pre-rendered HTML + assets, and `npm run deploy` (Wrangler
- * direct upload) pushes `dist/` to Cloudflare Pages. Everything configured here
- * runs ONCE at build time on the developer's/CI machine — never in the browser and
- * never in a Cloudflare Pages Function. The dynamic backend (Supabase/PostgREST +
+ * This is a STATIC Astro build. `npm run build` reads this file, runs `astro
+ * build` and then `pagefind --site dist` (search indexing is a post-build CLI
+ * step in package.json, not an Astro integration), producing a `dist/` folder of
+ * pre-rendered HTML + assets. Two deploy paths push that `dist/`: (1) `npm run
+ * deploy` = Wrangler direct upload for manual/CI deploys, and (2) the in-app
+ * publish pipeline (functions/api/publish.js commits Markdown to GitHub, which
+ * triggers a Cloudflare Pages Git-integration rebuild). Either way, everything
+ * configured in THIS file runs ONCE at build time on the builder machine — never
+ * in the browser and never in a Cloudflare Pages Function. The dynamic backend
+ * (Supabase/PostgREST +
  * RLS, Resend email, Turnstile bot-check, Dodo Payments Merchant-of-Record
  * paywall, Supabase auth) is entirely separate: it lives in Pages Functions and
  * client-side Supabase JS, none of which this file touches. Do not add secrets or
@@ -44,7 +49,9 @@
  * -------------------------
  *   - The Astro build/dev CLI reads it implicitly on every `astro build`/`dev`.
  *   - Every Markdown/MDX post relies on the pipeline here for math, code
- *     highlighting, and mermaid diagrams to render correctly.
+ *     highlighting, and D2 diagrams to render correctly. (D2 replaced the older
+ *     Mermaid setup — if you find lingering "mermaid" references elsewhere, they
+ *     are stale.)
  *   - Anything consuming absolute URLs at build time (sitemap, RSS, canonical
  *     link tags, OG image URLs) derives them from `site` below.
  *

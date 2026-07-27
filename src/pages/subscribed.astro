@@ -44,10 +44,13 @@
  *     `title` feeds <title>/OG; `description` feeds the meta description.
  *
  * WHAT DEPENDS ON THIS FILE
- *   - The server-side confirmation handler, which redirects the browser to
- *     `/subscribed` on success. If this route is renamed or removed, update that
- *     redirect target or confirmed users will hit a 404.
- *   - Possibly the Resend confirmation email copy ("you'll be taken to…").
+ *   - The server-side confirmation handler (functions/api/confirm.js) 302-
+ *     redirects the browser to `/subscribed` on a successful token match. If
+ *     this route is renamed or removed, update that redirect target or confirmed
+ *     users will hit a 404. Its sibling failure destination is the sister page
+ *     `/subscribe-error` (every failure path in confirm.js lands there instead).
+ *   - Possibly the Resend confirmation email copy ("you'll be taken to…"),
+ *     sent by sendConfirmationEmail() in lib/email.js.
  *
  * MAINTENANCE NOTE
  * Keep this page dumb and static. Any temptation to "read the token here and

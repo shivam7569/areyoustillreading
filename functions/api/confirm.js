@@ -31,7 +31,10 @@
  *
  * DEPENDENCIES (imports)
  *   From ../../lib/email.js:
- *     - isUuid          : strict v4-shaped UUID string check (input validation).
+ *     - isUuid          : strict RFC-4122 UUID-shape check, case-insensitive
+ *                         (input validation). NOTE it matches any UUID version's
+ *                         shape — it does NOT enforce the v4 version nibble — but
+ *                         the tokens minted upstream are v4, so that is fine here.
  *     - confirmByToken  : the actual Supabase/PostgREST PATCH that confirms the
  *                         row; returns true iff a row matched the token.
  *     - redirect        : builds a bare 302 Response with a `location` header.

@@ -42,9 +42,9 @@
  *   - This page is PURELY presentational auth state. The email shown and the
  *       signed-in/out branch are client-trust only and can be spoofed by anyone
  *       editing their own browser — they grant zero authority. Every privileged
- *       action (reading gated content, admin toggles, payments) is enforced
- *       server-side (Pages Functions) and by RLS + is_admin() in Postgres. Do not
- *       add trust-bearing logic here.
+ *       action (reading gated content, admin toggles, payments via Dodo) is
+ *       enforced server-side (Cloudflare Pages Functions) and by Supabase RLS +
+ *       is_admin() in Postgres. Do not add trust-bearing logic here.
  *   - getSession() reads the LOCAL token; it does not hit the network to verify.
  *       That is acceptable here because we only decide what to display. Never gate
  *       a real resource on getSession() alone.
@@ -124,6 +124,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   // post-auth landing target, the moment the client finishes consuming the URL
   // session (SIGNED_IN event) we re-render to the signed-in view without a manual
   // reload. It also keeps the UI in sync across tabs and after the sign-out above.
+  // NOTE: the returned subscription is deliberately never unsubscribed. This is a
+  // whole page (not a mount/unmount component island), so the listener is meant to
+  // live for the full page lifetime and is torn down naturally on navigation/reload
+  // — there is no leak to clean up here.
   supabase.auth.onAuthStateChange(() => render());
   // First paint: replace the "Checking your session…" placeholder with real state.
   render();

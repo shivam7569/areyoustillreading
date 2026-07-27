@@ -83,8 +83,12 @@ export async function getStaticPaths() {
 
 // `post` arrives from getStaticPaths props (no runtime query needed). render()
 // compiles the post's Markdown/MDX into an Astro <Content /> component using the
-// full pipeline (Shiki, KaTeX, build-time D2, etc.) — the exact same body a
-// paying reader is entitled to see.
+// full pipeline (Shiki syntax highlighting, KaTeX math, build-time D2 diagrams,
+// etc.) — the exact same body a paying reader is entitled to see. NOTE: any
+// interactive cells the body contains (client-side Pyodide/Plotly "python"
+// plots, notebook-style stdout) ship as inert markup + hydration scripts here
+// and only come alive in the reader's browser AFTER the middleware serves this
+// fragment; nothing in this pipeline runs per-user at request time.
 const { post } = Astro.props;
 const { Content } = await render(post);
 ---

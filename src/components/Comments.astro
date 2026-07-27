@@ -229,6 +229,11 @@ const { postId } = Astro.props;
   // Re-render the compose area on any auth transition (sign-in, sign-out,
   // token refresh, or the async session becoming available after first paint)
   // so the textarea vs. "Sign in" prompt always matches the live session.
+  // The returned subscription is intentionally discarded (never unsubscribed):
+  // this Astro island is bundled per page and never unmounts within a page's
+  // lifetime — navigation is a full document load — so there is nothing to
+  // clean up and no listener leak. Revisit only if this ever runs under a
+  // client-side router that swaps components without a full page reload.
   supabase.auth.onAuthStateChange(() => renderCompose());
   // Initial paint: load the thread and draw the compose area once. The
   // onAuthStateChange handler above then keeps compose in sync thereafter.

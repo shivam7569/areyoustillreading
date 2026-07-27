@@ -28,8 +28,12 @@
  *     mount points). The paid body lives at a SEPARATE `/gated/<slug>/` route.
  *   - This script runs after hydration, checks the Supabase session, asks the
  *     server for the gated body WITH the user's bearer token, and injects it.
- *   - `/gated/<slug>/` is a Pages Function (server) that verifies the token
- *     and the buyer's entitlement server-side before returning the body.
+ *   - `/gated/<slug>/` is itself a statically prerendered content fragment
+ *     (src/pages/gated/[...slug].astro). Access to it is enforced server-side
+ *     at the Cloudflare edge by a Pages Function MIDDLEWARE,
+ *     functions/gated/_middleware.js, which intercepts every /gated/* request,
+ *     validates the bearer token and the buyer's entitlement (with an admin
+ *     bypass), and only then lets Pages serve that static fragment.
  *   - Purchases go through `/api/checkout` (Dodo Payments, Merchant-of-Record),
  *     whose webhook writes a row into the `entitlements` table on success.
  *
@@ -39,10 +43,12 @@
  *     mode logic here (isPaid / entitled / isAdmin) is a UX convenience only.
  *     A determined viewer can flip variables in devtools — that must NOT leak
  *     paid content, because the ONLY real gate is the server:
- *       * `/gated/<slug>/` must independently verify the bearer token and that
- *         the caller owns an `entitlements` row (or is an admin) before it
- *         returns any paid HTML. If it returns the body without checking,
- *         the paywall is defeated regardless of anything in this file.
+ *       * The edge middleware in front of `/gated/<slug>/`
+ *         (functions/gated/_middleware.js) must independently verify the bearer
+ *         token and that the caller owns an `entitlements` row (or is an admin)
+ *         before Cloudflare Pages serves any paid HTML. If the fragment is
+ *         served without that check, the paywall is defeated regardless of
+ *         anything in this file.
  *   - Supabase Row-Level Security is the real guard on every table read below:
  *       * `entitlements` — RLS must restrict SELECT to the owning user, so
  *         `entitled()` can only ever see the current viewer's own rows.
@@ -59,13 +65,17 @@
  * --------------------
  *   - `astro:content` CollectionEntry<'blog'> — for the `post` prop typing.
  *   - `../lib/supabase` (browser Supabase JS client) — session, RPC, table reads.
- *   - Server routes it fetches at runtime: `/gated/<slug>/` and `/api/checkout`.
+ *   - Server routes it fetches at runtime: `/gated/<slug>/` (the static fragment
+ *     src/pages/gated/[...slug].astro, guarded by functions/gated/_middleware.js)
+ *     and `/api/checkout` (functions/api/checkout.js → Dodo Payments).
  *   - DB tables/functions: `post_paywall`, `entitlements`, `is_admin()`.
  *
  * DEPENDED ON BY
  * --------------
- *   - Blog post layout/pages that opt a post into gating (renders this in
- *     place of, or after, the free portion of the post body).
+ *   - src/pages/blog/[...slug].astro — the public post page. When
+ *     `post.data.gateable` is true it renders `<PaywallGate post={post} />` in
+ *     place of the full `<Content />`, so for a gated post THIS component IS the
+ *     rendered post body (teaser + client-decided gate), not an add-on below it.
  *
  * GOTCHAS
  * -------

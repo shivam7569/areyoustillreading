@@ -89,8 +89,10 @@ export async function getStaticPaths() {
 
 // The entry chosen for THIS page, forwarded from getStaticPaths via props.
 const { post } = Astro.props;
-// Compile the post's markdown/MDX into a renderable <Content /> component. This
-// runs the full markdown pipeline (Shiki, KaTeX, build-time D2, etc.).
+// Compile the post's markdown into a renderable <Content /> component. This
+// runs the full markdown pipeline (Shiki, KaTeX, build-time D2, etc.). NOTE:
+// the `blog` collection loads ONLY `.md` files (glob '**/*.md' in
+// src/content.config.ts), so this is plain Markdown — not MDX.
 // NOTE: <Content /> is the FULL body — for gated posts we deliberately do not
 // render it here (see the security note above); PaywallGate controls exposure.
 const { Content } = await render(post);

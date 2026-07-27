@@ -15,11 +15,14 @@
  *     only imports the layout, and all auth logic runs in the browser via the
  *     Supabase JS client. That is intentional — auth tokens must be minted by
  *     Supabase directly in the user's browser, never proxied through our edge.
- *   - After auth, Supabase sets its session in the browser (localStorage) and
- *     redirects to /account. Downstream pages/Functions read that session and
- *     rely on Supabase Row-Level Security (RLS) + the `is_admin()` SQL function
- *     for authorization. This page performs NO authorization — it only starts
- *     an authentication handshake.
+ *   - This page only STARTS the handshake; it never sees the returned session.
+ *     The magic-link email click (or the GitHub OAuth redirect) both land on
+ *     /account with the auth params in the URL, and supabase-js finalizes the
+ *     session THERE via its default `autoDetectSessionInUrl: true` (see
+ *     src/lib/supabase.ts) — writing the JWT + refresh token to localStorage.
+ *     Downstream pages/Functions then read that persisted session and rely on
+ *     Supabase Row-Level Security (RLS) + the `is_admin()` SQL function for
+ *     authorization. This page performs NO authorization of its own.
  *
  * DEPENDENCIES (imports)
  *   - ../layouts/BaseLayout.astro : shared page shell (head, nav, theming vars

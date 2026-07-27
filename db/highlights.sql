@@ -53,6 +53,13 @@
 --   - The client sends user_id / author_name itself, so insert policies must
 --     force auth.uid() = user_id (a reader cannot forge a row as someone else).
 --     author_name is cosmetic and NOT trusted for authorization.
+--   - NO UPDATE policy exists on ANY table below (only select/insert/delete).
+--     Because RLS default-denies anything not covered by a policy, this makes
+--     highlights and comments effectively IMMUTABLE over the ANON key: rows can
+--     be created and deleted but never edited (an UPDATE silently affects zero
+--     rows). This is intentional — the UI has no edit affordance. If you ever
+--     add editing, you must add an explicit `for update` policy with BOTH a
+--     using and a with check clause, or the update will appear to no-op.
 --
 -- OPERATIONAL NOTE
 --   Run once in the Supabase SQL editor. Written to be idempotent (safe to

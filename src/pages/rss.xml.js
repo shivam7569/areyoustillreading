@@ -18,8 +18,9 @@
  *
  * HOW IT FITS THE ARCHITECTURE
  * ----------------------------
- * - Reads from the `blog` content collection (see src/content/config.* for the
- *   Zod schema that defines `title`, `description`, `pubDate`, `draft`, etc.).
+ * - Reads from the `blog` content collection (see src/content.config.ts — the
+ *   Astro 5 content-config location — for the Zod schema that defines `title`,
+ *   `description`, `pubDate`, `draft`, etc.).
  * - Sits alongside the Astro pages that render the same posts as HTML
  *   (src/pages/blog/[...].astro or similar) and the sitemap integration. It is a
  *   sibling output surface, not a dependency of them.

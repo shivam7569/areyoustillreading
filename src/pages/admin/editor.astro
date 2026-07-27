@@ -1,17 +1,88 @@
 ---
 /*
- * /admin/editor — the admin-only writing surface (Phase 4).
+ * ============================================================================
+ * src/pages/admin/editor.astro  —  the admin-only writing surface (Phase 4)
+ * ============================================================================
  *
- * Client-gated: the page is statically served, but its script checks the
- * Supabase session + is_admin() and only mounts the editor for the owner. This
- * is UX gating only — the real protection is server-side at *publish* time (the
- * GitHub-commit Function will re-verify is_admin before writing anything).
+ * WHAT THIS FILE IS / SINGLE RESPONSIBILITY
+ * -----------------------------------------
+ * The full in-browser authoring experience for the blog: a Medium-style
+ * WYSIWYG editor plus the "Publish" flow that turns what you wrote into a
+ * committed Markdown post. It is one Astro page — statically built like every
+ * other route, but essentially a client-side app (all the logic lives in the
+ * bottom <script>, which Astro bundles/transpiles). The page renders nothing
+ * meaningful server-side beyond an empty shell + a hidden publish modal.
  *
- * Editor: Milkdown "Crepe" — a Medium-style WYSIWYG that is Markdown-native, so
- * what you write serializes straight to the Markdown files the site builds from
- * (Option B). Live inline rendering: math (latex feature), highlighted code
- * (code-mirror), images, slash menu (block-edit), floating toolbar. Mermaid is
- * added in a later increment via Milkdown's diagram plugin.
+ * WHERE IT SITS IN THE ARCHITECTURE
+ * ---------------------------------
+ * Stack: static Astro build hosted on Cloudflare Pages, with Pages Functions
+ * (functions/api/*) for the few dynamic bits, Supabase for auth + data, and
+ * Dodo for payments/premium (this page touches only auth + publish; it does
+ * not talk to Dodo directly). Data flow when you hit Publish:
+ *
+ *   editor.astro (this file)                     ← author writes, gets Markdown
+ *        │  POST /api/publish  { slug, content } + Supabase JWT (Bearer)
+ *        ▼
+ *   functions/api/publish.js (Pages Function)    ← re-verifies is_admin, then
+ *        │  GitHub Contents API commit                commits src/content/blog/<slug>.md
+ *        ▼
+ *   GitHub repo → Cloudflare Pages Git build      ← rebuild redeploys the site
+ *        ▼
+ *   /blog/<slug>/  goes live (Astro content collection renders the .md)
+ *
+ * So this page never writes files itself and holds no repo credentials; it just
+ * hands a Markdown blob + the user's JWT to the Function, which is the trusted
+ * boundary. The published site renders the SAME fenced code (```d2 diagrams via
+ * plugins/rehype-d2.mjs at build; ```python plots) so editor preview == live.
+ *
+ * KEY IMPORTS / DEPENDENCIES (see the <script> import block for the full list)
+ * ---------------------------------------------------------------------------
+ *   - @milkdown/crepe                 the WYSIWYG editor ("Crepe" preset), Markdown-native
+ *   - @milkdown/kit/prose/*           ProseMirror internals (Plugin/Decoration/…) for our
+ *                                     two custom plugins: bracket auto-pairing + Plotly cells
+ *   - @codemirror/language-data + /autocomplete   language-aware code blocks, close-brackets
+ *   - @terrastruct/d2                 D2 diagram engine (WASM), lazy-loaded for ```d2 preview
+ *   - ../../lib/plotly                runs author ```python via Pyodide + renders with plotly.js,
+ *                                     plus makeRotatingGif() for 3D-figure GIF export
+ *   - ../../lib/supabase             browser Supabase client (session, OAuth, magic-link, JWT)
+ *   - ../../layouts/BaseLayout.astro  page chrome
+ * WHAT DEPENDS ON THIS FILE: nothing imports it (it is a leaf route). It is the
+ * sole producer of requests to functions/api/publish.js.
+ *
+ * IMPORTANT DESIGN DECISIONS / NON-OBVIOUS GOTCHAS
+ * ------------------------------------------------
+ *   - Markdown-native by design (Option B): Crepe serialises straight to the .md
+ *     format the content collection consumes — no HTML round-trip, no lossy AST.
+ *   - D2 REPLACED Mermaid. Diagrams are authored in ```d2 fences and previewed
+ *     client-side via @terrastruct/d2 (see renderPreview below); the old Milkdown
+ *     Mermaid plugin is gone. If you find "mermaid" anywhere, it is stale.
+ *   - Interactive ```python plots are NOT drawn by Crepe's sanitised code-block
+ *     preview. They are a separate ProseMirror WIDGET decoration (plotlyCells)
+ *     injected just after each python block, so Plotly's interactivity/DOM
+ *     survives Crepe's sanitiser. See the long comment on that plugin.
+ *   - Two hand-rolled ProseMirror plugins are wired via crepe.editor.use():
+ *     bracketPairing (auto-pair brackets/quotes in prose) and plotlyCells.
+ *   - Draft autosave is localStorage-only for now (key 'aysr:editor-draft'),
+ *     debounced; there is no server-side draft store yet (see the TODO).
+ *   - The Publish modal is a two-state premium flow: sign-in view → metadata
+ *     form. Frontmatter is built by hand and the leading "# Title" is stripped
+ *     from the body to avoid a duplicate <h1> (title comes from frontmatter).
+ *
+ * SECURITY / CORRECTNESS CAVEATS  (READ BEFORE SHIPPING)
+ * ------------------------------------------------------
+ *   - !!! THE ADMIN GATE IS CURRENTLY DISABLED FOR DEV !!!  init() below has the
+ *     session + is_admin() check commented out, so ANYONE can open this editor.
+ *     That is intentional for building/testing without an admin login, but it
+ *     MUST be restored before launch (the commented block shows exactly how).
+ *     Even ungated, this is only UX exposure: the REAL protection is server-side
+ *     at publish time — functions/api/publish.js re-verifies is_admin before it
+ *     will commit anything, so a non-admin opening the editor still cannot ship.
+ *   - Publish auth rides on the Supabase access_token sent as a Bearer header;
+ *     the Function trusts that token, not the client's claims.
+ *   - Frontmatter scalars are emitted via JSON.stringify (yaml() helper) because
+ *     a JSON string literal is also a valid YAML scalar — this is the injection
+ *     guard for user-supplied title/description/tags.
+ * ============================================================================
  */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
