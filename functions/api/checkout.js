@@ -241,8 +241,9 @@ async function handleCheckout({ request, env }) {
       // Return 4xx, NOT 5xx: Cloudflare replaces a Function's 5xx with its own "Bad
       // gateway" HTML page, so a 502 here never reaches the client as parseable JSON.
       const notLive = data && data.code === 'MERCHANT_NOT_LIVE';
+      // Reader-facing: no internal jargon (the real Dodo code is in the server log above).
       return json(
-        { error: notLive ? 'Payments aren’t live yet — the store is still in test mode.' : 'Could not start checkout. Please try again.' },
+        { error: notLive ? 'Purchases aren’t available just yet — please check back soon.' : 'Could not start checkout. Please try again.' },
         400,
       );
     }
