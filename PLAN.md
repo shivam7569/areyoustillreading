@@ -3,10 +3,28 @@
 Living planning document. Supersedes the original brief where they differ. Updated as
 decisions are made.
 
-**Status (2026-07-24):** Static Phase 1 front-end is BUILT and pushed to GitHub
-(github.com/shivam7569/areyoustillreading, public) — blog pipeline, Shiki highlighting,
-KaTeX, build-time Mermaid, SEO/OG, RSS, sitemap, Pagefind search, resume + projects; 21
-passing tests. Next: deploy (Cloudflare Pages via Wrangler), then email capture.
+**Status (2026-07-27):** Phases 1–4 substantially built and live on the **`dev`**
+Cloudflare preview — **not yet promoted to production (`main`)**. Shipped since 2026-07-24:
+- **Phase 1** — done and deployed: blog pipeline, Shiki, KaTeX, SEO/OG, RSS, sitemap,
+  Pagefind search, resume + projects, owned email capture (double opt-in), custom domain.
+- **Phase 2 (auth + engagement)** — done: Supabase auth (magic-link + GitHub), comments,
+  highlights + reader↔admin discussion, private reader notes; Resend as the email pipe.
+- **Phase 3 (payments / paywall)** — working in Dodo **test mode**: per-post paywall with
+  **price-only checkout** — reader pays an admin-set price via **Dodo Payments** (Merchant
+  of Record) using ONE reusable "Pay What You Want" product; signature-verified webhook
+  grants a permanent entitlement. Verified end-to-end on `dev`.
+- **Phase 4 (authoring + admin)** — done on `dev`: premium in-browser **Milkdown editor**
+  (drafts, language-aware code blocks, live **D2** diagrams [replaced Mermaid — no
+  Chromium], interactive Plotly python cells); **instant-publish** (render-at-publish → KV
+  overlay → seconds-to-live); full **admin dashboard** at `/admin` (Home · Posts · Write ·
+  Audience · Engagement · Revenue · Settings) gated by a client admin-gate + server-side
+  `requireAdmin`; visual per-post **paywall toggle** on Posts; a "Studio" link on the
+  public site shown only to admins.
+
+**Remaining for launch:** promote `dev` → `main` (production); swap Dodo **test → live**
+keys + a live PWYW product; re-confirm the admin gate before launch; move editor drafts
+from localStorage to per-user Supabase; add read-through analytics (Plausible); remove the
+demo `premium-example.md`. (Phase 5 — UI/UX design polish — still to come.)
 
 ---
 
@@ -49,8 +67,12 @@ lazily: static by default, server routes added phase by phase.
 - **Auth (phase 2):** **Supabase Auth** — bundled with the DB choice above.
 - **Email sending:** **Resend** as a dumb pipe — we own the list in our DB; they handle
   deliverability. (Verify current free-tier limits before launch.)
-- **Payments (phase 3):** Stripe one-time **hosted checkout** (card data never touches our code).
-- **Math/diagrams:** KaTeX + Mermaid, rendered at build time (plain HTML, no client JS).
+- **Payments (phase 3):** **Dodo Payments** (Merchant of Record) one-time **hosted
+  checkout** (card data never touches our code) — Stripe is unavailable in India. Uses a
+  reusable Pay-What-You-Want product so the admin-set price is charged per post with no
+  per-post product to manage.
+- **Math/diagrams:** KaTeX + **D2** (WASM), rendered at build time (plain HTML, no client
+  JS). D2 replaced Mermaid to drop the Chromium build dependency.
 
 ---
 
