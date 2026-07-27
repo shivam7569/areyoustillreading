@@ -1,12 +1,10 @@
 ---
 /**
- * /admin/revenue — paywall pricing + sales overview.
- *   • KPIs + a by-post sales table from the admin-gated GET /api/admin/sales
- *     (reads the entitlements ledger server-side; revenue is an ESTIMATE from
- *     post_paywall prices — the ledger doesn't store the amount paid).
- *   • A pricing table for paywall-eligible posts. Toggle/price/product write
- *     straight to post_paywall with the anon client — the is_admin() RLS already
- *     authorizes the owner to write that table, so no endpoint is needed.
+ * /admin/revenue — sales overview.
+ * KPIs (gross revenue · sales · paywalled posts) + a by-post sales table from the
+ * admin-gated GET /api/admin/sales (reads the entitlements ledger server-side;
+ * revenue is an ESTIMATE from post_paywall prices — the ledger doesn't store the
+ * amount paid). Turning posts on/off the paywall lives on the Posts page.
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
@@ -18,6 +16,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         <h1>Revenue</h1>
         <p class="sub">What your paywalled writing has earned.</p>
       </div>
+      <div class="head-actions">
+        <a class="btn btn-sm btn-ghost" href="/admin/posts">Manage paywall on Posts →</a>
+      </div>
     </div>
 
     <div class="kpi-grid">
@@ -26,33 +27,14 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       <div class="kpi card"><p class="kpi-label">Paywalled posts</p><div class="kpi-value loading" id="r-paid">—</div><div class="kpi-foot">currently earning</div></div>
     </div>
 
-    <div class="card" style="margin-bottom:1.4rem">
+    <div class="card">
       <div class="card-head"><h2>Sales by post</h2></div>
       <div id="bypost"><div class="card-pad muted">Loading…</div></div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <h2>Paywall &amp; pricing</h2>
-        <span class="muted">toggle any post on or off the paywall</span>
-      </div>
-      <div id="pricing"><div class="card-pad muted">Loading…</div></div>
-      <p class="muted" style="padding:0 1.25rem 1rem;margin:0;font-size:0.82rem">Turning a post on or off the paywall changes the post itself, so it goes fully live ~1–2 min later while the site rebuilds. Price changes apply instantly.</p>
     </div>
   </section>
 </AdminLayout>
 
-<style>
-  .price-row { display: grid; grid-template-columns: 1.4fr auto auto auto auto; gap: 0.75rem; align-items: center; padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--border); }
-  .price-row:last-child { border-bottom: 0; }
-  .price-row .pr-price { width: 6.5rem; }
-  .price-row .pr-prod { width: 12rem; }
-  .switch { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
-  @media (max-width: 720px) { .price-row { grid-template-columns: 1fr 1fr; } .price-row .pr-prod { width: 100%; } }
-</style>
-
 <script>
-  import { supabase } from '../../lib/supabase';
   import { whenAdmin, adminFetch } from '../../lib/admin-gate';
   import { fmtNum, fmtMoney, esc } from '../../lib/admin-format';
 
@@ -85,82 +67,16 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     }
   }
 
-  async function loadPricing() {
-    const host = document.getElementById('pricing')!;
+  async function loadPaidCount() {
     try {
       const r = await adminFetch('/api/admin/posts');
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Failed');
-      const posts = (d.posts || []).filter((p: any) => !p.draft); // drafts aren't sellable
-      setKpi('r-paid', fmtNum(posts.filter((p: any) => p.paid).length));
-      if (!posts.length) {
-        host.innerHTML = '<div class="empty"><span class="emoji">🔓</span><h3>No posts yet</h3><p>Publish a post, then you can put it behind the paywall here.</p></div>';
-        return;
-      }
-      host.innerHTML = posts.map((p: any) => {
-        const dollars = ((p.priceCents ?? 500) / 100).toFixed(2);
-        return `<div class="price-row" data-slug="${esc(p.slug)}" data-gateable="${p.gateable ? '1' : '0'}">
-          <div class="t-title">${esc(p.title)}</div>
-          <label class="switch"><input type="checkbox" data-k="paid" ${p.paid ? 'checked' : ''}/> Paywalled</label>
-          <label class="switch">$ <input class="input pr-price" data-k="price" type="number" min="0" step="0.50" value="${dollars}"/></label>
-          <input class="input pr-prod" data-k="prod" type="text" placeholder="Product ID" value="${esc(p.productId || '')}"/>
-          <button class="btn btn-sm btn-primary" data-save>Save</button>
-        </div>`;
-      }).join('');
-    } catch (e: any) {
-      host.innerHTML = `<div class="card-pad notice err">Couldn't load posts: ${esc(e.message || e)}</div>`;
+      if (!r.ok) return;
+      setKpi('r-paid', fmtNum((d.posts || []).filter((p: any) => p.paid).length));
+    } catch {
+      setKpi('r-paid', '0');
     }
   }
 
-  async function save(row: HTMLElement, btn: HTMLButtonElement) {
-    const slug = row.dataset.slug!;
-    const wasGateable = row.dataset.gateable === '1';
-    const paid = (row.querySelector('[data-k="paid"]') as HTMLInputElement).checked;
-    const dollars = parseFloat((row.querySelector('[data-k="price"]') as HTMLInputElement).value) || 0;
-    const product = (row.querySelector('[data-k="prod"]') as HTMLInputElement).value.trim();
-    const price_cents = Math.max(0, Math.round(dollars * 100));
-    btn.disabled = true;
-    const original = btn.textContent;
-    btn.textContent = 'Saving…';
-    try {
-      // A post is truly gated by TWO layers: frontmatter `gateable` (build-time body
-      // split, committed to git) and the live post_paywall.is_paid flag. On-paywall
-      // requires gateable=true; off-paywall restores gateable=false. Only commit the
-      // frontmatter when the gateable state actually needs to change (avoids a needless
-      // rebuild), then set the live paywall row.
-      let rebuilding = false;
-      if (paid !== wasGateable) {
-        const cr = await adminFetch('/api/admin/post', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ slug, gateable: paid }),
-        });
-        const cj = await cr.json().catch(() => ({}));
-        if (!cr.ok) throw new Error(cj.error || 'Could not update the post');
-        row.dataset.gateable = paid ? '1' : '0';
-        rebuilding = true;
-      }
-      const { error } = await supabase.from('post_paywall').upsert(
-        { post_id: slug, is_paid: paid, price_cents, currency: 'usd', product_id: product || null, updated_at: new Date().toISOString() },
-        { onConflict: 'post_id' },
-      );
-      if (error) throw error;
-      btn.textContent = rebuilding ? 'Applied — going live…' : 'Saved ✓';
-      setTimeout(() => { btn.textContent = original; btn.disabled = false; }, rebuilding ? 2600 : 1400);
-      loadSales();
-    } catch (e: any) {
-      btn.textContent = 'Failed';
-      alert(e.message || 'Save failed');
-      setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1400);
-    }
-  }
-
-  document.getElementById('pricing')!.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('[data-save]') as HTMLButtonElement | null;
-    if (!btn) return;
-    const row = btn.closest('.price-row') as HTMLElement;
-    save(row, btn);
-  });
-
-  whenAdmin.then(() => { loadSales(); loadPricing(); });
+  whenAdmin.then(() => { loadSales(); loadPaidCount(); });
 </script>

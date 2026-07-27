@@ -44,6 +44,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 </AdminLayout>
 
 <script>
+  import { supabase } from '../../lib/supabase';
   import { whenAdmin, adminFetch } from '../../lib/admin-gate';
   import { fmtDate, esc } from '../../lib/admin-format';
 
@@ -77,6 +78,20 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     return b;
   }
 
+  // The paywall cell: a visual on/off switch; the price field appears only when on.
+  // Drafts aren't public, so they can't be paywalled.
+  function pwCell(p: any) {
+    if (p.draft) return '<span class="muted" style="font-size:0.82rem">—</span>';
+    const dollars = ((p.priceCents ?? 500) / 100).toFixed(2);
+    return `<div class="pw-cell" data-gateable="${p.gateable ? '1' : '0'}">
+        <label class="pw-toggle" title="${p.paid ? 'Paywalled' : 'Free'}">
+          <input type="checkbox" data-pw ${p.paid ? 'checked' : ''} aria-label="Paywall">
+          <span class="track"><span class="knob"></span></span>
+        </label>
+        <span class="pw-price"${p.paid ? '' : ' hidden'}>$<input class="input pw-price-in" type="number" min="0" step="0.50" value="${dollars}" aria-label="Price"></span>
+      </div>`;
+  }
+
   function render(rows: any[]) {
     document.getElementById('posts-sub')!.textContent =
       `${all.length} post${all.length === 1 ? '' : 's'}${rows.length !== all.length ? ` · ${rows.length} shown` : ''}`;
@@ -89,7 +104,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       return;
     }
     host.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>'
-      + '<th>Title</th><th>Status</th><th class="num">Actions</th></tr></thead><tbody>'
+      + '<th>Title</th><th>Status</th><th>Paywall</th><th class="num">Actions</th></tr></thead><tbody>'
       + rows.map((p) => {
         const tags = (p.tags || []).length ? `<span class="t-sub">${(p.tags || []).map((t: string) => '#' + esc(t)).join(' ')}</span>` : '';
         const armed = armedDelete === p.slug;
@@ -104,6 +119,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
               <div class="t-sub">${esc(fmtDate(p.pubDate))}${tags ? ' · ' : ''}${tags}</div>
             </td>
             <td>${stateBadges(p)}</td>
+            <td>${pwCell(p)}</td>
             <td class="num"><div class="row-actions">
               <a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a>
               ${viewBtn}${toggle}${del}
@@ -165,6 +181,58 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         view(); // re-render so the button shows "Confirm delete"
         armTimer = window.setTimeout(() => { armedDelete = null; view(); }, 3500);
       }
+    }
+  });
+
+  async function savePaywall(slug: string, wasGateable: boolean, on: boolean, dollars: number) {
+    const price_cents = Math.max(0, Math.round((dollars || 0) * 100));
+    // Two layers: frontmatter `gateable` (build-time body split, committed to git) is
+    // touched only when the on/off state changes; then the live post_paywall row
+    // (is_paid + price). No product id — enable/disable + price is all that's needed here.
+    if (on !== wasGateable) {
+      const cr = await adminFetch('/api/admin/post', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug, gateable: on }),
+      });
+      if (!cr.ok) { const cj = await cr.json().catch(() => ({})); throw new Error(cj.error || 'Update failed'); }
+    }
+    const { error } = await supabase.from('post_paywall').upsert(
+      { post_id: slug, is_paid: on, price_cents, currency: 'usd', updated_at: new Date().toISOString() },
+      { onConflict: 'post_id' },
+    );
+    if (error) throw error;
+  }
+
+  // Paywall toggle / price edits (event-delegated on the table).
+  host.addEventListener('change', async (e) => {
+    const cell = (e.target as HTMLElement).closest('.pw-cell') as HTMLElement | null;
+    if (!cell) return;
+    const row = cell.closest('tr') as HTMLElement;
+    const slug = row.dataset.slug!;
+    const toggle = cell.querySelector('[data-pw]') as HTMLInputElement;
+    const priceWrap = cell.querySelector('.pw-price') as HTMLElement;
+    const priceIn = cell.querySelector('.pw-price-in') as HTMLInputElement;
+    const on = toggle.checked;
+    const wasGateable = cell.dataset.gateable === '1';
+    const dollars = parseFloat(priceIn.value) || 5;
+    priceWrap.hidden = !on;
+    toggle.disabled = true;
+    priceIn.disabled = true;
+    const post = all.find((x) => x.slug === slug);
+    try {
+      await savePaywall(slug, wasGateable, on, dollars);
+      cell.dataset.gateable = on ? '1' : '0';
+      if (post) { post.paid = on; post.gateable = on; post.priceCents = Math.round(dollars * 100); }
+      const statusTd = row.children[1] as HTMLElement; // reflect the Paid badge
+      if (statusTd && post) statusTd.innerHTML = stateBadges(post);
+    } catch (err: any) {
+      alert(err.message || 'Paywall update failed');
+      toggle.checked = !on; // revert
+      priceWrap.hidden = !toggle.checked;
+    } finally {
+      toggle.disabled = false;
+      priceIn.disabled = false;
     }
   });
 
