@@ -46,8 +46,31 @@ export async function onRequestGet({ request, env }) {
     /* instant markers are best-effort */
   }
 
+  // Which posts have already been emailed to subscribers. The broadcast guard
+  // (functions/api/admin/broadcast.js) stores a `broadcast:<slug>` KV key whose
+  // metadata carries the send status, so one list() call reads every post's state
+  // with no per-post get(). Legacy keys (written before metadata) have no metadata
+  // — a lingering key means a completed send (the transient 'sending' reservation
+  // gets metadata; a total failure deletes the key), so treat missing metadata as sent.
+  const broadcasts = {};
+  try {
+    if (env.POSTS_HTML) {
+      let cursor;
+      do {
+        const l = await env.POSTS_HTML.list({ prefix: 'broadcast:', cursor });
+        for (const k of l.keys || []) {
+          broadcasts[k.name.slice('broadcast:'.length)] = k.metadata || {};
+        }
+        cursor = l.list_complete ? null : l.cursor;
+      } while (cursor);
+    }
+  } catch {
+    /* email-state markers are best-effort */
+  }
+
   const enriched = posts.map((p) => {
     const pw = paywall[p.slug];
+    const bc = broadcasts[p.slug];
     return {
       ...p,
       paid: pw ? pw.is_paid === true : false,
@@ -56,6 +79,10 @@ export async function onRequestGet({ request, env }) {
       productId: pw ? pw.product_id || '' : '',
       hasProduct: pw ? Boolean(pw.product_id) : false,
       instant: instant.includes(p.slug),
+      // emailed: a present key with status !== 'sending' (or a legacy key with no
+      // metadata) counts as sent; a mid-flight 'sending' reservation does not.
+      emailed: bc ? bc.status !== 'sending' : false,
+      emailedAt: bc && bc.sentAt ? bc.sentAt : null,
     };
   });
 

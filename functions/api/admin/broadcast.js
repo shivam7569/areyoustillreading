@@ -210,8 +210,10 @@ async function handleBroadcast({ request, env }) {
   }
 
   // Reserve the slug (best-effort) so a concurrent same-slug publish backs off.
+  // Mirror the status into KV metadata so the Posts panel can read send-state via
+  // a single list({prefix:'broadcast:'}) without a get() per post.
   if (kv) {
-    try { await kv.put(guardKey, JSON.stringify({ status: 'sending', startedAt: new Date().toISOString(), title })); } catch { /* reservation is best-effort */ }
+    try { await kv.put(guardKey, JSON.stringify({ status: 'sending', startedAt: new Date().toISOString(), title }), { metadata: { status: 'sending' } }); } catch { /* reservation is best-effort */ }
   }
 
   // --- Send via Resend batch (<=100/call), per-recipient unsubscribe link -----
@@ -286,7 +288,12 @@ async function handleBroadcast({ request, env }) {
   // ones who succeeded; the author is told the failed count and can force a resend.)
   if (kv) {
     try {
-      await kv.put(guardKey, JSON.stringify({ status: 'sent', sentAt: new Date().toISOString(), sent, failed, title }));
+      const sentAt = new Date().toISOString();
+      await kv.put(
+        guardKey,
+        JSON.stringify({ status: 'sent', sentAt, sent, failed, title }),
+        { metadata: { status: 'sent', sentAt, sent } },
+      );
     } catch { /* guard write is best-effort */ }
   }
 
