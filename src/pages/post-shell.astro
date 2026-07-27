@@ -20,12 +20,20 @@
  */
 import BlogPost from '../layouts/BlogPost.astro';
 
+// Unique sentinel tokens (plain ASCII → Astro emits them verbatim, no escaping).
+// The editor swaps each for the real value with a global string replace, so the
+// assembly never depends on exact head/markup selectors:
+//   AYSRZZTITLE → title  (flows to <title>, <h1>, og:title, twitter:title)
+//   AYSRZZDESC  → description  (meta description, og/twitter description)
+//   AYSRZZID    → slug  (og:image path /og/<id>.png, per-post island postIds)
+// The byline date (epoch), "1 min read", the /post-shell canonical path, and the
+// data-shell-body marker are handled by their own targeted replacements.
 const post = {
-  id: 'post-shell',
+  id: 'AYSRZZID',
   collection: 'blog',
   data: {
-    title: 'Untitled',
-    description: '',
+    title: 'AYSRZZTITLE',
+    description: 'AYSRZZDESC',
     pubDate: new Date(0),
     tags: [],
     draft: false,

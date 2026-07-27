@@ -261,6 +261,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state';
   import { Decoration, DecorationSet } from '@milkdown/kit/prose/view';
   import { renderPlotlyFigure, loadPlotlyJs, makeRotatingGif } from '../../lib/plotly';
+  // Render-at-publish: render the body with the same pipeline as the build, then
+  // assemble the full page from the /post-shell donor for the instant KV overlay.
+  import { renderPostBodyBrowser } from '../../lib/render-post-browser.mjs';
+  import { assemblePostHtml } from '../../lib/assemble-post.mjs';
   import '@milkdown/crepe/theme/common/style.css';
   import '@milkdown/crepe/theme/nord.css';
 
@@ -749,16 +753,32 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         '',
       ].join('\n') + body;
 
-      status.textContent = 'Publishing…';
       $('pm-publish').disabled = true;
-      // Set once publish succeeds and we begin waiting for the rebuild, so the `finally`
-      // below doesn't re-enable the button while we're about to navigate away.
+      // Assemble the full page HTML for the instant KV overlay: render the body with
+      // the exact build pipeline, fetch the CURRENT shell donor (so asset URLs match
+      // this deployment), and inject. If any of this fails we still publish — the git
+      // commit makes the post live after the rebuild; we just lose the "instant" part.
+      status.textContent = 'Rendering…';
+      let assembledHtml = null;
+      try {
+        const bodyHtml = await renderPostBodyBrowser(body);
+        const shellHtml = await (await fetch('/post-shell', { cache: 'no-store' })).text();
+        assembledHtml = assemblePostHtml(shellHtml, {
+          slug, title, description, pubDate: today, tags: pubTags, bodyMarkdown: body, bodyHtml,
+        });
+      } catch (e) {
+        console.error('[publish] instant-assembly failed; committing rebuild-only', e);
+      }
+
+      status.textContent = 'Publishing…';
+      // Set once publish succeeds and we begin waiting for the post to go live, so the
+      // `finally` below doesn't re-enable the button while we're about to navigate away.
       let navigating = false;
       try {
         const res = await fetch('/api/publish', {
           method: 'POST',
           headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ slug, content }),
+          body: JSON.stringify({ slug, content, html: assembledHtml }),
         });
         const j = await res.json().catch(() => ({}));
         if (res.ok && j.ok) {
