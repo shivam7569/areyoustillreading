@@ -1,23 +1,26 @@
 /**
  * src/lib/render-post-browser.mjs — BROWSER build of the render-at-publish engine.
  *
- * Same createMarkdownProcessor pipeline as the Node render-post.mjs / the build,
- * but assembled for the browser: Shiki and KaTeX run client-side fine. D2 is the
- * one plugin that can't use its Node (worker_thread) backend here — it's handled
- * separately with the editor's WASM D2 (added once this core is proven to bundle
- * and run in the browser). This module is currently a FEASIBILITY SPIKE for that.
+ * Renders a post's Markdown body to HTML in the browser using the SAME shared
+ * markdown pipeline as the static build (src/lib/markdown-config.mjs) — Shiki (JS
+ * regex engine), KaTeX — plus the WASM D2 backend (src/lib/rehype-d2-browser.mjs).
+ * Output is byte-identical to the build, so a post published instantly looks exactly
+ * like one rendered by a full site build. This is what lets /api/publish write a
+ * finished body to KV and serve it in seconds without a rebuild.
+ *
+ * Two browser-compat details make @astrojs/markdown-remark run client-side:
+ *   1. Shiki's JS regex engine (in the shared config) instead of Oniguruma WASM —
+ *      the WASM engine never loads in the browser and hangs the render.
+ *   2. A Vite `define` (astro.config.mjs) replaces the process.env token markdown-
+ *      remark reads at module load; the shim below covers any later process.* access.
  */
 import { createMarkdownProcessor } from '@astrojs/markdown-remark';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-// Shiki's DEFAULT engine loads the Oniguruma WASM binary at runtime, which never
-// resolves in the browser (the render hangs forever). The pure-JS regex engine
-// avoids WASM entirely and runs client-side. See research finding on shiki#510.
-import { createJavaScriptRegexEngine } from 'shiki';
+import { markdownConfig } from './markdown-config.mjs';
+import rehypeD2Browser from './rehype-d2-browser.mjs';
 
-// @astrojs/markdown-remark references the Node `process` global at runtime (e.g.
-// process.env / NODE_ENV checks). In the browser that's a ReferenceError, so
-// provide a minimal shim once at module load, before any render runs.
+// Minimal Node `process` shim for the browser. The import-time
+// process.env.ASTRO_PERFORMANCE_BENCHMARK read in markdown-remark is neutralized by a
+// Vite define; this covers any runtime process.* access during rendering.
 if (typeof globalThis.process === 'undefined') {
   globalThis.process = {
     env: { NODE_ENV: 'production' },
@@ -34,18 +37,7 @@ let processorPromise = null;
 
 export async function renderPostBodyBrowser(markdown) {
   if (!processorPromise) {
-    processorPromise = createMarkdownProcessor({
-      // D2 excluded from Shiki (as in the build); D2 fences pass through untouched
-      // for now (browser D2 backend wired in a follow-up).
-      syntaxHighlight: { type: 'shiki', excludeLangs: ['d2'] },
-      remarkPlugins: [remarkMath],
-      rehypePlugins: [rehypeKatex],
-      shikiConfig: {
-        themes: { light: 'github-light', dark: 'github-dark' },
-        wrap: true,
-        engine: createJavaScriptRegexEngine(),
-      },
-    });
+    processorPromise = createMarkdownProcessor(markdownConfig(rehypeD2Browser));
   }
   const processor = await processorPromise;
   const { code } = await processor.render(markdown || '');

@@ -22,6 +22,7 @@
  * WASM build the editor already loads; everything else in the pipeline is identical.
  */
 import { createMarkdownProcessor } from '@astrojs/markdown-remark';
+import rehypeD2 from '../../plugins/rehype-d2.mjs';
 import { markdownConfig } from './markdown-config.mjs';
 
 // Building the processor is relatively expensive (loads Shiki grammars/themes), so
@@ -34,7 +35,7 @@ let processorPromise = null;
  * @returns {Promise<string>} rendered HTML.
  */
 export async function renderPostBody(markdown) {
-  if (!processorPromise) processorPromise = createMarkdownProcessor(markdownConfig);
+  if (!processorPromise) processorPromise = createMarkdownProcessor(markdownConfig(rehypeD2));
   const processor = await processorPromise;
   const { code } = await processor.render(markdown || '');
   return code;

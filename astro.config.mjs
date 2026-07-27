@@ -70,9 +70,10 @@
  */
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
+import rehypeD2 from './plugins/rehype-d2.mjs';
 // The Markdown pipeline (Shiki + KaTeX + D2) is defined ONCE in a shared module so
-// the render-at-publish path (src/lib/render-post.mjs) produces byte-identical HTML
-// to this build. See that file for the full rationale; edit the pipeline there.
+// the render-at-publish paths produce byte-identical HTML to this build. D2 is passed
+// in per environment (Node worker build here); see that file for the full rationale.
 import { markdownConfig } from './src/lib/markdown-config.mjs';
 
 // https://astro.build/config
@@ -95,7 +96,7 @@ export default defineConfig({
   // excluded, remark-math → rehype-katex, then rehype-d2 → inline SVG). Defined in
   // src/lib/markdown-config.mjs and shared verbatim with the render-at-publish path
   // so instantly-published posts render identically to this build. Edit it there.
-  markdown: markdownConfig,
+  markdown: markdownConfig(rehypeD2),
 
   vite: {
     // The render-at-publish engine (src/lib/render-post-browser.mjs) runs
