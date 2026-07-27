@@ -71,23 +71,53 @@ export async function onRequest(context) {
   const kv = env.POSTS_HTML;
   if (!kv) return next();
 
-  let html;
+  let raw;
   try {
-    html = await kv.get(slug);
+    raw = await kv.get(slug);
   } catch {
     return next();
   }
-  if (html == null) return next(); // not published via the overlay → static asset.
+  if (raw == null) return next(); // not published via the overlay → static asset.
 
-  return new Response(request.method === 'HEAD' ? null : html, {
+  // KV stores JSON: { html, publishedAt }. Anything unexpected → fall through.
+  let entry;
+  try { entry = JSON.parse(raw); } catch { return next(); }
+  if (!entry || typeof entry.html !== 'string') return next();
+
+  // STALENESS GATE: serve the KV copy ONLY while it is newer than this deployment's
+  // build. Once the git-commit rebuild lands (post baked in, current hashed asset
+  // URLs), builtAt >= publishedAt and we hand back the fresh static page instead —
+  // so a stored page's asset URLs can never go stale. Publishing writes KV with a
+  // publishedAt newer than the live build, so the new post shows instantly; the
+  // rebuild ~1-2 min later flips this route back to static.
+  const builtAt = await getBuiltAt(url);
+  if (builtAt && entry.publishedAt && entry.publishedAt <= builtAt) return next();
+
+  return new Response(request.method === 'HEAD' ? null : entry.html, {
     status: 200,
     headers: {
       'content-type': 'text/html; charset=utf-8',
-      // Always revalidate for now so an edit is visible immediately; KV reads are
-      // edge-fast. Aggressive edge caching + single-path purge lands in a later
-      // phase (Workers Cache with a TTL, purged on publish).
+      // Revalidate each load for now (KV reads are edge-fast); a Workers Cache TTL
+      // with single-path purge on publish is a later optimization.
       'cache-control': 'public, max-age=0, must-revalidate',
       'x-served-by': 'kv-overlay',
     },
   });
+}
+
+// This deployment's build timestamp, from the static /build-meta.json emitted per
+// build. Edge-cached, so it's one cheap subrequest amortized across requests. On any
+// failure returns 0 → the staleness gate then serves the KV copy (fail toward showing
+// freshly-published content rather than hiding it).
+async function getBuiltAt(url) {
+  try {
+    const r = await fetch(new URL('/build-meta.json', url), {
+      cf: { cacheTtl: 300, cacheEverything: true },
+    });
+    if (!r.ok) return 0;
+    const j = await r.json();
+    return typeof j.builtAt === 'number' ? j.builtAt : 0;
+  } catch {
+    return 0;
+  }
 }
