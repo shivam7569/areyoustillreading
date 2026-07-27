@@ -68,6 +68,8 @@
  *     never be added — they would ship to the browser and bloat/leak output.
  */
 
+// Self-hosted Inter (variable) — CSP-safe, bundled by Astro (no external CDN).
+import '@fontsource-variable/inter';
 // Bundle the global stylesheet into every page (single shared import point).
 import '../styles/global.css';
 // Delegate all <head> construction (SEO/OG/canonical/meta) to BaseHead.
@@ -108,6 +110,11 @@ const nav = [
   { href: '/resume', label: 'Resume' },
   { href: '/account', label: 'Account' },
 ];
+
+// Current path, for marking the active nav item (aria-current="page"). Home
+// matches exactly; the rest match on prefix so /blog/<post> keeps Blog active.
+const pathname = Astro.url.pathname.replace(/\/$/, '') || '/';
+const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/'));
 ---
 
 {/* Root document. lang="en" set once here so every page inherits it (a11y/SEO). */}
@@ -123,16 +130,21 @@ const nav = [
   <body>
     {/* Persistent site header: brand wordmark links home, followed by primary nav. */}
     <header class="site-header">
-      <a href="/" class="brand">areyoustillreading</a>
-      <nav>
-        {/* Render the static `nav` array as anchors — one <a> per entry. Data-driven
-            so adding/removing a link is a one-line edit above, not markup surgery. */}
-        {nav.map((item) => <a href={item.href}>{item.label}</a>)}
-        {/* Studio (admin dashboard) entry — hidden by default; the script below reveals
-            it only for a signed-in admin (is_admin). Link visibility is UX only; the
-            /admin area and every mutation are enforced by the gate + requireAdmin. */}
-        <a href="/admin" id="nav-admin" class="nav-studio" hidden>Studio</a>
-      </nav>
+      <div class="site-header-inner">
+        <a href="/" class="brand">areyoustillreading</a>
+        <nav>
+          {/* Render the static `nav` array as anchors — one <a> per entry. Data-driven
+              so adding/removing a link is a one-line edit above, not markup surgery.
+              aria-current marks (and styles) the active section. */}
+          {nav.map((item) => (
+            <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>{item.label}</a>
+          ))}
+          {/* Studio (admin dashboard) entry — hidden by default; the script below reveals
+              it only for a signed-in admin (is_admin). Link visibility is UX only; the
+              /admin area and every mutation are enforced by the gate + requireAdmin. */}
+          <a href="/admin" id="nav-admin" class="nav-studio" hidden>Studio</a>
+        </nav>
+      </div>
     </header>
     {/* Page-specific content is injected here by the wrapping page via the slot. */}
     <main>
@@ -169,13 +181,16 @@ const nav = [
       }
     </script>
     <footer class="site-footer">
-      {/* Copyright year computed at BUILD TIME (this is SSG, not SSR): the year is
-          frozen to whenever the site was last built/deployed, not the visitor's
-          current date. Any rebuild rolls it over — a manual `npm run deploy` OR
-          the publish pipeline committing a post and triggering a Pages Git
-          rebuild — so in practice it advances the next time anything ships, not
-          punctually on Jan 1. */}
-      <p>&copy; {new Date().getFullYear()} areyoustillreading</p>
+      <div class="site-footer-inner">
+        {/* Copyright year computed at BUILD TIME (this is SSG, not SSR): frozen to
+            the last build/deploy, advancing whenever anything next ships. */}
+        <p>&copy; {new Date().getFullYear()} areyoustillreading</p>
+        <div class="footer-links">
+          <a href="/blog">Blog</a>
+          <a href="/projects">Projects</a>
+          <a href="/rss.xml">RSS</a>
+        </div>
+      </div>
     </footer>
     {/* Cookieless first-party analytics beacon — public pages only. */}
     <Analytics />

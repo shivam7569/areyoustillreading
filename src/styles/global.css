@@ -1,216 +1,236 @@
 /*
- * global.css — the ONE global stylesheet for the whole site
+ * global.css — the ONE global stylesheet for the whole site.
  * =========================================================================
- * WHAT THIS FILE IS
- *   The single, hand-written global stylesheet for areyoustillreading.dev.
- *   It defines the design tokens (CSS custom properties), the base element
- *   resets/typography, and the class-based styles for the shared chrome
- *   (header/nav, footer, hero) plus the blog post + listing pages. There is
- *   NO CSS framework (no Tailwind, no CSS-in-JS): everything the reader sees
- *   is either declared here or is scoped <style> inside an individual .astro
- *   component/page.
+ * Refined-minimal design system: design tokens (CSS custom properties), base
+ * typography, and the shared public chrome (header/nav, footer, hero) + blog
+ * listing/post styles. No framework. Imported once by the site layouts
+ * (BaseLayout for the public site, AdminLayout for the studio — which then
+ * layers admin.css on top). Token NAMES here are a contract admin.css relies on
+ * (--bg/--fg/--muted/--accent/--border/--code-bg/--font-sans/…): refine values
+ * freely, but renaming a token silently unstyles the dashboard.
  *
- * WHERE IT SITS IN THE ARCHITECTURE
- *   Stack: static Astro build deployed to Cloudflare Pages, with Pages
- *   Functions (functions/api/...) for dynamic bits, Supabase for auth/data,
- *   and Dodo for payments. This file is a pure build-time asset — it ships
- *   as static CSS, runs entirely in the reader's browser, and touches none
- *   of the server/functions/payment layers.
- *   It is pulled in ONCE by the site-wide layout (see src/layouts/*.astro,
- *   which imports "../styles/global.css"). Because Astro bundles/hashes the
- *   import, every page that uses that layout inherits these styles. Anything
- *   NOT here is expected to live in a component's own scoped <style> block.
- *
- * KEY DEPENDENCIES / WHAT DEPENDS ON THIS
- *   - Consumed by: the base layout .astro file (via `import`), and therefore
- *     transitively by essentially every rendered page.
- *   - The markup class names below (.site-header, .brand, .site-footer,
- *     .hero, .cta, .post-list, .lede, .tags, .tag, .count) are contracts:
- *     the .astro templates emit exactly these classes. Renaming a selector
- *     here silently unstyles that markup — grep the .astro files before you
- *     touch a class name.
- *   - Shiki (Astro's built-in Markdown syntax highlighter) emits .astro-code
- *     elements and inline CSS variables; the dark-mode block near the bottom
- *     depends on Shiki's dual-theme output. See "Shiki dual-theme" below.
- *
- * DESIGN DECISIONS & NON-OBVIOUS GOTCHAS
- *   - Theming is OS-driven only. Colors are tokens on :root and are
- *     overridden inside `@media (prefers-color-scheme: dark)`. There is NO
- *     manual light/dark toggle and no data-theme attribute — the browser's
- *     system preference is the single source of truth. Add new colors as
- *     tokens and give them a dark override, or they will look wrong in dark
- *     mode.
- *   - `--measure: 68ch` is the reading-measure token. Both `main` and the
- *     header/footer clamp to it so body text and chrome stay visually
- *     aligned on one column. Change it in one place to reflow the whole site.
- *   - Sticky footer: `body` is a flex column with `min-height: 100vh`, `main`
- *     uses `flex: 1 0 auto`, and `.site-footer` uses `flex-shrink: 0`. This
- *     is what keeps the footer at the bottom on short pages. Do not drop the
- *     flex layout on body or the footer will float up.
- *   - This global sheet is deliberately small. Rich, page-specific UI — the
- *     admin Milkdown/Crepe editor and its publish modal (src/pages/admin/
- *     editor.astro), interactive Pyodide/Plotly "python" plot cells
- *     (src/lib/plotly.js), notebook-style stdout output, and D2 diagrams
- *     (rendered by @terrastruct/d2 via plugins/rehype-d2.mjs; D2 REPLACED the
- *     old Mermaid pipeline) — is styled by those components' own scoped CSS,
- *     NOT here. Do not expect editor/plot/diagram styling in this file.
- *
- * SECURITY / CORRECTNESS CAVEATS
- *   - No user data, secrets, or logic here — pure presentation.
- *   - The only `!important` in the file is in the Shiki dark-mode block and
- *     is intentional (see that comment). Avoid adding more `!important`;
- *     specificity wars here are hard to unwind because this sheet is global.
+ * Theming is OS-driven (prefers-color-scheme); every colour has a dark override.
+ * Rich page-specific UI (editor, plot cells, D2 diagrams, dashboard) is styled by
+ * its own scoped CSS, not here. The only !important is the Shiki dark block.
  * =========================================================================
  */
 :root {
-  /* Design tokens (light theme defaults). Every color has a dark override in
-     the prefers-color-scheme block below. --measure is the reading width;
-     --space is the base spacing unit that most padding/margins derive from. */
-  --measure: 68ch;
-  --bg: #ffffff;
-  --fg: #1a1a1a;
-  --muted: #5b5b5b;
-  --accent: #2f5bff;
-  --border: #e6e6e6;
-  --code-bg: #f5f5f7;
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* ---- Layout ---- */
+  --measure: 68ch;              /* prose reading width */
+  --page: 46rem;                /* chrome + landing max width */
   --space: 1rem;
+
+  /* ---- Type ---- */
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --fs-xs: 0.78rem;
+  --fs-sm: 0.885rem;
+  --fs-base: 1.06rem;
+  --fs-lg: 1.2rem;
+  --fs-xl: 1.5rem;
+  --fs-2xl: 2rem;
+  --fs-hero: clamp(2.4rem, 6vw, 3.5rem);
+  --lh-tight: 1.14;
+  --lh-body: 1.72;
+
+  /* ---- Colour (light) ---- */
+  --bg: #ffffff;
+  --surface: #f8f8fa;           /* subtly raised: cards, hovers */
+  --fg: #17181b;
+  --muted: #5b5e67;
+  --faint: #8a8d96;             /* meta / timestamps */
+  --accent: #3a5bff;
+  --accent-ink: #2a45d8;        /* accent on hover (light) */
+  --border: #ececef;
+  --border-strong: #dedee3;
+  --code-bg: #f6f6f8;
+
+  /* ---- Effects ---- */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --shadow: 0 1px 2px rgba(20, 22, 28, 0.04), 0 10px 30px rgba(20, 22, 28, 0.06);
+  --dur: 160ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Dark theme: same token names, remapped values. Triggered purely by the
-   OS/browser "prefers dark" setting — there is no in-page toggle. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1115;
-    --fg: #e8e8ea;
-    --muted: #a0a0a8;
-    --accent: #7aa2ff;
-    --border: #262a33;
-    --code-bg: #171a21;
+    --bg: #0c0d10;
+    --surface: #14161b;
+    --fg: #e9eaec;
+    --muted: #9a9da6;
+    --faint: #6d707a;
+    --accent: #8aa2ff;
+    --accent-ink: #a8b8ff;
+    --border: #20222a;
+    --border-strong: #2c2f38;
+    --code-bg: #14161b;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 34px rgba(0, 0, 0, 0.4);
   }
 }
 
 * { box-sizing: border-box; }
-
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 
 body {
   margin: 0;
   font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-body);
   color: var(--fg);
   background: var(--bg);
-  line-height: 1.65;
-  font-size: 1.05rem;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";  /* Inter refinements */
   display: flex;
   flex-direction: column;
   min-height: 100vh;
 }
 
-/* Main content column: clamped to the reading measure and centered.
-   `flex: 1 0 auto` lets it grow to fill vertical space so the footer is
-   pushed to the bottom on short pages (see sticky-footer note in header). */
+/* Reading column: prose clamps to --measure and centers; the footer sticks to the
+   bottom on short pages via the flex column above. */
 main {
   width: 100%;
   max-width: var(--measure);
   margin: 0 auto;
-  padding: calc(var(--space) * 2) var(--space);
+  padding: clamp(2rem, 5vw, 3.5rem) var(--space);
   flex: 1 0 auto;
 }
 
-h1, h2, h3 { line-height: 1.25; font-weight: 650; }
-h1 { font-size: 2rem; margin: 0 0 0.5rem; }
-h2 { font-size: 1.4rem; margin: 2rem 0 0.5rem; }
+/* ---- Headings ---- */
+h1, h2, h3, h4 { line-height: var(--lh-tight); font-weight: 680; letter-spacing: -0.02em; color: var(--fg); }
+h1 { font-size: var(--fs-2xl); margin: 0 0 0.6rem; }
+h2 { font-size: var(--fs-xl); margin: 2.5rem 0 0.85rem; }
+h3 { font-size: var(--fs-lg); margin: 1.9rem 0 0.6rem; letter-spacing: -0.012em; }
+article :where(h2, h3, h4) { scroll-margin-top: 5rem; }
 
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
+p { margin: 0 0 1.15rem; }
 
-p { margin: 0 0 1rem; }
+a { color: var(--accent); text-decoration: none; transition: color var(--dur) var(--ease); }
+a:hover { color: var(--accent-ink); }
 
-.lede { font-size: 1.2rem; color: var(--muted); }
+.lede { font-size: var(--fs-lg); line-height: 1.55; color: var(--muted); font-weight: 400; }
 
-code {
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-  background: var(--code-bg);
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
-}
-pre {
-  background: var(--code-bg);
-  padding: var(--space);
-  border-radius: 8px;
-  overflow-x: auto;
-}
-pre code { background: none; padding: 0; }
+/* Body-copy links (inside prose) get a subtle underline for scannability. */
+article a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+article a:hover { text-decoration-color: currentColor; }
 
-/* D2 diagrams — rendered to inline SVG at build time (rehype-d2) AND at publish time
-   (rehype-d2-browser). Published pages had no styling for these (only the editor's
-   live `.d2-preview` was styled); mirror it here so diagrams are centered, scale to
-   the column, and scroll if wider. `.d2-error` styles the fallback box on a bad diagram. */
-.d2-diagram { display: flex; justify-content: center; margin: 1.25rem 0; overflow-x: auto; }
+/* ---- Code ---- */
+code { font-family: var(--font-mono); font-size: 0.875em; background: var(--code-bg); padding: 0.15em 0.4em; border-radius: var(--radius-sm); }
+pre { background: var(--code-bg); padding: 1.05rem 1.15rem; border-radius: var(--radius); overflow-x: auto; border: 1px solid var(--border); font-size: 0.92rem; line-height: 1.62; }
+pre code { background: none; padding: 0; font-size: inherit; }
+
+/* ---- Prose elements ---- */
+blockquote { margin: 1.6rem 0; padding: 0.15rem 0 0.15rem 1.15rem; border-left: 3px solid var(--border-strong); color: var(--muted); }
+blockquote p:last-child { margin-bottom: 0; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.75rem 0; }
+img { max-width: 100%; height: auto; border-radius: var(--radius); }
+ul, ol { padding-left: 1.35rem; }
+li { margin: 0.35rem 0; }
+
+/* D2 diagrams — inline SVG at build + publish time. Centered, scale to column,
+   scroll if wider. `.d2-error` is the bad-diagram fallback box. */
+.d2-diagram { display: flex; justify-content: center; margin: 1.5rem 0; overflow-x: auto; }
 .d2-diagram svg { max-width: 100%; height: auto; }
 .d2-error {
   padding: 1rem; color: #e5484d; white-space: pre-wrap; overflow-x: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em;
+  font-family: var(--font-mono); font-size: 0.9em;
 }
 
-/* Header / nav */
+/* ---- Header / nav ---- */
 .site-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  max-width: var(--measure);
-  margin: 0 auto;
-  padding: var(--space);
+  position: sticky; top: 0; z-index: 50;
   border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  backdrop-filter: saturate(180%) blur(14px);
 }
-.brand { font-weight: 700; color: var(--fg); }
-.site-header nav { display: flex; gap: 1.1rem; }
-.site-header nav a { color: var(--muted); }
-.site-header nav a:hover { color: var(--fg); text-decoration: none; }
-/* The admin-only "Studio" entry (revealed by BaseLayout's script for admins). */
+.site-header-inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  max-width: var(--page); margin: 0 auto; padding: 0.8rem var(--space);
+}
+.brand { font-weight: 700; font-size: 1.02rem; letter-spacing: -0.025em; color: var(--fg); }
+.brand:hover { color: var(--fg); }
+.site-header nav { display: flex; gap: 0.15rem; align-items: center; }
+.site-header nav a {
+  color: var(--muted); font-size: var(--fs-sm); font-weight: 500;
+  padding: 0.4rem 0.62rem; border-radius: var(--radius-sm);
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.site-header nav a:hover { color: var(--fg); background: var(--surface); }
+.site-header nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .site-header nav a.nav-studio { color: var(--accent); font-weight: 600; }
+.site-header nav a.nav-studio:hover { color: var(--accent-ink); }
 
-/* Footer */
-.site-footer {
-  flex-shrink: 0;
-  max-width: var(--measure);
-  margin: 0 auto;
-  padding: var(--space);
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.9rem;
+/* ---- Footer ---- */
+.site-footer { flex-shrink: 0; border-top: 1px solid var(--border); color: var(--faint); font-size: var(--fs-sm); }
+.site-footer-inner {
+  max-width: var(--page); margin: 0 auto; padding: 2.25rem var(--space);
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+}
+.site-footer a { color: var(--muted); }
+.site-footer a:hover { color: var(--fg); }
+.footer-links { display: flex; gap: 1.1rem; }
+
+/* ---- Buttons (public) — distinct names from admin.css's .btn* ---- */
+.cta, .cta-secondary {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-size: var(--fs-sm); font-weight: 600; line-height: 1;
+  padding: 0.7rem 1.2rem; border-radius: var(--radius);
+  border: 1px solid transparent; cursor: pointer;
+  transition: transform var(--dur) var(--ease), background var(--dur) var(--ease), border-color var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.cta { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.cta:hover { color: var(--bg); opacity: 0.88; transform: translateY(-1px); }
+.cta-secondary { color: var(--fg); border-color: var(--border-strong); background: transparent; }
+.cta-secondary:hover { color: var(--fg); border-color: var(--fg); background: var(--surface); transform: translateY(-1px); }
+
+/* ---- Home hero ---- */
+.hero { padding: clamp(1.5rem, 5vw, 3.5rem) 0 1.75rem; }
+.hero h1 { font-size: var(--fs-hero); letter-spacing: -0.035em; line-height: 1.04; margin: 0 0 1.05rem; }
+.hero .lede { max-width: 42ch; }
+.hero-actions { display: flex; gap: 0.7rem; margin-top: 1.7rem; flex-wrap: wrap; }
+@media (prefers-reduced-motion: no-preference) {
+  .hero { animation: rise 0.5s var(--ease) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 }
 
-/* Home hero */
-.hero { padding: 2rem 0; }
-.cta { font-weight: 600; }
+/* Section heading with a trailing "see all" link. */
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 2.75rem 0 0.5rem; }
+.section-head h2 { margin: 0; font-size: var(--fs-lg); }
+.section-head a { font-size: var(--fs-sm); font-weight: 500; color: var(--muted); }
+.section-head a:hover { color: var(--accent); }
 
-/* Post + listing */
-article time { color: var(--muted); font-size: 0.95rem; }
-.post-list { list-style: none; padding: 0; }
-.post-list li { padding: 1rem 0; border-bottom: 1px solid var(--border); }
-.post-list h2 { margin: 0 0 0.25rem; font-size: 1.25rem; }
+/* ---- Post listing ---- */
+article time { color: var(--faint); font-size: var(--fs-sm); }
+.post-list { list-style: none; padding: 0; margin: 0; }
+.post-list li { padding: 1.5rem 0; border-bottom: 1px solid var(--border); }
+.post-list li:first-child { padding-top: 0.5rem; }
+.post-list li:last-child { border-bottom: 0; }
+.post-list h2 { margin: 0 0 0.3rem; font-size: var(--fs-lg); letter-spacing: -0.012em; }
+.post-list h2 a { color: var(--fg); }
+.post-list h2 a:hover { color: var(--accent); }
+.post-list time { color: var(--faint); font-size: var(--fs-sm); }
+.post-list p { margin: 0.45rem 0 0; color: var(--muted); }
 
-/* Shiki dual-theme code blocks.
-   Astro's Markdown highlighter (Shiki) renders fenced code as `.astro-code`
-   and inlines BOTH palettes as CSS variables on each token: --shiki-light /
-   --shiki-light-bg (used by default) and --shiki-dark / --shiki-dark-bg. In
-   dark mode we swap every token and its background to the dark vars. The
-   `!important` is required to beat Shiki's own inline styles on those spans;
-   without it the light palette wins and code is unreadable on dark bg. */
+/* Shiki dual-theme code blocks. Shiki inlines both palettes as CSS vars per token;
+   in dark mode we swap to the dark vars. !important beats Shiki's inline styles. */
 @media (prefers-color-scheme: dark) {
-  .astro-code,
-  .astro-code span {
+  .astro-code, .astro-code span {
     color: var(--shiki-dark) !important;
     background-color: var(--shiki-dark-bg) !important;
   }
 }
 
-/* Tags */
-.tags { margin-top: -0.5rem; }
-.tag { display: inline-block; margin-right: 0.6rem; font-size: 0.9rem; }
+/* ---- Tags ---- */
+.tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0 0; }
+.tag {
+  display: inline-block; font-size: var(--fs-sm); color: var(--muted);
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 0.12rem 0.6rem; border-radius: 999px;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.tag:hover { color: var(--fg); border-color: var(--border-strong); }
 .count { color: var(--muted); }

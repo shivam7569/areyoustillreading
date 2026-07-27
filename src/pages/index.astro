@@ -87,13 +87,16 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft))
 
 {/* title flows into BaseLayout's <head> (<title> + OG/meta). This page owns only the body slot. */}
 <BaseLayout title="areyoustillreading — LLM engineering notes">
-  {/* Static hero: fixed marketing copy + primary CTA into the blog archive. No data binding. */}
+  {/* Static hero: fixed marketing copy + primary CTAs. No data binding. */}
   <section class="hero">
     <h1>areyoustillreading</h1>
     <p class="lede">
-      In-depth writing on LLM engineering, plus the projects behind it.
+      In-depth writing on LLM engineering — and the projects behind it.
     </p>
-    <p><a class="cta" href="/blog">Read the blog &rarr;</a></p>
+    <div class="hero-actions">
+      <a class="cta" href="/blog">Read the blog &rarr;</a>
+      <a class="cta-secondary" href="/projects">View projects</a>
+    </div>
   </section>
 
   {/* Short-circuit: render the whole "Latest posts" section ONLY if at least one
@@ -101,7 +104,10 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft))
       or empty <ul>. `&&` returns false (renders nothing) when the list is empty. */}
   {posts.length > 0 && (
     <section>
-      <h2>Latest posts</h2>
+      <div class="section-head">
+        <h2>Latest posts</h2>
+        <a href="/blog">All posts &rarr;</a>
+      </div>
       <ul class="post-list">
         {/* One <li> per teaser entry. post.id is the collection slug used to build
             the canonical /blog/<slug> permalink — it must match the blog route. */}
