@@ -4,6 +4,7 @@ description: "dsdfsdfgsfdgfds"
 pubDate: "2026-07-27"
 tags: []
 draft: false
+gateable: true
 ---
 Start writing.
 
