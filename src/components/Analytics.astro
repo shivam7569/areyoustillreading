@@ -1,0 +1,124 @@
+---
+/**
+ * Analytics.astro — the first-party, cookieless analytics beacon.
+ * Included once in BaseLayout so it runs on every PUBLIC page (the /admin studio
+ * uses AdminLayout and is never tracked). Sends two kinds of beacon to /api/track:
+ *   1. a 'view' on load (and on back/forward bfcache restore), and
+ *   2. a 'read' (max scroll depth + FOREGROUND dwell) — (re)sent whenever the page
+ *      is hidden and at pagehide; the server keeps the MAX per (session, page), so
+ *      re-sends across tab-switches don't inflate counts or drag averages down.
+ * PRIVACY: no cookies, no fingerprinting, no PII. Respects Do-Not-Track / Global
+ * Privacy Control. The "session" is a random id kept only in sessionStorage (gone
+ * when the tab closes). Same-origin POST — no third-party requests, no CSP change.
+ *
+ * OWNER EXCLUSION IS BEST-EFFORT, NOT A GUARANTEE. It relies on a synchronous
+ * localStorage flag, so it reliably excludes you only where that flag is already
+ * known: a signed-in admin whose browser has cached the admin flag, or any browser
+ * where you've used ?noanalytics=1. It CANNOT auto-detect a logged-out owner on a
+ * fresh/incognito browser (no client signal exists) — so when proof-reading
+ * anonymously, load a page with ?noanalytics=1 once to opt that browser out.
+ */
+---
+<script is:inline>
+  (function () {
+    try {
+      // Explicit, auth-independent owner opt-out: ?noanalytics=1 stops counting AND
+      // remembers the choice for this browser/profile. The reliable way to exclude
+      // your own incognito / second-browser proof-reading.
+      if (/[?&]noanalytics\b/i.test(location.search)) {
+        try { localStorage.setItem('aysr:no-analytics', '1'); } catch (e) {}
+        return;
+      }
+      // Honor privacy signals.
+      if (
+        navigator.doNotTrack === '1' ||
+        window.doNotTrack === '1' ||
+        navigator.msDoNotTrack === '1' ||
+        navigator.globalPrivacyControl === true
+      ) return;
+    } catch (e) {}
+
+    // Best-effort owner exclusion (see the header note). Re-checked before each
+    // 'read' send too, in case the admin flag resolves mid-visit.
+    function excluded() {
+      try {
+        if (localStorage.getItem('aysr:no-analytics') === '1') return true;
+        if (localStorage.getItem('aysr:admin-ok') === '1') return true;
+      } catch (e) {}
+      return false;
+    }
+    if (excluded()) return;
+
+    var path = location.pathname;
+    if (path.indexOf('/admin') === 0) return; // never track the studio
+
+    // Per-tab random id (sessionStorage): not a cookie, not persistent, not identity.
+    var sid;
+    try {
+      sid = sessionStorage.getItem('aysr:sid');
+      if (!sid) {
+        sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        sessionStorage.setItem('aysr:sid', sid);
+      }
+    } catch (e) { sid = 'nostore'; }
+
+    // External referrer HOSTNAME only (never the full URL, never our own host).
+    var ref = '';
+    try {
+      if (document.referrer) {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) ref = h;
+      }
+    } catch (e) {}
+
+    function send(payload) {
+      try {
+        var data = JSON.stringify(payload);
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/track', new Blob([data], { type: 'application/json' }));
+        } else {
+          fetch('/api/track', { method: 'POST', headers: { 'content-type': 'application/json' }, body: data, keepalive: true }).catch(function () {});
+        }
+      } catch (e) {}
+    }
+
+    // --- Pageview ------------------------------------------------------------
+    send({ t: 'view', p: path, r: ref, s: sid });
+
+    // --- Read depth + FOREGROUND dwell --------------------------------------
+    // maxPct only grows. dwell counts only time the page is actually VISIBLE, so a
+    // long background tab can't inflate it.
+    var maxPct = 0, lastResume = Date.now(), activeMs = 0;
+    function measure() {
+      var scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      var pct = scrollable <= 0 ? 100 : Math.round((window.scrollY / scrollable) * 100);
+      if (pct < 0) pct = 0; if (pct > 100) pct = 100;
+      if (pct > maxPct) maxPct = pct;
+    }
+    measure();
+    window.addEventListener('scroll', measure, { passive: true });
+
+    function dwellMs() {
+      return activeMs + (document.visibilityState === 'visible' ? (Date.now() - lastResume) : 0);
+    }
+    function sendRead() {
+      if (excluded()) return;
+      send({ t: 'read', p: path, s: sid, pct: maxPct, ms: dwellMs() });
+    }
+    // (Re)send read on every hide + at pagehide — server keeps the max per session/page.
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') { activeMs += Date.now() - lastResume; sendRead(); }
+      else { lastResume = Date.now(); }
+    });
+    window.addEventListener('pagehide', sendRead);
+
+    // --- Back/Forward cache restore -----------------------------------------
+    // A page restored from bfcache does NOT re-run this script, so count the repeat
+    // view and re-arm read tracking for the restored visit.
+    window.addEventListener('pageshow', function (e) {
+      if (!e.persisted || excluded()) return;
+      send({ t: 'view', p: path, r: ref, s: sid });
+      maxPct = 0; activeMs = 0; lastResume = Date.now(); measure();
+    });
+  })();
+</script>

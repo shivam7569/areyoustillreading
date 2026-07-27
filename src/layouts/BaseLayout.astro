@@ -72,6 +72,8 @@
 import '../styles/global.css';
 // Delegate all <head> construction (SEO/OG/canonical/meta) to BaseHead.
 import BaseHead from '../components/BaseHead.astro';
+// First-party, cookieless analytics beacon (public pages only; see the component).
+import Analytics from '../components/Analytics.astro';
 
 /**
  * Props accepted from the wrapping page.
@@ -175,5 +177,7 @@ const nav = [
           punctually on Jan 1. */}
       <p>&copy; {new Date().getFullYear()} areyoustillreading</p>
     </footer>
+    {/* Cookieless first-party analytics beacon — public pages only. */}
+    <Analytics />
   </body>
 </html>

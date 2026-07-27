@@ -1,0 +1,206 @@
+---
+/**
+ * /admin/analytics — first-party traffic dashboard.
+ * Reads the admin-gated GET /api/admin/analytics (aggregated from the cookieless
+ * analytics_events table) and joins post slugs → titles via /api/admin/posts.
+ * Shows KPIs, a daily views chart, top posts by views + read depth, referrers,
+ * and in-range conversion (new subscribers, unlocks). No third-party analytics.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Analytics — Studio" heading="Analytics" active="analytics">
+  <section>
+    <div class="page-head">
+      <div>
+        <h1>Analytics</h1>
+        <p class="sub">Who's reading — privacy-first, no cookies, all your own data.</p>
+      </div>
+      <div class="range" role="tablist" aria-label="Time range">
+        <button class="btn btn-sm seg" data-range="7d" type="button">7 days</button>
+        <button class="btn btn-sm seg is-on" data-range="30d" type="button">30 days</button>
+        <button class="btn btn-sm seg" data-range="90d" type="button">90 days</button>
+        <button class="btn btn-sm seg" data-range="all" type="button">All time</button>
+      </div>
+    </div>
+
+    <div id="setup" class="card card-pad notice" hidden>
+      <strong>Analytics isn't set up yet.</strong> Run <code>db/analytics.sql</code> once in the
+      Supabase SQL editor, then reload — traffic will start recording immediately.
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi card"><p class="kpi-label">Views</p><div class="kpi-value loading" id="k-views">—</div><div class="kpi-foot" id="k-views-foot">page loads</div></div>
+      <div class="kpi card"><p class="kpi-label">Visitors</p><div class="kpi-value loading" id="k-visitors">—</div><div class="kpi-foot">unique sessions</div></div>
+      <div class="kpi card"><p class="kpi-label">Avg. read depth</p><div class="kpi-value loading" id="k-read">—</div><div class="kpi-foot" id="k-read-foot">how far people scroll</div></div>
+      <div class="kpi card"><p class="kpi-label">New subscribers</p><div class="kpi-value loading" id="k-subs">—</div><div class="kpi-foot">confirmed, in range</div></div>
+      <div class="kpi card"><p class="kpi-label">Unlocks</p><div class="kpi-value loading" id="k-unlocks">—</div><div class="kpi-foot">paid, in range</div></div>
+    </div>
+
+    <div class="card card-pad chart-card">
+      <div class="card-title">Views over time</div>
+      <div id="chart"><div class="muted">Loading…</div></div>
+    </div>
+
+    <div class="cols">
+      <div class="card">
+        <div class="card-title pad">Top posts</div>
+        <div id="posts"><div class="card-pad muted">Loading…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title pad">Where readers come from</div>
+        <div id="refs"><div class="card-pad muted">Loading…</div></div>
+      </div>
+    </div>
+  </section>
+</AdminLayout>
+
+<style>
+  /* Only rules that target STATIC template elements live here; dynamically
+     injected chart/rows use inline styles (Astro scoping can't reach innerHTML). */
+  .range { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+  .seg { background: transparent; }
+  .seg.is-on { background: var(--admin-accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); color: var(--accent); }
+  .chart-card { margin: 1rem 0; }
+  .card-title { font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.75rem; }
+  .card-title.pad { padding: 1rem 1.25rem 0; margin-bottom: 0; }
+  #chart { min-height: 140px; }
+  .cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 1rem; align-items: start; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+</style>
+
+<script>
+  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { fmtNum, esc } from '../../lib/admin-format';
+
+  let range = '30d';
+  let titles: Record<string, string> = {};
+
+  const $ = (id: string) => document.getElementById(id)!;
+
+  function fmtDwell(ms: number): string {
+    if (!ms || ms < 1000) return '0s';
+    const s = Math.round(ms / 1000);
+    if (s < 60) return s + 's';
+    const m = Math.floor(s / 60);
+    return m + 'm ' + (s % 60) + 's';
+  }
+
+  function setKpi(id: string, text: string) {
+    const el = $(id);
+    el.textContent = text;
+    el.classList.remove('loading');
+  }
+
+  // Inline styles — these nodes are injected via innerHTML, so Astro's scoped
+  // <style> below does NOT reach them; only global admin.css classes + inline work.
+  const ROW = 'display:flex;align-items:center;gap:0.75rem;padding:0.6rem 1.25rem;border-top:1px solid var(--border)';
+  const NAME = 'flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+  const NUM = 'flex:0 0 auto;font-variant-numeric:tabular-nums;font-weight:600';
+
+  function renderChart(byDay: { date: string; views: number }[]) {
+    const host = $('chart');
+    // Fill the window with continuous days (0 where no traffic) for fixed ranges.
+    const days = range === '7d' ? 7 : range === '90d' ? 90 : range === '30d' ? 30 : 0;
+    let series = byDay;
+    if (days) {
+      const map = new Map(byDay.map((d) => [d.date, d.views]));
+      series = [];
+      const today = new Date();
+      // days+1 bars: the server window (ts >= now - days*24h) spans the earliest
+      // UTC date (today-days) through today, so include that boundary day too —
+      // otherwise the bars can't sum to the Views KPI when it has traffic.
+      for (let i = days; i >= 0; i--) {
+        const d = new Date(today.getTime() - i * 86400000).toISOString().slice(0, 10);
+        series.push({ date: d, views: map.get(d) || 0 });
+      }
+    }
+    if (!series.length) { host.innerHTML = '<div class="muted">No views in this range yet.</div>'; return; }
+    const max = Math.max(1, ...series.map((d) => d.views));
+    const bars = series.map((d) => {
+      const h = Math.max(2, Math.round((d.views / max) * 100));
+      return `<div title="${d.date}: ${d.views} view${d.views === 1 ? '' : 's'}" style="flex:1 1 0;min-width:2px;height:${h}%;align-self:flex-end;border-radius:3px 3px 0 0;background:color-mix(in srgb, var(--accent) 60%, transparent)"></div>`;
+    }).join('');
+    const first = series[0].date.slice(5), last = series[series.length - 1].date.slice(5);
+    host.innerHTML =
+      `<div style="display:flex;align-items:flex-end;gap:3px;height:140px">${bars}</div>` +
+      `<div style="display:flex;justify-content:space-between;margin-top:0.4rem;font-size:0.72rem;color:var(--muted)"><span>${first}</span><span>${last}</span></div>`;
+  }
+
+  function renderPosts(topPosts: any[]) {
+    const host = $('posts');
+    if (!topPosts.length) { host.innerHTML = '<div class="card-pad muted">No post views yet.</div>'; return; }
+    host.innerHTML = topPosts.map((p) => {
+      const title = titles[p.slug] || p.slug;
+      const depth = typeof p.avgReadPct === 'number'
+        ? `<span style="flex:0 0 92px;display:flex;align-items:center;gap:0.4rem">
+             <span style="flex:1 1 auto;height:6px;border-radius:999px;background:var(--border);overflow:hidden"><span style="display:block;height:100%;width:${p.avgReadPct}%;background:var(--accent);border-radius:999px"></span></span>
+             <span style="font-size:0.75rem;color:var(--muted);width:2.4em;text-align:right">${p.avgReadPct}%</span>
+           </span>`
+        : `<span style="flex:0 0 92px;font-size:0.75rem;color:var(--muted);text-align:right">—</span>`;
+      return `<div style="${ROW}">
+          <span style="${NAME}"><a href="/blog/${encodeURIComponent(p.slug)}" target="_blank" rel="noopener" style="color:var(--fg);text-decoration:none">${esc(title)}</a></span>
+          ${depth}
+          <span style="${NUM}">${fmtNum(p.views)}</span>
+        </div>`;
+    }).join('');
+  }
+
+  function renderRefs(referrers: any[], direct: number) {
+    const host = $('refs');
+    const all = referrers.map((r) => `<div style="${ROW}"><span style="${NAME}">${esc(r.host)}</span><span style="${NUM}">${fmtNum(r.count)}</span></div>`);
+    if (direct > 0) all.push(`<div style="${ROW}"><span style="${NAME}" class="muted">Direct / none</span><span style="${NUM}">${fmtNum(direct)}</span></div>`);
+    host.innerHTML = all.length ? all.join('') : '<div class="card-pad muted">No referrers yet.</div>';
+  }
+
+  async function loadTitles() {
+    try {
+      const r = await adminFetch('/api/admin/posts');
+      const d = await r.json();
+      if (r.ok && Array.isArray(d.posts)) {
+        titles = {};
+        for (const p of d.posts) titles[p.slug] = p.title;
+      }
+    } catch { /* fall back to slugs */ }
+  }
+
+  async function load() {
+    try {
+      const r = await adminFetch(`/api/admin/analytics?range=${encodeURIComponent(range)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed');
+      if (d.configured === false) {
+        $('setup').hidden = false;
+        for (const id of ['k-views', 'k-visitors', 'k-read', 'k-subs', 'k-unlocks']) setKpi(id, '0');
+        renderChart([]); renderPosts([]); renderRefs([], 0);
+        return;
+      }
+      $('setup').hidden = true;
+      const t = d.totals || {};
+      setKpi('k-views', fmtNum(t.views || 0));
+      setKpi('k-visitors', fmtNum(t.uniqueSessions || 0));
+      setKpi('k-read', (t.avgReadPct || 0) + '%');
+      $('k-read-foot').textContent = t.reads ? `${fmtNum(t.reads)} reads · ~${fmtDwell(t.avgDwellMs || 0)} on page` : 'how far people scroll';
+      $('k-views-foot').textContent = d.truncated ? 'page loads (capped)' : 'page loads';
+      setKpi('k-subs', fmtNum((d.conversion && d.conversion.newSubscribers) || 0));
+      setKpi('k-unlocks', fmtNum((d.conversion && d.conversion.unlocks) || 0));
+      renderChart(d.byDay || []);
+      renderPosts(d.topPosts || []);
+      renderRefs(d.referrers || [], d.directViews || 0);
+    } catch (e: any) {
+      $('chart').innerHTML = `<div class="notice err">Couldn't load analytics: ${esc(e.message || e)}</div>`;
+    }
+  }
+
+  document.querySelectorAll('.seg').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.seg').forEach((x) => x.classList.remove('is-on'));
+      b.classList.add('is-on');
+      range = (b as HTMLElement).dataset.range!;
+      for (const id of ['k-views', 'k-visitors', 'k-read', 'k-subs', 'k-unlocks']) $(id).classList.add('loading');
+      load();
+    });
+  });
+
+  whenAdmin.then(async () => { await loadTitles(); load(); });
+</script>
