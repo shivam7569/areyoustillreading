@@ -154,6 +154,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     margin-top: 1rem; padding: 1rem; border: 1px solid var(--border);
     border-radius: 8px; background: var(--code-bg); overflow-x: auto; white-space: pre-wrap;
   }
+  /* The `hidden` attribute MUST win. Without this, the `.pm-overlay { display:flex }`
+     rule below (author origin) overrides the UA `[hidden] { display:none }`, so the
+     modal stays permanently rendered — an empty overlay covering the editor with a
+     close button that appears dead (closeModal sets `hidden`, which display:flex
+     ignores). This attribute-qualified selector has higher specificity, restoring it. */
+  .pm-overlay[hidden] { display: none; }
   .pm-overlay {
     position: fixed; inset: 0; z-index: 100; display: flex; align-items: center;
     justify-content: center; padding: 1.5rem; background: rgba(12, 14, 18, 0.55);
