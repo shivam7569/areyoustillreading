@@ -69,10 +69,11 @@
  *     build generates (sitemap, RSS, canonical, OG) — no error, just bad links.
  */
 import { defineConfig } from 'astro/config';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import rehypeD2 from './plugins/rehype-d2.mjs';
 import sitemap from '@astrojs/sitemap';
+// The Markdown pipeline (Shiki + KaTeX + D2) is defined ONCE in a shared module so
+// the render-at-publish path (src/lib/render-post.mjs) produces byte-identical HTML
+// to this build. See that file for the full rationale; edit the pipeline there.
+import { markdownConfig } from './src/lib/markdown-config.mjs';
 
 // https://astro.build/config
 export default defineConfig({
@@ -90,36 +91,9 @@ export default defineConfig({
   //   token/entitlement middleware + Supabase RLS. See top doc block.
   integrations: [sitemap({ filter: (page) => !page.includes('/gated/') })],
 
-  // Markdown/MDX compilation pipeline. Governs how post content becomes HTML.
-  markdown: {
-    // Syntax highlighting via Shiki (Astro's built-in), BUT with ```d2 fences
-    // excluded. WHY: if Shiki highlighted d2 blocks it would wrap the diagram
-    // source in <pre><code> spans, and rehype-d2 (a later rehype pass) would no
-    // longer see raw fence text to convert into an SVG. Excluding the lang lets the
-    // d2 source pass through untouched to that pass.
-    syntaxHighlight: { type: 'shiki', excludeLangs: ['d2'] },
-
-    // remark (Markdown-AST) plugins, run before rehype. remark-math tokenizes
-    // `$…$` inline and `$$…$$` block math into math nodes for rehype-katex.
-    remarkPlugins: [remarkMath],
-
-    // rehype (HTML-AST) plugins, run in order:
-    //   1. rehype-katex → converts the math nodes from remark-math into static,
-    //      pre-rendered KaTeX HTML (no client-side JS/math library shipped).
-    //   2. rehype-d2 (local) → finds the passed-through ```d2 fences and renders
-    //      each to inline <svg> baked into the HTML at BUILD time via @terrastruct/d2's
-    //      WASM engine — no headless browser/Chromium, no runtime diagram JS, no
-    //      layout shift. This is why d2 must dodge Shiki above. KaTeX before d2 is
-    //      fine — they operate on disjoint node types.
-    rehypePlugins: [rehypeKatex, rehypeD2],
-
-    // Shiki theme config: dual light/dark themes emitted as CSS-variable-driven
-    // markup so code blocks follow the site's theme without re-highlighting.
-    // wrap: true → long code lines soft-wrap instead of forcing horizontal
-    // scroll (better on mobile / narrow columns).
-    shikiConfig: {
-      themes: { light: 'github-light', dark: 'github-dark' },
-      wrap: true,
-    },
-  },
+  // Markdown/MDX compilation pipeline (Shiki syntax highlighting with ```d2
+  // excluded, remark-math → rehype-katex, then rehype-d2 → inline SVG). Defined in
+  // src/lib/markdown-config.mjs and shared verbatim with the render-at-publish path
+  // so instantly-published posts render identically to this build. Edit it there.
+  markdown: markdownConfig,
 });
