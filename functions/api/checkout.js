@@ -105,13 +105,14 @@ function json(obj, status = 200) {
  * @returns {Promise<Response>}
  */
 export async function onRequestPost(ctx) {
-  // Top-level guard: any unexpected throw returns a readable JSON error instead of a
-  // bare Cloudflare 502 "Bad gateway" (which the client can't parse). TEMP: the message
-  // includes the reason while we diagnose the production checkout hang.
+  // Top-level guard: any unexpected throw returns a readable JSON 4xx error instead of a
+  // bare Cloudflare 502 "Bad gateway" (Cloudflare replaces a Function's 5xx with its own
+  // error page, which the client can't parse — so all error paths here use 4xx).
   try {
     return await handleCheckout(ctx);
   } catch (e) {
-    return json({ error: 'Checkout crashed: ' + String((e && e.message) || e) }, 500);
+    console.error('checkout crashed', (e && e.message) || e);
+    return json({ error: 'Checkout failed. Please try again.' }, 400);
   }
 }
 
@@ -237,19 +238,23 @@ async function handleCheckout({ request, env }) {
       // Log full detail server-side (status + body) for debugging, but return a
       // vague message to the client so we don't leak Dodo internals.
       console.error('dodo checkout failed', res.status, JSON.stringify(data));
-      // TEMP diagnostic: surface Dodo's status + reason to the tester.
-      return json({ error: 'Dodo ' + res.status + ': ' + JSON.stringify(data).slice(0, 300) }, 502);
+      // Return 4xx, NOT 5xx: Cloudflare replaces a Function's 5xx with its own "Bad
+      // gateway" HTML page, so a 502 here never reaches the client as parseable JSON.
+      const notLive = data && data.code === 'MERCHANT_NOT_LIVE';
+      return json(
+        { error: notLive ? 'Payments aren’t live yet — the store is still in test mode.' : 'Could not start checkout. Please try again.' },
+        400,
+      );
     }
     // Dodo has varied the URL field name across API versions; accept any of the
     // known aliases so a field rename doesn't break checkout.
     const url = data.checkout_url || data.url || data.payment_link;
-    if (!url) return json({ error: 'No checkout URL returned.' }, 502);
+    if (!url) return json({ error: 'No checkout URL returned.' }, 400);
     return json({ url });
   } catch (e) {
     // Network failure or unexpected throw reaching Dodo — log and surface a
     // generic retryable error.
     console.error('checkout error', (e && e.message) || e);
-    // TEMP diagnostic: surface the actual failure (e.g. a Dodo timeout/abort) to the tester.
-    return json({ error: 'Checkout error: ' + String((e && e.message) || e) }, 500);
+    return json({ error: 'Checkout failed. Please try again.' }, 400);
   }
 }
