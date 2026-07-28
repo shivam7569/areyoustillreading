@@ -1,71 +1,25 @@
 ---
 /**
- * BlogPost.astro — Presentational layout for a single blog post.
+ * BlogPost.astro — the editorial reader layout for one blog post (Phase 5).
  * =============================================================================
+ * Presentation + composition only, rebuilt from the Claude Design "post" template:
+ * a reading-progress bar, the article head (backlink, kicker, title, standfirst,
+ * byline with avatar), the two-width .wrap/.measure reading column, then the share
+ * row, subscribe block, prev/next pager, and the interactive islands.
  *
- * WHAT THIS FILE IS
- * -----------------
- * The reusable "chrome" that wraps the rendered Markdown body of one blog
- * entry: the <h1> title, the byline (publish date · reading time · optional
- * updated date), the tag links, the article <slot> where the compiled Markdown
- * is injected, and the interactive per-post widgets (Highlights, Notes,
- * Comments) plus a back-link to the index.
+ * MUST NOT CHANGE (verified against the reconciliation map):
+ *   - The body stays wrapped in a SINGLE <article> element (Highlights.astro does
+ *     document.querySelector('article') to scope text selection + <mark> placement).
+ *     It now carries class="post-body" for the editorial prose styling in global.css.
+ *   - Every island is kept and keyed by post.id: Highlights / Notes / Comments /
+ *     PaywallGate(slot) / ShareBar / SubscribeForm / PlotlyReader / SeriesNav.
+ *   - The gateable branch is decided by the [...slug] route, which passes <PaywallGate>
+ *     as the slot instead of <Content>; this layout is agnostic to the slot's content.
+ *   - katex.min.css is imported here so math styling ships only on posts.
  *
- * SINGLE RESPONSIBILITY
- * ---------------------
- * Presentation and composition ONLY. It takes an already-loaded content
- * collection entry and lays it out. It does NOT:
- *   - fetch or query the post (the caller does that),
- *   - render the Markdown body (Astro's content pipeline does that; the body
- *     arrives through <slot />),
- *   - talk to Supabase / auth / payments directly (delegated wholesale to the
- *     three child components below).
- *
- * HOW IT FITS THE ARCHITECTURE
- * ----------------------------
- *   Route (e.g. src/pages/blog/[...slug].astro)
- *     └─ getCollectionEntry('blog', slug)  →  entry
- *     └─ const { Content } = await entry.render()
- *     └─ <BlogPost post={entry}><Content /></BlogPost>
- *                                  ▲ the <Content /> lands in our <slot />
- *   BlogPost.astro (this file)
- *     └─ BaseLayout.astro   → <head>, global nav/footer, OG meta, theming
- *     └─ Highlights / Notes / Comments → client-side islands (Supabase JS,
- *        RLS-protected reads/writes, Turnstile bot-check on write paths)
- *
- * IMPORTS / DEPENDENCIES
- *   - astro:content CollectionEntry<'blog'> — the typed shape of a blog entry;
- *     `post.data` is validated at build time against the 'blog' collection
- *     schema (src/content/config.*), so title/pubDate/tags are trusted here.
- *   - BaseLayout.astro — the outer HTML document + <head>. Receives the OG
- *     image path we compute below.
- *   - Highlights / Notes / Comments — interactive components keyed by post.id.
- *   - katex.min.css — KaTeX stylesheet. Imported HERE (not in BaseLayout) so
- *     the ~stylesheet only ships on pages that can contain rendered math, i.e.
- *     blog posts. The math HTML itself is produced at build time by
- *     remark-math/rehype-katex and arrives via <slot />; this import only
- *     supplies the styling for that already-rendered markup.
- *
- * WHO DEPENDS ON THIS FILE
- *   Every blog-post route that renders a single entry (the [...slug] page,
- *   and any preview/gated post routes) wraps its <Content /> in this layout.
- *   Changing the props shape or the slot contract is a breaking change for all
- *   of them.
- *
- * SECURITY NOTES / GOTCHAS
- *   - No untrusted input is handled in this frontmatter. Everything comes from
- *     `post.data`, which is build-time content validated by the collection
- *     schema — not user input — so title/tags/description are safe to render.
- *   - All security-sensitive behaviour (auth, entitlement/paywall gating,
- *     Turnstile honeypot, RLS-guarded reads/writes) lives INSIDE the child
- *     island components (Highlights/Notes/Comments) and their backing Pages
- *     Functions + Supabase Row-Level Security. This layout only mounts them and
- *     hands each the post.id; it grants no access of its own. The real access
- *     control is enforced server-side by RLS, never here.
- *   - The OG image path is derived from post.id (a build-time collection key,
- *     not user input); the actual PNG is generated separately by
- *     astro-og-canvas. If that image is missing the link 404s but the page
- *     still renders.
+ * All security-sensitive behaviour (auth, entitlement/paywall gating, Turnstile,
+ * RLS reads/writes) lives inside the child islands + their Pages Functions + Supabase
+ * RLS. This layout mounts them and passes only post.id.
  */
 import type { CollectionEntry } from 'astro:content';
 import BaseLayout from './BaseLayout.astro';
@@ -77,117 +31,170 @@ import SeriesNav from '../components/SeriesNav.astro';
 import ShareBar from '../components/ShareBar.astro';
 import PlotlyReader from '../components/PlotlyReader.astro';
 import { getSeriesNav } from '../lib/series';
+import { getCollection } from 'astro:content';
 import 'katex/dist/katex.min.css';
 
-// The only prop: a fully-loaded 'blog' collection entry. The rendered Markdown
-// body is passed separately as children (see <slot /> in the template), NOT
-// through this prop.
 type Props = { post: CollectionEntry<'blog'> };
-
 const { post } = Astro.props;
-// Destructure the schema-validated frontmatter. These fields are guaranteed to
-// exist/typecheck by the 'blog' collection schema; `updatedDate` is optional.
 const { title, description, pubDate, updatedDate, tags } = post.data;
 
-// Human-readable date formatter (e.g. "July 25, 2026"). 'en-US' locale is
-// hard-coded for a stable, deterministic build output regardless of the build
-// machine's locale.
-const fmt = (d: Date) =>
-  d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+// Human-readable date (stable 'en-US' locale for deterministic build output).
+const fmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-// Reading-time estimate. `post.body` is the raw Markdown source string.
-//   - `?? 0` is a fail-safe: some entries (e.g. content rendered without a
-//     body available) can leave post.body undefined; guard against splitting
-//     undefined.
-//   - filter(Boolean) drops empty tokens from collapsed/leading whitespace so
-//     the word count isn't inflated.
+// Reading-time estimate from the raw Markdown source (200 wpm, min 1).
 const words = post.body?.split(/\s+/).filter(Boolean).length ?? 0;
-// 200 wpm is the conventional average reading speed. Math.max(1, ...) ensures
-// even a very short post reads as "1 min" rather than "0 min".
 const minutes = Math.max(1, Math.round(words / 200));
 
-// Series context (null unless this post is part of a multi-post series). Computed
-// at build from the whole collection, so each part's list — and the author-written
-// intro's list — stays current automatically. See src/lib/series.ts.
+// Series context (null unless this post is part of a multi-post series).
 const series = await getSeriesNav(post);
 
-// Absolute canonical URL of this post, for the share links. Derived exactly like
-// BaseHead's canonical (current path resolved against the configured site), so the
-// shared link always matches the page's own og:url. Nothing is ever auto-posted:
-// ShareBar only opens each network's composer for the reader to review and send.
+// Absolute canonical URL for the share links (matches BaseHead's og:url).
 const shareUrl = new URL(Astro.url.pathname, Astro.site).toString();
+
+// Adjacent posts for the prev/next pager (published only, reverse-chron). Series
+// posts use the SeriesNav card for part navigation instead. `allPosts.length` also
+// feeds the "browse all" count; the eyebrow labels the essay by its first tag.
+const allPosts = (await getCollection('blog', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+const here = allPosts.findIndex((p) => p.id === post.id);
+const olderPost = here >= 0 && here < allPosts.length - 1 ? allPosts[here + 1] : null;
+const newerPost = here > 0 ? allPosts[here - 1] : null;
+const eyebrow = tags[0] ? `${tags[0]} · Field notes` : 'Field notes';
 ---
 
-{/*
-  Outer document shell. `image` is the per-post Open Graph image path, derived
-  from the build-time collection id (see astro-og-canvas). BaseLayout owns
-  <head>, global nav/footer, and meta tags.
-*/}
-<BaseLayout title={title} description={description} image={`/og/${post.id}.png`}>
-  <article>
-    <h1>{title}</h1>
-    <p>
-      {/* Machine-readable ISO timestamp in datetime; human string in the label. */}
-      <time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time>
-      <span> &middot; {minutes} min read</span>
-      {/* "updated" line only renders when the optional updatedDate is present. */}
-      {updatedDate && <span> &middot; updated {fmt(updatedDate)}</span>}
-    </p>
-    {/* Tag row is omitted entirely (no empty <p>) when the post has no tags. */}
-    {tags.length > 0 && (
-      <p class="tags">
-        {/* Each tag links to its filtered index at /blog/tags/<tag>. */}
-        {tags.map((t) => (<a class="tag" href={`/blog/tags/${t}`}>#{t}</a>))}
-      </p>
-    )}
-    {/* Series card (only when this post is part of a multi-post series): the
-        ordered parts list with the current one highlighted. */}
-    {series && <SeriesNav data={series} placement="top" />}
-    {/*
-      The compiled Markdown body is injected here by the caller. For a normal
-      post that is <Content /> (<BlogPost post={entry}><Content /></BlogPost>);
-      for a `gateable` post the [...slug] route instead passes <PaywallGate>,
-      which only emits preview-safe HTML statically and fetches the paid body
-      per-request. Either way, this layout is agnostic to what fills the slot.
-      Content that can arrive through this slot includes: Shiki-highlighted
-      code, KaTeX math, and build-time D2 diagrams (all pre-rendered to HTML at
-      build), plus the outputs of "python" plot cells — a pre-baked static
-      matplotlib SVG, or an interactive Plotly figure that ships as figure JSON
-      hydrated client-side by plotly.js (see src/lib/pyplot.js & src/lib/plotly.js;
-      note Pyodide runs only in the admin editor, never on published pages).
-    */}
-    <slot />
-  </article>
-  {/* Continue the series: previous / next part. */}
-  {series && <SeriesNav data={series} placement="bottom" />}
+<BaseLayout title={title} description={description} image={`/og/${post.id}.png`} wide>
+  {/* Reading-progress bar (driven by the script below). */}
+  <div class="progress" id="pg"></div>
+
+  {/* Article head — inside the reading column. */}
+  <div class="wrap">
+    <div class="measure">
+      <header class="art-head">
+        <a class="backlink" href="/blog"><span class="a">&larr;</span> Back to the blog</a>
+        <div class="kicker"><span class="line"></span><span class="eyebrow">{eyebrow}</span></div>
+        <h1 class="title">{title}</h1>
+        {description && <p class="standfirst">{description}</p>}
+        <div class="byline">
+          <div class="avatar" aria-hidden="true">a</div>
+          <div class="who"><b>The author</b> &middot; <time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time></div>
+          <span class="dot">&mdash;</span>
+          <span class="meta-caps">{minutes} min read</span>
+          {updatedDate && <span class="meta-caps">&middot; updated {fmt(updatedDate)}</span>}
+          {tags.length > 0 && (
+            <div class="btags">{tags.map((t) => (<a class="tag" href={`/blog/tags/${t}`}>{t}</a>))}</div>
+          )}
+        </div>
+      </header>
+    </div>
+  </div>
+
+  {/* Series card (top): the ordered parts list with the current one highlighted. */}
+  {series && <div class="wrap"><div class="measure"><SeriesNav data={series} placement="top" /></div></div>}
+
   {/*
-    Share row: friction-free way to pass the post along the instant it's finished.
-    Manual only — each button opens that network's own composer pre-filled with the
-    title + canonical URL; nothing is ever posted automatically. See ShareBar.astro.
+    The compiled Markdown body is injected here. For a normal post that is <Content/>;
+    for a `gateable` post the [...slug] route passes <PaywallGate/> instead, which only
+    emits preview-safe HTML statically. The single <article> wrapper is load-bearing
+    (see header) — never remove/rename/duplicate it. `.post-body` styles the prose.
   */}
-  <ShareBar url={shareUrl} title={title} />
-  {/*
-    End-of-post subscribe note. Placed right after the article body — the moment a
-    reader has just finished — so a post reached directly (not via the homepage)
-    still has a clear way to subscribe. Same self-contained component as the
-    homepage widget (double opt-in, Turnstile, honeypot all server-enforced); only
-    the copy is warmer here via props. One instance per page, so its fixed id is safe.
-  */}
-  <SubscribeForm
-    heading="Enjoyed this? Get the next one by email."
-    blurb="I'll send new posts straight to your inbox — no spam, unsubscribe in one click."
-  />
-  {/*
-    Interactive per-post islands, all keyed by post.id. Each is a self-contained
-    client component that talks to Supabase (via the browser JS client) under
-    Row-Level Security, and — on write paths — through Turnstile bot-checking.
-    This layout deliberately delegates ALL data/auth/paywall concerns to them;
-    it passes only the post identifier and enforces no access itself.
-  */}
+  <div class="wrap">
+    <article class="post-body">
+      <div class="measure">
+        <slot />
+      </div>
+    </article>
+  </div>
+
+  {/* Everything after the essay, back inside the reading column. */}
+  <div class="wrap">
+    <div class="measure">
+      <div class="after">
+        {series
+          ? <SeriesNav data={series} placement="bottom" />
+          : (olderPost || newerPost) && (
+              <nav class="pager" aria-label="More essays">
+                {olderPost
+                  ? <a class="prev" href={`/blog/${olderPost.id}`}><div class="dir">&larr; Older</div><div class="t">{olderPost.data.title}</div></a>
+                  : <span></span>}
+                {newerPost
+                  ? <a class="next" href={`/blog/${newerPost.id}`}><div class="dir">Newer &rarr;</div><div class="t">{newerPost.data.title}</div></a>
+                  : <span></span>}
+              </nav>
+            )
+        }
+
+        {/* Manual share row (web-intent links + copy; nothing auto-posts). */}
+        <ShareBar url={shareUrl} title={title} />
+
+        {/* End-of-post subscribe (self-contained; one instance per page). */}
+        <SubscribeForm
+          heading="Read the next one first"
+          blurb="One considered essay every few weeks on LLM engineering and the systems underneath. No noise — unsubscribe in one click."
+        />
+
+        <div class="all-link"><a href="/blog">Browse all {allPosts.length} {allPosts.length === 1 ? 'essay' : 'essays'} &rarr;</a></div>
+
+        {/* Interactive per-post islands (Supabase + RLS; keyed by post.id). */}
+        <Highlights postId={post.id} />
+        <Notes postId={post.id} />
+        <Comments postId={post.id} />
+      </div>
+    </div>
+  </div>
+
   {/* Hydrates any published Plotly figures (interactive, lazy). No-op if none. */}
   <PlotlyReader />
-  <Highlights postId={post.id} />
-  <Notes postId={post.id} />
-  <Comments postId={post.id} />
-  <p><a href="/blog">&larr; All posts</a></p>
 </BaseLayout>
+
+<style>
+  .progress { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--accent); z-index: 60; transition: width 0.1s linear; }
+  @media (prefers-reduced-motion: reduce) { .progress { transition: none; } }
+
+  .art-head { padding: clamp(48px, 7vw, 88px) 0 clamp(28px, 4vw, 44px); }
+  .backlink { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); display: inline-flex; align-items: center; gap: 8px; margin-bottom: 34px; transition: color 0.2s; }
+  .backlink:hover { color: var(--accent); }
+  .backlink .a { transition: transform 0.2s; }
+  .backlink:hover .a { transform: translateX(-4px); }
+  .art-head .kicker { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+  .art-head .kicker .line { height: 1px; width: 44px; background: var(--accent); opacity: 0.6; }
+  h1.title { font-family: var(--serif-display); font-weight: 600; font-size: clamp(36px, 6vw, 64px); line-height: 1.04; letter-spacing: -0.02em; margin: 0; max-width: 20ch; }
+  .standfirst { font-family: var(--serif-display); font-style: italic; font-size: clamp(20px, 2.5vw, 26px); line-height: 1.5; color: var(--ink-soft); max-width: 54ch; margin: 26px 0 0; }
+
+  .byline { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; margin-top: 34px; padding-top: 26px; border-top: 1px solid var(--rule); }
+  .avatar { width: 44px; height: 44px; border-radius: 999px; background: radial-gradient(120% 120% at 30% 20%, var(--accent-soft), var(--accent)); display: grid; place-items: center; color: var(--on-accent); font-family: var(--serif-display); font-size: 18px; flex: none; }
+  .byline .who { font-family: var(--sans); font-size: 14px; color: var(--ink); }
+  .byline .who b { font-weight: 600; }
+  .byline .who time { color: inherit; }
+  .byline .dot { color: var(--rule); }
+  .byline .btags { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+  .byline .tag { font-family: var(--sans); font-size: 12px; letter-spacing: 0.03em; color: var(--ink-faint); border: 1px solid var(--rule); border-radius: 999px; padding: 4px 11px; transition: border-color 0.2s, color 0.2s; }
+  .byline .tag:hover { border-color: var(--accent); color: var(--accent); }
+  @media (max-width: 640px) { .byline .btags { margin-left: 0; width: 100%; } }
+
+  .after { padding: clamp(30px, 4vw, 44px) 0 0; }
+  .pager { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 0 0 clamp(28px, 4vw, 40px); }
+  @media (max-width: 640px) { .pager { grid-template-columns: 1fr; } }
+  .pager a { border: 1px solid var(--rule); border-radius: 6px; padding: 22px 24px; transition: border-color 0.2s, transform 0.2s, background 0.2s; display: block; }
+  .pager a:hover { border-color: var(--accent); transform: translateY(-2px); background: var(--paper-2); }
+  .pager .dir { font-family: var(--sans); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 9px; }
+  .pager .t { font-family: var(--serif-display); font-weight: 600; font-size: 19px; line-height: 1.25; color: var(--ink); }
+  .pager a.next { text-align: right; }
+
+  .all-link { text-align: center; margin: 34px 0 0; }
+  .all-link a { font-family: var(--sans); font-size: 14px; color: var(--accent); border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+  .all-link a:hover { border-color: var(--accent); }
+</style>
+
+<script>
+  // Reading-progress bar: width = scroll fraction. Passive listener; no-op if absent.
+  const pg = document.getElementById('pg');
+  if (pg) {
+    const onScroll = () => {
+      const h = document.documentElement;
+      const max = h.scrollHeight - h.clientHeight;
+      pg.style.width = (max > 0 ? ((h.scrollTop || document.body.scrollTop) / max) * 100 : 0) + '%';
+    };
+    addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+</script>

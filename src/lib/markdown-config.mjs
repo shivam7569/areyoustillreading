@@ -36,8 +36,13 @@ import rehypePlotly from './rehype-plotly.mjs';
 // One shared engine instance (pure JS, no WASM). Created once at module load.
 const engine = createJavaScriptRegexEngine();
 
+// Editorial code blocks are ALWAYS dark (like the design), framed on the warm
+// --code-bg surface (global.css styles the <pre>). A single dark theme means the
+// highlighted spans carry dark-theme colours in both light and dark page themes —
+// no dual-theme swap needed. `css-variables` lets global.css tint the palette to
+// the warm editorial tokens (--astro-code-token-*) instead of a cool default.
 export const shikiConfig = {
-  themes: { light: 'github-light', dark: 'github-dark' },
+  theme: 'css-variables',
   wrap: true,
   engine,
 };

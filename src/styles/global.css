@@ -47,7 +47,7 @@
   --accent-ink: var(--accent-soft);
   --border: var(--rule-soft);
   --border-strong: var(--rule);
-  --code-bg: #f2ecdf;           /* warm light code surface (theme-following; dark override below) */
+  --code-bg: #2a231a;           /* warm light code surface (theme-following; dark override below) */
 
   /* ---- Type family aliases: UI keeps the current sans; body/headings go serif ---- */
   --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -86,7 +86,7 @@
     --rule: #38301f; --rule-soft: #2a2318; --card: #211c14;
     --accent: #d6a75f; --accent-soft: #e3bd84; --on-accent: #221809;
     --code-fg: #ddd2bd;
-    --code-bg: #14120c;
+    --code-bg: #12100b;
     --shadow: 24px 44px 90px -50px rgba(0, 0, 0, 0.72);
   }
 }
@@ -96,7 +96,7 @@
   --rule: #38301f; --rule-soft: #2a2318; --card: #211c14;
   --accent: #d6a75f; --accent-soft: #e3bd84; --on-accent: #221809;
   --code-fg: #ddd2bd;
-  --code-bg: #14120c;
+  --code-bg: #12100b;
   --shadow: 24px 44px 90px -50px rgba(0, 0, 0, 0.72);
 }
 /* Re-assert light (higher specificity than the @media :root) so a manual
@@ -107,7 +107,7 @@
   --rule: #d8cfbd; --rule-soft: #e6dfd0; --card: #fffdf8;
   --accent: #5e3560; --accent-soft: #764a78; --on-accent: #faf3fa;
   --code-fg: #e7ddc9;
-  --code-bg: #f2ecdf;
+  --code-bg: #2a231a;
   --shadow: 24px 40px 80px -48px rgba(40, 28, 14, 0.45);
 }
 
@@ -168,9 +168,27 @@ article a { text-decoration: underline; text-decoration-thickness: 1px; text-und
 article a:hover { text-decoration-color: currentColor; }
 
 /* ---- Code ---- */
-code { font-family: var(--font-mono); font-size: 0.875em; background: var(--code-bg); padding: 0.15em 0.4em; border-radius: var(--radius-sm); }
-pre { background: var(--code-bg); padding: 1.05rem 1.15rem; border-radius: var(--radius); overflow-x: auto; border: 1px solid var(--border); font-size: 0.92rem; line-height: 1.62; }
-pre code { background: none; padding: 0; font-size: inherit; }
+/* Inline code: editorial pill on the warm surface with an accent glyph. */
+code { font-family: var(--font-mono); font-size: 0.86em; background: var(--paper-2); border: 1px solid var(--rule); color: var(--accent); padding: 0.1em 0.4em; border-radius: 4px; }
+/* Block code: an always-dark framed slab (Shiki 'css-variables' theme; palette below),
+   so it reads like the design in BOTH page themes. */
+pre { background: var(--code-bg); color: var(--code-fg); margin: 1.9em 0; padding: 0; border-radius: 6px; overflow-x: auto; border: 1px solid var(--rule); box-shadow: var(--shadow); }
+pre code { display: block; background: none; border: 0; color: inherit; padding: 18px 20px; font-size: 0.86rem; line-height: 1.75; min-width: max-content; }
+/* Warm token palette for Shiki's 'css-variables' theme — matches the design's code
+   colours. Code is always dark, so these apply in both page themes. */
+.astro-code {
+  --astro-code-foreground: var(--code-fg);
+  --astro-code-background: var(--code-bg);
+  --astro-code-token-comment: #7a6f5b;
+  --astro-code-token-keyword: #c98a63;
+  --astro-code-token-string: #9bb586;
+  --astro-code-token-string-expression: #9bb586;
+  --astro-code-token-constant: #cf8f6f;
+  --astro-code-token-function: #e0b56a;
+  --astro-code-token-parameter: #d9a06b;
+  --astro-code-token-punctuation: #c2b6a0;
+  --astro-code-token-link: var(--accent-soft);
+}
 
 /* ---- Prose elements ---- */
 blockquote { margin: 1.6rem 0; padding: 0.15rem 0 0.15rem 1.15rem; border-left: 3px solid var(--border-strong); color: var(--muted); }
@@ -179,6 +197,42 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 2.75rem 0; }
 img { max-width: 100%; height: auto; border-radius: var(--radius); }
 ul, ol { padding-left: 1.35rem; }
 li { margin: 0.35rem 0; }
+
+/* ============================================================================
+   BLOG READER PROSE (.post-body) — editorial essay typography ported from the
+   design's post template. GLOBAL (not scoped) so it reaches the Markdown body
+   injected through the slot (Shiki code, KaTeX, D2, Plotly). Only affects the
+   reader post body; the byline/head live outside .post-body.
+   ============================================================================ */
+.post-body { font-size: 19px; }
+.post-body .measure > p:first-of-type::first-letter {
+  font-family: var(--serif-display); float: left; font-size: 4.6em; line-height: 0.82;
+  padding: 0.06em 0.12em 0 0; color: var(--accent); font-weight: 600;
+}
+.post-body p { margin: 0 0 1.35em; color: var(--ink); }
+.post-body h2 {
+  font-family: var(--serif-display); font-weight: 600; font-size: clamp(26px, 3.4vw, 36px);
+  line-height: 1.14; letter-spacing: -0.01em; margin: 2em 0 0.6em;
+}
+.post-body h3 { font-family: var(--serif-display); font-weight: 600; font-size: 23px; margin: 1.8em 0 0.5em; }
+.post-body :where(p, li, td, blockquote) a {
+  color: var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  text-decoration: none; transition: border-color var(--dur) var(--ease);
+}
+.post-body :where(p, li, td, blockquote) a:hover { border-color: var(--accent); }
+.post-body blockquote { margin: 1.8em 0; padding: 6px 0 6px 26px; border-left: 2px solid var(--accent); }
+.post-body blockquote p { font-family: var(--serif-display); font-style: italic; font-size: 24px; line-height: 1.5; color: var(--ink); margin: 0; }
+.post-body blockquote cite { display: block; margin-top: 14px; font-family: var(--sans); font-style: normal; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
+.post-body hr { border: 0; height: 1px; background: var(--rule); margin: 2.4em 0; }
+.post-body ul, .post-body ol { padding-left: 1.4em; margin: 0 0 1.35em; }
+.post-body li { margin: 0.4em 0; }
+.post-body img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--rule); }
+/* Build-time D2 diagrams get the editorial framed-card treatment, sized to the
+   reading column and scrolling if wider. */
+.post-body .d2-diagram {
+  margin: 2.2em 0; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--card); box-shadow: var(--shadow); padding: 22px; overflow-x: auto;
+}
 
 /* D2 diagrams — inline SVG at build + publish time. Centered, scale to column,
    scroll if wider. `.d2-error` is the bad-diagram fallback box. */
@@ -354,19 +408,8 @@ article time { color: var(--faint); font-size: var(--fs-sm); }
 
 /* Shiki dual-theme code blocks. Shiki inlines both palettes as CSS vars per token;
    in dark mode we swap to the dark vars. !important beats Shiki's inline styles. */
-@media (prefers-color-scheme: dark) {
-  .astro-code, .astro-code span {
-    color: var(--shiki-dark) !important;
-    background-color: var(--shiki-dark-bg) !important;
-  }
-}
-/* Mirror for the manual toggle so code blocks follow data-theme="dark" too
-   (added now; inert until the toggle ships). */
-:root[data-theme="dark"] .astro-code,
-:root[data-theme="dark"] .astro-code span {
-  color: var(--shiki-dark) !important;
-  background-color: var(--shiki-dark-bg) !important;
-}
+/* (Shiki dual-theme swap removed — code blocks are now always dark via the single
+   'css-variables' theme, so there is no light/dark palette to swap.) */
 
 /* ---- Tags ---- */
 .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0 0; }
