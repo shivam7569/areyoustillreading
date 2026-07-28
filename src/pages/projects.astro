@@ -88,6 +88,7 @@ const projects: Project[] = [
 */}
 <BaseLayout title="Projects — areyoustillreading" description="Selected engineering and research projects by Shivam Chaudhary.">
   <h1>Projects</h1>
+  <p class="lede">Selected engineering and research work.</p>
 
   <ul class="project-grid">
     {/*
@@ -131,36 +132,38 @@ const projects: Project[] = [
   .project-grid {
     list-style: none;
     padding: 0;
-    margin: 1.5rem 0 0;
+    margin: 1.75rem 0 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: var(--space);
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
   }
   /* Column flexbox so the tag row can be pinned to the bottom (see .tags
      margin-top:auto) — keeps all cards' tags aligned despite blurbs of
-     differing length. */
+     differing length. Subtle raise + hover lift for a premium, tactile feel. */
   .card {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    padding: var(--space);
+    gap: 0.55rem;
+    padding: 1.25rem;
+    background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
+    transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
   }
-  .card-title { margin: 0; font-size: 1.15rem; }
-  .card-title a { color: inherit; }
+  .card:hover { border-color: var(--border-strong); transform: translateY(-2px); box-shadow: var(--shadow); }
+  .card-title { margin: 0; font-size: 1.12rem; letter-spacing: -0.015em; line-height: 1.3; }
+  .card-title a { color: var(--fg); }
   .card-title a:hover { color: var(--accent); }
-  .card-desc { margin: 0; color: var(--muted); font-size: 0.95rem; }
-  /* margin-top:auto (the `auto` in `auto 0 0`) pushes the tag row to the
-     bottom of the flex column, so tags bottom-align across cards. */
-  .tags { list-style: none; padding: 0; margin: auto 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  /* Pill-shaped monospace keyword chips (999px radius = full pill). */
+  .card-desc { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
+  /* margin-top:auto pushes the tag row to the bottom so tags bottom-align across cards. */
+  .tags { list-style: none; padding: 0; margin: 0.35rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .tag {
     font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--muted);
+    background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 999px;
-    padding: 0.1rem 0.6rem;
+    padding: 0.12rem 0.6rem;
   }
 </style>
