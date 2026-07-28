@@ -68,6 +68,37 @@ const nav = [
     <BaseHead title={title} description="Admin dashboard." />
     {/* The admin area must never be indexed or advertised to crawlers. */}
     <meta name="robots" content="noindex, nofollow" />
+    <meta name="color-scheme" content="light dark" />
+    {/*
+      Theme: honour the SAME persisted choice as the public site (localStorage
+      'ays.theme'), else the OS preference, set on <html> before first paint, then
+      bind the Studio topbar toggle. admin.css mirrors its dark state-colours under
+      :root[data-theme] so the whole dashboard flips (not just the base tokens).
+    */}
+    <script is:inline>
+      (function () {
+        var root = document.documentElement;
+        var t = null;
+        try { t = localStorage.getItem('ays.theme'); } catch (e) {}
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        root.setAttribute('data-theme', t);
+        function bind() {
+          var btn = document.getElementById('tt');
+          if (!btn) return;
+          btn.setAttribute('aria-pressed', String(root.getAttribute('data-theme') === 'dark'));
+          btn.addEventListener('click', function () {
+            var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            root.setAttribute('data-theme', next);
+            btn.setAttribute('aria-pressed', String(next === 'dark'));
+            try { localStorage.setItem('ays.theme', next); } catch (e) {}
+          });
+        }
+        if (document.readyState !== 'loading') bind();
+        else document.addEventListener('DOMContentLoaded', bind);
+      })();
+    </script>
   </head>
   {/* data-pagefind-ignore keeps the whole admin surface out of the on-site (Pagefind) search index. */}
   <body data-pagefind-ignore>
@@ -141,6 +172,10 @@ const nav = [
         <header class="admin-topbar">
           <div class="tb-title">{heading ?? title}</div>
           <div class="tb-actions">
+            <button type="button" id="tt" class="admin-theme-toggle" aria-label="Switch light or dark theme" title="Switch light / dark">
+              <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+            </button>
             <a class="btn btn-sm btn-ghost" href="/" target="_blank" rel="noopener">View site ↗</a>
           </div>
         </header>

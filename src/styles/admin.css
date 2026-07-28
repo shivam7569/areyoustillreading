@@ -55,10 +55,45 @@
     --ok: #3fb950;    --ok-bg: color-mix(in srgb, #3fb950 18%, transparent);
     --warn: #d29922;  --warn-bg: color-mix(in srgb, #d29922 20%, transparent);
     --danger: #f85149; --danger-bg: color-mix(in srgb, #f85149 16%, transparent);
-    /* Darken the button fill so white text stays legible (WCAG AA) on dark backgrounds. */
+    /* Darken the button fill so its text stays legible (WCAG AA) on dark backgrounds. */
     --btn-fill: color-mix(in srgb, var(--accent) 58%, #06080d);
     --btn-fill-hover: color-mix(in srgb, var(--accent) 66%, #06080d);
   }
+}
+/* Manual-toggle mirrors: the Studio now sets data-theme on <html> (matching the
+   public toggle), so its semantic state colours + button fill must flip on the
+   ATTRIBUTE too — the base tokens + derived --admin-* surfaces already do. Without
+   these the dashboard would render half-dark when the toggle disagrees with the OS. */
+:root[data-theme="dark"] {
+  --ok: #3fb950;    --ok-bg: color-mix(in srgb, #3fb950 18%, transparent);
+  --warn: #d29922;  --warn-bg: color-mix(in srgb, #d29922 20%, transparent);
+  --danger: #f85149; --danger-bg: color-mix(in srgb, #f85149 16%, transparent);
+  --btn-fill: color-mix(in srgb, var(--accent) 58%, #06080d);
+  --btn-fill-hover: color-mix(in srgb, var(--accent) 66%, #06080d);
+}
+:root[data-theme="light"] {
+  --ok: #1a7f37;    --ok-bg: color-mix(in srgb, #1a7f37 14%, transparent);
+  --warn: #9a6700;  --warn-bg: color-mix(in srgb, #9a6700 16%, transparent);
+  --danger: #cf222e; --danger-bg: color-mix(in srgb, #cf222e 12%, transparent);
+  --btn-fill: var(--accent);
+  --btn-fill-hover: color-mix(in srgb, var(--accent) 88%, #000);
+}
+
+/* Studio topbar theme toggle (mirrors the public one; icon swaps by data-theme). */
+.admin-theme-toggle {
+  width: 34px; height: 34px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  display: grid; place-items: center;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+.admin-theme-toggle:hover { background: var(--admin-hover); color: var(--fg); }
+.admin-theme-toggle svg { width: 17px; height: 17px; }
+.admin-theme-toggle .icon-sun { display: none; }
+:root[data-theme="dark"] .admin-theme-toggle .icon-moon { display: none; }
+:root[data-theme="dark"] .admin-theme-toggle .icon-sun { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .admin-theme-toggle .icon-moon { display: none; }
+  :root:not([data-theme]) .admin-theme-toggle .icon-sun { display: block; }
 }
 
 /* The public site's body font is the editorial body SERIF (Charis SIL). The
