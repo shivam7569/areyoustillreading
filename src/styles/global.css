@@ -163,9 +163,10 @@ a.link:hover { border-color: var(--accent); }
 
 .lede { font-size: var(--fs-lg); line-height: 1.55; color: var(--muted); font-weight: 400; }
 
-/* Body-copy links (inside prose) get a subtle underline for scannability. */
-article a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); }
-article a:hover { text-decoration-color: currentColor; }
+/* Reader-post prose links get their accent underline from `.post-body :where(p,li,
+   td,blockquote) a` (border-bottom) further down. The old generic `article a`
+   underline was removed: the editorial listing rows are <article> elements, so it
+   was wrongly underlining post-title links (which use the hover underline-wipe). */
 
 /* ---- Code ---- */
 /* Inline code: editorial pill on the warm surface with an accent glyph. */
