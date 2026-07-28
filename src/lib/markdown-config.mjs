@@ -29,6 +29,9 @@
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { createJavaScriptRegexEngine } from 'shiki';
+// Pure hast transform (no Node/WASM) → safe to import in every environment. Turns a
+// published ```plotly figure fence into a reader plot + collapsible code view.
+import rehypePlotly from './rehype-plotly.mjs';
 
 // One shared engine instance (pure JS, no WASM). Created once at module load.
 const engine = createJavaScriptRegexEngine();
@@ -47,9 +50,11 @@ export const shikiConfig = {
  */
 export function markdownConfig(rehypeD2) {
   return {
-    syntaxHighlight: { type: 'shiki', excludeLangs: ['d2'] },
+    // `plotly` is excluded (like `d2`) so its figure-JSON fence reaches rehypePlotly
+    // raw instead of being syntax-highlighted into span soup.
+    syntaxHighlight: { type: 'shiki', excludeLangs: ['d2', 'plotly'] },
     remarkPlugins: [remarkMath],
-    rehypePlugins: rehypeD2 ? [rehypeKatex, rehypeD2] : [rehypeKatex],
+    rehypePlugins: rehypeD2 ? [rehypeKatex, rehypeD2, rehypePlotly] : [rehypeKatex, rehypePlotly],
     shikiConfig,
   };
 }

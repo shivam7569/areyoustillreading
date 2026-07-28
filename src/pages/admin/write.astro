@@ -406,6 +406,24 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   // long editing session can't grow the cache without limit.
   const d2Cache = new Map();
   const D2_CACHE_MAX = 64;
+
+  // Figures produced by ```python plot cells during this session, keyed by the
+  // cell's (trimmed) source. At publish we embed each one as a ```plotly fence so
+  // the reader page renders the plot interactively (rehype-plotly + PlotlyReader);
+  // Pyodide never runs for readers. Cells that produce no figure aren't cached.
+  const plotlyFigureCache = new Map();
+  // After every ```python cell whose source has a cached figure, append a ```plotly
+  // fence carrying that figure JSON. Left untouched for non-plotting cells.
+  function injectPlotlyFigures(md) {
+    return md.replace(/```(?:python|py)[^\n]*\n([\s\S]*?)\n```/g, (whole, code) => {
+      const fig = plotlyFigureCache.get(code.trim());
+      if (!fig) return whole;
+      let json;
+      try { json = JSON.stringify(fig); } catch { return whole; }
+      return whole + '\n\n```plotly\n' + json + '\n```';
+    });
+  }
+
   function renderD2(code) {
     if (d2Cache.has(code)) {
       // Refresh recency: re-insert so it's treated as most-recently-used.
@@ -500,6 +518,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           await plotlyJs.react(holder, figure.data || [], layout, { responsive: true, displaylogo: false });
           requestAnimationFrame(() => { try { plotlyJs.Plots.resize(holder); } catch {} });
           updateControls(panel, holder, figure);
+          // Remember this cell's figure so publish can embed it for readers.
+          plotlyFigureCache.set(code, figure);
         } else {
           // Non-plotting cell -> a notebook-style output block showing stdout. If the
           // cell printed nothing, show nothing (no clutter).
@@ -978,7 +998,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
       // Title lives in frontmatter (rendered as the page <h1>), so drop a leading
       // "# Title" from the body to avoid a duplicate heading.
-      const body = crepe.getMarkdown().replace(/^#\s+.+\n+/, '');
+      const body = injectPlotlyFigures(crepe.getMarkdown().replace(/^#\s+.+\n+/, ''));
       // Preserve the original publish date when updating an existing post; a brand-new
       // post is dated today.
       const pubDate = (editing && editing.pubDate) || new Date().toISOString().slice(0, 10);

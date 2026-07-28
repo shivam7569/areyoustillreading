@@ -139,6 +139,22 @@ li { margin: 0.35rem 0; }
   font-family: var(--font-mono); font-size: 0.9em;
 }
 
+/* Published Plotly figures + collapsible code (src/lib/rehype-plotly.mjs, hydrated
+   by PlotlyReader.astro). The plot renders interactively; the code sits one click away. */
+.py-plot { margin: 1.75rem 0; }
+.py-code { margin: 0 0 0.65rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.py-code > summary {
+  cursor: pointer; padding: 0.5rem 0.9rem; font-size: var(--fs-sm); font-weight: 600;
+  color: var(--muted); list-style: none; user-select: none;
+}
+.py-code > summary::-webkit-details-marker { display: none; }
+.py-code > summary::before { content: '▸'; display: inline-block; margin-right: 0.4rem; transition: transform var(--dur) var(--ease); }
+.py-code[open] > summary::before { transform: rotate(90deg); }
+.py-code > summary:hover { color: var(--fg); }
+.py-code pre { margin: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; }
+.plotly-figure { width: 100%; }
+.plotly-holder { width: 100%; min-height: 300px; }
+
 /* ---- Header / nav ---- */
 .site-header {
   position: sticky; top: 0; z-index: 50;

@@ -74,6 +74,7 @@ import Highlights from '../components/Highlights.astro';
 import Notes from '../components/Notes.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
 import SeriesNav from '../components/SeriesNav.astro';
+import PlotlyReader from '../components/PlotlyReader.astro';
 import { getSeriesNav } from '../lib/series';
 import 'katex/dist/katex.min.css';
 
@@ -170,6 +171,8 @@ const series = await getSeriesNav(post);
     This layout deliberately delegates ALL data/auth/paywall concerns to them;
     it passes only the post identifier and enforces no access itself.
   */}
+  {/* Hydrates any published Plotly figures (interactive, lazy). No-op if none. */}
+  <PlotlyReader />
   <Highlights postId={post.id} />
   <Notes postId={post.id} />
   <Comments postId={post.id} />
