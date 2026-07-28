@@ -619,6 +619,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // (/admin/write?slug=<slug>) → load its Markdown from the content collection.
     const editSlug = new URLSearchParams(location.search).get('slug');
     const DRAFT_KEY = 'aysr:editor-draft';
+    // Durable drafts: the signed-in admin's id, used to read/write their single
+    // draft row in Supabase (RLS-scoped) so a draft survives a browser clear or a
+    // switch of device. Best-effort — null if the session isn't ready.
+    let draftUid = null;
+    try { const { data: s } = await supabase.auth.getSession(); draftUid = (s && s.session && s.session.user && s.session.user.id) || null; } catch {}
 
     let startDoc = '# New post\n\nStart writing.\n';
     let restoredMsg = '';
@@ -669,6 +674,14 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     } else {
       let savedDraft = null;
       try { savedDraft = localStorage.getItem(DRAFT_KEY); } catch {}
+      // Prefer the durable server draft when present (this device may have been
+      // cleared, or the draft was written on another device). Best-effort.
+      try {
+        if (draftUid) {
+          const { data: row } = await supabase.from('drafts').select('content').eq('user_id', draftUid).maybeSingle();
+          if (row && typeof row.content === 'string' && row.content.trim()) savedDraft = row.content;
+        }
+      } catch {}
       if (savedDraft != null) { startDoc = savedDraft; restoredMsg = 'Draft restored'; }
     }
 
@@ -719,9 +732,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         if (editing) { statusEl.textContent = 'Unsaved edits — Publish to save'; return; }
         statusEl.textContent = 'Saving…';
         clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => {
-          try { localStorage.setItem(DRAFT_KEY, md); statusEl.textContent = 'Saved'; }
-          catch { statusEl.textContent = 'Save failed'; }
+        saveTimer = setTimeout(async () => {
+          try { localStorage.setItem(DRAFT_KEY, md); } catch {}
+          // Durable copy — upsert the user's single draft row (RLS-scoped). Best-effort.
+          try {
+            if (draftUid) await supabase.from('drafts').upsert({ user_id: draftUid, content: md, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+            statusEl.textContent = 'Saved';
+          } catch { statusEl.textContent = 'Saved locally'; }
         }, 800);
       });
     });
@@ -767,6 +784,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         return;
       }
       try { localStorage.removeItem(DRAFT_KEY); } catch {}
+      try { if (draftUid) supabase.from('drafts').delete().eq('user_id', draftUid).then(() => {}, () => {}); } catch {}
       // Start a genuinely fresh post: drop any ?slug= so we don't reload the edited post.
       if (editing) location.href = '/admin/write';
       else location.reload();
@@ -1022,6 +1040,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         const j = await res.json().catch(() => ({}));
         if (res.ok && j.ok) {
           navigating = true;
+          // Published — clear the new-post draft (local + durable) so it can't resurrect
+          // next time the editor opens. Only for a genuinely new post, not an edit.
+          if (!editing) {
+            try { localStorage.removeItem(DRAFT_KEY); } catch {}
+            try { if (draftUid) supabase.from('drafts').delete().eq('user_id', draftUid).then(() => {}, () => {}); } catch {}
+          }
           // Optionally announce the post to confirmed subscribers — only for a real
           // publish (never a draft) and only if the author opted in. AWAITED (not
           // fire-and-forget) so the "emailed N" count is shown before the live-jump
