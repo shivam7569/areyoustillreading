@@ -15,6 +15,8 @@
  * origin-checks the input; spoofed events are low-value for a personal blog.
  */
 
+import { rateLimit, clientIp } from '../../lib/rate-limit.js';
+
 const NOOP = () => new Response(null, { status: 204 });
 
 function clampInt(v, lo, hi) {
@@ -48,6 +50,11 @@ async function handle({ request, env }) {
       host === '127.0.0.1';
     if (!ok) return NOOP();
   }
+
+  // Per-IP rate limit (fail-open, silent). Generous — a reader legitimately loads
+  // several pages a minute, each firing a view + a read beacon.
+  const rl = await rateLimit(env, 'track', clientIp(request), 100, 60);
+  if (!rl.ok) return NOOP();
 
   // Beacons arrive as application/json (Blob) or text/plain; read as text + parse.
   let body;

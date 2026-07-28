@@ -124,6 +124,19 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       </div>`;
   }
 
+  // Visibility cell: an explicit Visible/Hidden switch (maps to the draft flag).
+  // On = public (draft:false); off = hidden from the public site (draft:true).
+  function visCell(p: any) {
+    return `<div class="pw-cell" title="${p.draft ? 'Hidden from the public site — flip to show' : 'Visible on the public site — flip to hide'}">
+        <label class="pw-toggle">
+          <input type="checkbox" data-vis data-slug="${esc(p.slug)}" ${p.draft ? '' : 'checked'} aria-label="Visible to the public">
+          <span class="track"><span class="knob"></span></span>
+        </label>
+        <span style="font-size:0.82rem;color:${p.draft ? 'var(--muted)' : 'var(--fg)'}">${p.draft ? 'Hidden' : 'Visible'}</span>
+        ${p.paid ? ' <span class="badge paid">Paid</span>' : ''}
+      </div>`;
+  }
+
   function render(rows: any[]) {
     document.getElementById('posts-sub')!.textContent =
       `${all.length} post${all.length === 1 ? '' : 's'}${rows.length !== all.length ? ` · ${rows.length} shown` : ''}`;
@@ -136,7 +149,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       return;
     }
     host.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>'
-      + '<th>Title</th><th>Status</th><th>Paywall</th><th class="num">Actions</th></tr></thead><tbody>'
+      + '<th>Title</th><th>Visibility</th><th>Paywall</th><th class="num">Actions</th></tr></thead><tbody>'
       + rows.map((p) => {
         const tags = (p.tags || []).length ? `<span class="t-sub">${(p.tags || []).map((t: string) => '#' + esc(t)).join(' ')}</span>` : '';
         // Series indicator (shown in the row subline) so series membership is
@@ -154,20 +167,17 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           : p.emailed
             ? `<button class="btn btn-sm btn-ghost" disabled title="Already emailed${p.emailedAt ? ' · ' + esc(fmtDate(p.emailedAt)) : ''}">✓ Emailed</button>`
             : `<button class="btn btn-sm" data-act="email" data-slug="${esc(p.slug)}">✉ Email</button>`;
-        const toggle = p.draft
-          ? `<button class="btn btn-sm" data-act="publish" data-slug="${esc(p.slug)}">Publish</button>`
-          : `<button class="btn btn-sm btn-ghost" data-act="unpublish" data-slug="${esc(p.slug)}">Unpublish</button>`;
         const del = `<button class="btn btn-sm ${armed ? 'btn-danger' : 'btn-ghost'}" data-act="delete" data-slug="${esc(p.slug)}">${armed ? 'Confirm delete' : 'Delete'}</button>`;
         return `<tr data-slug="${esc(p.slug)}">
             <td>
               <div class="t-title"><a href="/admin/write?slug=${encodeURIComponent(p.slug)}">${esc(p.title)}</a></div>
               <div class="t-sub">${esc(fmtDate(p.pubDate))}${tags ? ' · ' : ''}${tags}${seriesInfo ? ' · ' + seriesInfo : ''}</div>
             </td>
-            <td>${stateBadges(p)}</td>
+            <td>${visCell(p)}</td>
             <td>${pwCell(p)}</td>
             <td class="num"><div class="row-actions">
               <a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a>
-              ${viewBtn}${emailBtn}${toggle}${del}
+              ${viewBtn}${emailBtn}${del}
             </div></td>
           </tr>`;
       }).join('')
@@ -215,9 +225,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     if (!btn) return;
     const act = btn.dataset.act!;
     const slug = btn.dataset.slug!;
-    if (act === 'publish') setDraft(slug, false);
-    else if (act === 'unpublish') setDraft(slug, true);
-    else if (act === 'email') openEmail(slug);
+    if (act === 'email') openEmail(slug);
     else if (act === 'delete') {
       if (armedDelete === slug) {
         del(slug);
@@ -250,8 +258,22 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     if (error) throw error;
   }
 
+  // Visibility toggle (Visible/Hidden = the draft flag). Event-delegated. The
+  // visibility switch shares the .pw-cell layout class, so both change handlers
+  // are scoped by the changed control's data attribute.
+  host.addEventListener('change', async (e) => {
+    const cb = e.target as HTMLInputElement;
+    if (!(cb instanceof HTMLInputElement) || !cb.hasAttribute('data-vis')) return;
+    const slug = cb.dataset.slug!;
+    const visible = cb.checked; // checked = visible on the public site = draft:false
+    cb.disabled = true;
+    await setDraft(slug, !visible); // reloads the list (badge/labels re-render from server)
+  });
+
   // Paywall toggle / price edits (event-delegated on the table).
   host.addEventListener('change', async (e) => {
+    // Only paywall controls — the visibility switch shares the .pw-cell layout class.
+    if (!(e.target as HTMLElement).matches('[data-pw], .pw-price-in')) return;
     const cell = (e.target as HTMLElement).closest('.pw-cell') as HTMLElement | null;
     if (!cell) return;
     const row = cell.closest('tr') as HTMLElement;
@@ -270,8 +292,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       await savePaywall(slug, wasGateable, on, dollars);
       cell.dataset.gateable = on ? '1' : '0';
       if (post) { post.paid = on; post.gateable = on; post.priceCents = Math.round(dollars * 100); }
-      const statusTd = row.children[1] as HTMLElement; // reflect the Paid badge
-      if (statusTd && post) statusTd.innerHTML = stateBadges(post);
+      const statusTd = row.children[1] as HTMLElement; // reflect the Paid badge in the visibility cell
+      if (statusTd && post) statusTd.innerHTML = visCell(post);
     } catch (err: any) {
       alert(err.message || 'Paywall update failed');
       toggle.checked = !on; // revert

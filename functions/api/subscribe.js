@@ -93,6 +93,7 @@ import {
   setPendingToken,
   sendConfirmationEmail,
 } from '../../lib/email.js';
+import { rateLimit, clientIp } from '../../lib/rate-limit.js';
 
 // Minimum gap between confirmation emails to the SAME still-pending address.
 // This is the anti-flood throttle: without it, repeatedly POSTing a victim's
@@ -116,6 +117,15 @@ export async function onRequestPost({ request, env }) {
   // dedicated pages for classic form submissions (progressive enhancement).
   const ct = request.headers.get('content-type') || '';
   const isJson = ct.includes('application/json');
+
+  // Per-IP rate limit (fail-open). Low ceiling — a human subscribes once; this
+  // caps scripted abuse of the mail path on top of Turnstile + the honeypot.
+  const rl = await rateLimit(env, 'subscribe', clientIp(request), 8, 60);
+  if (!rl.ok) {
+    return isJson
+      ? jsonResponse({ ok: false, error: 'Too many requests — please wait a moment.' }, 429)
+      : redirect('/subscribe-error');
+  }
 
   // Three inputs we care about, extracted differently per content type.
   // NOTE the field-name divergence between the two transports:

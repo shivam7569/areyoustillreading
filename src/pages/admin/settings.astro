@@ -28,14 +28,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     </div>
 
     <div class="card card-pad">
-      <strong>Read-through analytics</strong>
+      <strong>Analytics</strong>
       <p class="muted" style="margin:0.25rem 0 0.8rem;font-size:0.92rem">
-        The site's whole premise is knowing whether people finish. <strong>Plausible</strong> measures
-        scroll depth per page automatically, is cookieless (no consent banner), and counts every read —
-        the right fit for a static site. It needs a one-time script include added to the site's head, then
-        this section can chart read-through per post.
+        First-party and cookieless — traffic, read-depth per post, referrers, and subscribe/unlock
+        conversion, all your own data (no third-party script, no consent banner). Tip: append
+        <code>?noanalytics=1</code> to any page once to stop counting your own visits from that browser.
       </p>
-      <a class="btn btn-sm" href="https://plausible.io/docs/scroll-depth" target="_blank" rel="noopener">How scroll-depth works ↗</a>
+      <a class="btn btn-sm" href="/admin/analytics">Open Analytics →</a>
     </div>
 
     <div class="card card-pad">

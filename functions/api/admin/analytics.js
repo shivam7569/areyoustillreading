@@ -14,6 +14,53 @@ import { requireAdmin, json } from '../../../lib/require-admin.js';
 const LIMIT = 20000; // max events pulled per query (JS-side aggregation cap)
 const RANGES = { '7d': 7, '30d': 30, '90d': 90 };
 
+/**
+ * POST /api/admin/analytics — data maintenance (retention + test-data cleanup).
+ * Body { action: 'purge-synthetic' } deletes the load-test rows (session prefix
+ * 'lt_'); { action: 'purge-old', days } deletes events older than `days`.
+ * Admin-gated; service-role DELETE (the table is RLS deny-all to the anon key).
+ */
+export async function onRequestPost({ request, env }) {
+  const gate = await requireAdmin(request, env);
+  if (!gate.ok) return json({ error: gate.error }, gate.status);
+  const sb = env.SUPABASE_URL;
+  const service = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!sb || !service) return json({ error: 'Server not configured (Supabase).' }, 400);
+
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
+  const action = body && body.action;
+
+  let filter;
+  if (action === 'purge-synthetic') {
+    // Load-test rows use session ids prefixed 'lt_' (see the loadtest script). Real
+    // sessions are bare base36 with no underscore, so this won't touch live traffic.
+    filter = 'session=like.lt_*';
+  } else if (action === 'purge-old') {
+    const days = Math.max(1, Math.min(3650, parseInt(body.days, 10) || 90));
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    filter = `ts=lt.${encodeURIComponent(cutoff)}`;
+  } else {
+    return json({ error: 'Unknown action' }, 400);
+  }
+
+  const auth = { Authorization: `Bearer ${service}`, apikey: service };
+  // Count first (for a truthful "removed N" report).
+  let removed = 0;
+  try {
+    const cr = await fetch(`${sb}/rest/v1/analytics_events?select=id&${filter}`, { headers: { ...auth, Prefer: 'count=exact', Range: '0-0' } });
+    const m = /\/(\d+)\s*$/.exec(cr.headers.get('content-range') || '');
+    removed = m ? parseInt(m[1], 10) : 0;
+  } catch { /* count is best-effort */ }
+
+  const dr = await fetch(`${sb}/rest/v1/analytics_events?${filter}`, {
+    method: 'DELETE',
+    headers: { ...auth, Prefer: 'return=minimal' },
+  });
+  if (!dr.ok) return json({ error: `Delete failed (${dr.status})` }, 400);
+  return json({ ok: true, removed, action });
+}
+
 export async function onRequestGet({ request, env }) {
   const gate = await requireAdmin(request, env);
   if (!gate.ok) return json({ error: gate.error }, gate.status);

@@ -104,6 +104,8 @@ function json(obj, status = 200) {
  *        Cloudflare-injected context. `env` carries the secrets/bindings above.
  * @returns {Promise<Response>}
  */
+import { rateLimit, clientIp } from '../../lib/rate-limit.js';
+
 export async function onRequestPost(ctx) {
   // Top-level guard: any unexpected throw returns a readable JSON 4xx error instead of a
   // bare Cloudflare 502 "Bad gateway" (Cloudflare replaces a Function's 5xx with its own
@@ -122,6 +124,11 @@ async function handleCheckout({ request, env }) {
   // `svc` = service-role auth headers for PostgREST. This bypasses RLS, so the
   // queries below MUST carry explicit filters — the DB will not scope for us.
   const svc = { apikey: key, authorization: `Bearer ${key}` };
+
+  // Per-IP rate limit (fail-open) on the payment path — caps scripted abuse of
+  // checkout-session creation. Returns 4xx so the client can read it.
+  const rl = await rateLimit(env, 'checkout', clientIp(request), 12, 60);
+  if (!rl.ok) return json({ error: 'Too many requests — please wait a moment.' }, 429);
 
   // --- 1. Authenticate the reader -------------------------------------------
   // Read the reader's Supabase access token from the Authorization header. We

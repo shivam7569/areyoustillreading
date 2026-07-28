@@ -52,6 +52,16 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         <div id="refs"><div class="card-pad muted">Loading…</div></div>
       </div>
     </div>
+
+    <div class="card card-pad" style="margin-top:1rem">
+      <div class="card-title">Data</div>
+      <p class="muted" style="font-size:0.9rem;margin:0 0 0.9rem">Housekeeping — deletes are permanent.</p>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-sm btn-ghost" id="purge-synthetic" type="button">Clear load-test data</button>
+        <button class="btn btn-sm btn-ghost" id="purge-old" type="button">Purge data older than 90 days</button>
+        <span class="muted" id="purge-status" style="font-size:0.85rem"></span>
+      </div>
+    </div>
   </section>
 </AdminLayout>
 
@@ -201,6 +211,27 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       load();
     });
   });
+
+  async function purge(action: string, label: string) {
+    if (!confirm(`${label}? This can't be undone.`)) return;
+    const st = $('purge-status');
+    st.textContent = 'Working…';
+    try {
+      const r = await adminFetch('/api/admin/analytics', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(action === 'purge-old' ? { action, days: 90 } : { action }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok) throw new Error(d.error || 'Failed');
+      st.textContent = `Removed ${fmtNum(d.removed || 0)} row${d.removed === 1 ? '' : 's'}.`;
+      load();
+    } catch (e: any) {
+      st.textContent = 'Error: ' + (e.message || e);
+    }
+  }
+  $('purge-synthetic').addEventListener('click', () => purge('purge-synthetic', 'Delete all load-test rows'));
+  $('purge-old').addEventListener('click', () => purge('purge-old', 'Delete analytics older than 90 days'));
 
   whenAdmin.then(async () => { await loadTitles(); load(); });
 </script>
