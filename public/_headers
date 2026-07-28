@@ -5,12 +5,14 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://cdn.plot.ly https://challenges.cloudflare.com; connect-src 'self' https://*.supabase.co https://cdn.jsdelivr.net https://cdn.plot.ly https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; form-action 'self'
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://cdn.plot.ly https://challenges.cloudflare.com; connect-src 'self' https://*.supabase.co https://cdn.jsdelivr.net https://cdn.plot.ly https://challenges.cloudflare.com https://pypi.org https://files.pythonhosted.org; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; form-action 'self'
 # ENFORCING. The host allowlists are the real protection: default-src 'self', object-src
 # 'none', frame-ancestors 'none' (no clickjacking), and script/connect/frame limited to
 # self + the known CDNs (jsDelivr/Plotly for the editor's Pyodide+Plotly, Turnstile,
 # Supabase). script-src keeps 'unsafe-inline' (the site ships several first-party inline
 # scripts: analytics beacon, subscribe, Pagefind, admin reveal) and 'unsafe-eval'/
 # 'wasm-unsafe-eval' (Pyodide) — a static site can't nonce per-request, and the injection
-# surface is low (no user HTML is ever innerHTML'd unescaped). If the editor ever fails to
-# load a CDN, add that host here. To debug: open devtools, watch for "Refused to…" errors.
+# surface is low (no user HTML is ever innerHTML'd unescaped). connect-src includes
+# pypi.org + files.pythonhosted.org because the editor's Python plot cells install plotly
+# via micropip at runtime (Pyodide fetches package metadata/wheels from PyPI). If the
+# editor ever fails to load a CDN, add that host here; devtools shows "Refused to…" errors.
