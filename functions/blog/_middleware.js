@@ -89,6 +89,10 @@ export async function onRequest(context) {
   let entry;
   try { entry = JSON.parse(raw); } catch { return next(); }
   if (!entry || typeof entry.html !== 'string') return next();
+  // Drafts are never served on the public /blog route — an early-access draft is
+  // reachable only through a tokenized /early link (functions/early.js). Fall through
+  // to the static asset (which 404s for a draft, since the build excludes drafts).
+  if (entry.draft) return next();
 
   // STALENESS GATE: serve the KV copy ONLY while it is newer than this deployment's
   // build. Once the git-commit rebuild lands (post baked in, current hashed asset

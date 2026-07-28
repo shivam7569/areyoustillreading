@@ -157,7 +157,9 @@ export async function onRequestPost({ request, env }) {
     if (env.POSTS_HTML && typeof html === 'string' && html.trim()) {
       const publishedAt = Date.now();
       try {
-        await env.POSTS_HTML.put(slug, JSON.stringify({ html, publishedAt }));
+        // `draft` lets the /blog overlay skip serving a draft publicly (early-access
+        // drafts are reachable only via a tokenized /early link — see functions/early.js).
+        await env.POSTS_HTML.put(slug, JSON.stringify({ html, publishedAt, draft: !!draft }));
         instant = true;
         // Maintain a small recent-posts index so the /blog listing overlay can show
         // this post immediately too (the static listing only refreshes on rebuild).

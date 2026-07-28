@@ -169,6 +169,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
                 ? `<button class="btn btn-sm" data-act="retry-email" data-slug="${esc(p.slug)}" title="${p.emailedFailed} delivery failure(s) — resend to just those">↻ Retry ${p.emailedFailed}</button>`
                 : `<button class="btn btn-sm btn-ghost" disabled title="Already emailed${p.emailedAt ? ' · ' + esc(fmtDate(p.emailedAt)) : ''}">✓ Emailed</button>`)
             : `<button class="btn btn-sm" data-act="email" data-slug="${esc(p.slug)}">✉ Email</button>`;
+        // Early access (drafts only): email confirmed subscribers a private tokenized
+        // link to read the hidden draft before it goes public.
+        const earlyBtn = p.draft
+          ? `<button class="btn btn-sm" data-act="early" data-slug="${esc(p.slug)}" title="Email confirmed subscribers a private early-access link to this draft">◔ Early access</button>`
+          : '';
         const del = `<button class="btn btn-sm ${armed ? 'btn-danger' : 'btn-ghost'}" data-act="delete" data-slug="${esc(p.slug)}">${armed ? 'Confirm delete' : 'Delete'}</button>`;
         return `<tr data-slug="${esc(p.slug)}">
             <td>
@@ -229,6 +234,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     const slug = btn.dataset.slug!;
     if (act === 'email') openEmail(slug);
     else if (act === 'retry-email') retryEmail(slug);
+    else if (act === 'early') sendEarly(slug);
     else if (act === 'delete') {
       if (armedDelete === slug) {
         del(slug);
@@ -402,6 +408,31 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       alert(e.message || 'Retry failed');
     }
     await load();
+  }
+
+  // Early access (drafts only): email confirmed subscribers a private tokenized link
+  // to read the hidden draft. The post stays out of the public /blog until published.
+  async function sendEarly(slug: string) {
+    const p = all.find((x) => x.slug === slug);
+    if (!p) return;
+    if (!confirm(`Email confirmed subscribers a private early-access link to “${p.title}”?\n\nThe post stays hidden from the public until you publish it.`)) return;
+    try {
+      const r = await adminFetch('/api/admin/early', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug, title: p.title, description: p.description || '' }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) {
+        alert(d.sent > 0
+          ? `Early-access link emailed to ${d.sent} subscriber(s).`
+          : (d.message || 'Link created.') + (d.url ? '\n\n' + d.url : ''));
+      } else {
+        alert(d.error || 'Failed to send early access');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Failed to send early access');
+    }
   }
 
   document.getElementById('em-cancel')!.addEventListener('click', closeEmail);
