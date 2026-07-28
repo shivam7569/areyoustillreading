@@ -1,0 +1,133 @@
+---
+/*
+ * =============================================================================
+ * src/pages/series.astro  ·  ROUTE: "/series"  (multi-part collections)
+ * =============================================================================
+ * The editorial series index (Phase 5), from the Claude Design "series" template.
+ * A series is just the published posts sharing a `series` slug (2+ parts). Our
+ * model declares no "total/planned" parts, so — unlike the template's fictional
+ * progress bars — each card shows the REAL published parts + a count. Static SSG.
+ *
+ * If no multi-part series exist yet, an empty state is shown. GUARD: `!data.draft`.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SubscribeForm from '../components/SubscribeForm.astro';
+import { getCollection } from 'astro:content';
+import { bySeriesOrder } from '../lib/series';
+
+const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).filter(Boolean).length ?? 0) / 200));
+const prettify = (slug: string) => { const w = slug.replace(/[-_]+/g, ' ').trim(); return w.charAt(0).toUpperCase() + w.slice(1); };
+const fmtMonth = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+
+// Group published posts by series slug; keep only real (2+ part) series.
+const all = await getCollection('blog', ({ data }) => !data.draft && !!data.series);
+const bySeries = new Map<string, typeof all>();
+for (const p of all) {
+  const s = p.data.series as string;
+  if (!bySeries.has(s)) bySeries.set(s, []);
+  bySeries.get(s)!.push(p);
+}
+const seriesList = [...bySeries.entries()]
+  .filter(([, m]) => m.length >= 2)
+  .map(([slug, members]) => {
+    members.sort(bySeriesOrder);
+    const title = members.map((p) => p.data.seriesTitle).find((t) => t && t.trim())?.trim() || prettify(slug);
+    const parts = members.map((p) => ({ slug: p.id, title: p.data.title, date: p.data.pubDate, mins: readMins(p.body) }));
+    return { slug, title, parts, description: members[0].data.description, latest: parts[parts.length - 1].date, first: parts[0].date };
+  })
+  .sort((a, b) => b.latest.valueOf() - a.latest.valueOf());
+
+// A decorative themed chart per card (unique gradient id per series slug).
+const gid = (slug: string) => 'sg-' + slug.replace(/[^a-z0-9]+/gi, '');
+---
+
+<BaseLayout title="Series — areyoustillreading" description="Multi-part essay collections, each a single argument split across essays that build on each other." wide>
+  <div class="wrap">
+    <header class="page-head">
+      <div class="kicker"><span class="line"></span><span class="eyebrow">Series</span></div>
+      <h1>Some ideas <em>don't fit in one sitting.</em></h1>
+      <p class="lede">Running collections — each one a single argument split across essays that build on each other. Start at part one, or don't; every part stands up alone.</p>
+    </header>
+
+    {seriesList.length > 0 ? (
+      seriesList.map((s) => (
+        <article class="series">
+          <a class="art" href={`/blog/${s.parts[0].slug}`} aria-label={`Start ${s.title}`}>
+            <span class="badge">{s.parts.length} {s.parts.length === 1 ? 'part' : 'parts'}</span>
+            <svg viewBox="0 0 300 190" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <linearGradient id={gid(s.slug)} x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="var(--accent)" stop-opacity="0.26"/>
+                  <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <rect width="300" height="190" fill={`url(#${gid(s.slug)})`}/>
+              <g stroke="var(--rule)" stroke-width="1" opacity="0.6"><line x1="0" y1="48" x2="300" y2="48"/><line x1="0" y1="95" x2="300" y2="95"/><line x1="0" y1="142" x2="300" y2="142"/></g>
+              <path d="M0 160 C60 160 60 110 120 110 S200 70 250 62 300 40 300 40" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+              <g fill="var(--accent)"><circle cx="120" cy="110" r="3.5"/><circle cx="250" cy="62" r="3.5"/></g>
+            </svg>
+          </a>
+          <div>
+            <h2><a href={`/blog/${s.parts[0].slug}`}>{s.title}</a></h2>
+            {s.description && <p>{s.description}</p>}
+            <div class="prog">
+              <span>{s.parts.length} {s.parts.length === 1 ? 'part' : 'parts'} published</span>
+              <span class="dot-sep">·</span>
+              <span>{fmtMonth(s.first)}{s.first.valueOf() !== s.latest.valueOf() ? ` – ${fmtMonth(s.latest)}` : ''}</span>
+            </div>
+            <ul class="parts">
+              {s.parts.map((part, i) => (
+                <li>
+                  <a href={`/blog/${part.slug}`}>
+                    <span class="p">Part {i + 1}</span>
+                    <span class="t">{part.title}</span>
+                    <span class="m">{fmtMonth(part.date)} · {part.mins} min</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </article>
+      ))
+    ) : (
+      <p class="empty">No multi-part series yet. When two essays share a series, they'll gather here. <a class="link" href="/blog">Browse the archive &rarr;</a></p>
+    )}
+
+    <div class="series-foot">
+      <div class="sub-inner">
+        <SubscribeForm
+          heading="Get the next part when it lands"
+          blurb="Series instalments go out by email as they publish. No noise — unsubscribe from any email in one click."
+        />
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .series { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: clamp(24px, 4vw, 52px); padding: clamp(32px, 4vw, 48px) 0; border-top: 1px solid var(--rule); }
+  @media (max-width: 900px) { .series { grid-template-columns: 1fr; gap: 24px; } }
+  .series .art { position: relative; display: block; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: var(--paper-2); min-height: 190px; transition: border-color 0.2s; }
+  .series .art:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--rule)); }
+  .series .art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .badge { position: absolute; top: 16px; left: 16px; z-index: 2; font-family: var(--sans); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; background: var(--accent); color: var(--on-accent); padding: 6px 11px; border-radius: 2px; }
+  .series h2 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(26px, 3.2vw, 34px); line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 12px; }
+  .series h2 a { color: var(--ink); background-image: linear-gradient(var(--accent), var(--accent)); background-size: 0 1.5px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size 0.3s; }
+  .series:hover h2 a { background-size: 100% 1.5px; }
+  .series > div > p { color: var(--ink-soft); margin: 0 0 20px; max-width: 60ch; font-size: 17.5px; }
+  .prog { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; font-family: var(--sans); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); flex-wrap: wrap; }
+  .prog .dot-sep { opacity: 0.5; }
+  .parts { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+  .parts li { border-bottom: 1px solid var(--rule); }
+  .parts a { display: grid; grid-template-columns: 56px minmax(0, 1fr) 150px; gap: 20px; align-items: baseline; padding: 14px 6px; transition: background 0.22s; }
+  @media (max-width: 640px) { .parts a { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; } }
+  .parts a:hover { background: var(--paper-2); }
+  .parts .p { font-family: var(--sans); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+  .parts .t { font-family: var(--serif-display); font-size: 20px; line-height: 1.3; color: var(--ink); }
+  .parts a:hover .t { color: var(--accent); }
+  .parts .m { font-family: var(--sans); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); text-align: right; }
+  @media (max-width: 640px) { .parts .m { display: none; } }
+  .empty { border-top: 1px solid var(--rule); padding: clamp(40px, 6vw, 70px) 6px; color: var(--ink-faint); font-family: var(--sans); font-size: 16px; }
+  .series-foot { padding: clamp(44px, 6vw, 72px) 0 clamp(56px, 8vw, 96px); }
+  .sub-inner { max-width: 720px; }
+</style>
