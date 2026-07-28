@@ -136,15 +136,23 @@ async function getBuiltAt(url) {
 const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// One <li> matching src/pages/blog/index.astro's static markup (same classes + date
-// format), so an injected entry is indistinguishable from a built one.
+// One `.post` article matching src/pages/blog/index.astro's editorial markup (same
+// classes + date format), so an injected entry is indistinguishable from a built one
+// and is picked up by the archive's in-page filter script. `__index` has no tags, so
+// data-tags is empty (the entry shows under "All"); reading time is omitted (no body).
 function listingItem(p) {
   const d = new Date(`${p.pubDate}T00:00:00.000Z`);
   const ok = !isNaN(d.valueOf());
-  const iso = ok ? d.toISOString() : '';
   const human = ok ? `${SHORT_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}` : '';
-  return `<li><h2><a href="/blog/${p.slug}">${escHtml(p.title)}</a></h2>` +
-    `<time datetime="${iso}">${human}</time><p>${escHtml(p.description)}</p></li>`;
+  const tags = Array.isArray(p.tags) ? p.tags : [];
+  const chips = tags.length
+    ? `<div class="tags">${tags.slice(0, 3).map((t) => `<span class="tag">${escHtml(t)}</span>`).join('')}</div>`
+    : '';
+  return `<article class="post" data-tags="${escHtml(tags.join(' '))}">` +
+    `<div class="idx">&bull;</div>` +
+    `<div><h3><a href="/blog/${p.slug}">${escHtml(p.title)}</a></h3>` +
+    `<p>${escHtml(p.description)}</p>${chips}</div>` +
+    `<div class="aside"><span class="date">${human}</span></div></article>`;
 }
 
 // Serve the static /blog listing with instantly-published posts prepended: entries
@@ -166,7 +174,13 @@ async function listingOverlay(url, kv, next) {
         !html.includes(`/blog/${p.slug}"`)          // and not already in the static list
     );
     if (!fresh.length) return new Response(html, res);
-    const merged = html.replace('<ul class="post-list">', `<ul class="post-list">${fresh.map(listingItem).join('')}`);
+    // Inject a "Just published" group at the archive's stable anchor. The client
+    // filter script picks up these .post rows automatically (they're in the DOM at
+    // load). If the anchor is absent (older build), replace is a no-op → static list.
+    const block = `<div class="yr" data-year="new"><h2>Just published</h2>` +
+      `<span class="n">${fresh.length} new</span><span class="rule"></span></div>` +
+      `<div class="post-list" data-year="new">${fresh.map(listingItem).join('')}</div>`;
+    const merged = html.replace('<div id="ays-instant"></div>', `<div id="ays-instant"></div>${block}`);
     const headers = new Headers(res.headers);
     headers.set('x-served-by', 'kv-listing-overlay');
     headers.set('cache-control', 'public, max-age=0, must-revalidate');
