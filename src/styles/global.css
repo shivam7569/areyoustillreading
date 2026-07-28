@@ -263,6 +263,13 @@ li { margin: 0.35rem 0; }
 .py-code pre { margin: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; }
 .plotly-figure { width: 100%; }
 .plotly-holder { width: 100%; min-height: 300px; }
+/* Notebook-style stdout from a non-plotting python cell, embedded at publish as raw
+   <pre class="py-output">. Reuses the dark code slab (global `pre`) with an accent edge
+   marking it as output, sitting just under its source block. */
+.post-body pre.py-output {
+  margin: 0.5em 0 1.9em; padding: 14px 18px; font-family: var(--mono); font-size: 0.84rem;
+  line-height: 1.7; white-space: pre-wrap; box-shadow: none; border-left: 3px solid var(--accent);
+}
 
 /* ============================================================================
    EDITORIAL CHROME + UTILITIES — ported from the Claude Design base.css onto

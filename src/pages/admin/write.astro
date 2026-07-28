@@ -143,16 +143,32 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 <style>
   .muted { color: var(--muted); }
   .editor-bar {
-    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
-    padding: 0.5rem 0; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+    padding: 0.55rem 0.7rem; margin-bottom: 0.9rem;
+    background: var(--admin-surface); border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: var(--admin-shadow);
+    position: sticky; top: 0.5rem; z-index: 20;
+    -webkit-backdrop-filter: saturate(140%) blur(8px); backdrop-filter: saturate(140%) blur(8px);
   }
+  .editor-bar > strong {
+    font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.13em; text-transform: uppercase; color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    padding: 0.32rem 0.7rem; border-radius: 999px;
+  }
+  .editor-bar #editor-status { flex: 1 1 auto; font-size: 0.8rem; }
   .editor-bar button {
-    padding: 0.4rem 0.9rem; border: 1px solid var(--border); border-radius: 6px;
-    background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+    padding: 0.46rem 0.95rem; border: 1px solid var(--border); border-radius: 8px;
+    background: transparent; color: var(--fg); font-family: var(--font-sans);
+    font-weight: 600; font-size: 0.85rem; cursor: pointer;
+    transition: background 0.16s, border-color 0.16s, transform 0.16s;
   }
+  .editor-bar button:hover { background: var(--admin-hover); border-color: var(--border-strong); transform: translateY(-1px); }
+  .editor-bar #publish-btn { background: var(--btn-fill); border-color: var(--btn-fill); color: #fff; box-shadow: 0 8px 20px -12px var(--btn-fill); }
+  .editor-bar #publish-btn:hover { background: var(--btn-fill-hover); border-color: var(--btn-fill-hover); }
   #milkdown {
-    border: 1px solid var(--border); border-radius: 10px; min-height: 60vh;
-    background: var(--bg);
+    border: 1px solid var(--border); border-radius: 12px; min-height: 60vh;
+    background: var(--bg); overflow: hidden;
   }
   #md-out {
     margin-top: 1rem; padding: 1rem; border: 1px solid var(--border);
@@ -184,10 +200,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .pm-sub { margin: 0 0 1.35rem; color: var(--muted); font-size: 0.95rem; line-height: 1.5; }
   .pm-field { display: block; margin-bottom: 1rem; }
   .pm-label { display: block; margin-bottom: 0.35rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
-  .pm-card input[type="text"], .pm-card input[type="email"], .pm-card textarea {
-    width: 100%; padding: 0.6rem 0.75rem; font: inherit; color: inherit;
-    border: 1px solid var(--border); border-radius: 10px; background: var(--code-bg, transparent);
+  .pm-card input[type="text"], .pm-card input[type="email"], .pm-card input[type="number"], .pm-card textarea {
+    width: 100%; padding: 0.6rem 0.75rem; font: inherit; color: var(--fg);
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
   }
+  .pm-card input::placeholder, .pm-card textarea::placeholder { color: var(--muted); }
   .pm-card textarea { resize: vertical; line-height: 1.5; }
   .pm-card input:focus, .pm-card textarea:focus, .pm-slug:focus {
     outline: none; border-color: var(--accent);
@@ -225,9 +242,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .plotly-holder { width: 100%; height: 380px; }
   .py-running { padding: 0.5rem 0.8rem; opacity: 0.6; font-size: 0.85em; }
   .py-output {
-    margin: 0; padding: 0.6rem 0.8rem; white-space: pre-wrap; overflow-x: auto;
+    margin: 0.3rem 0 0.6rem; padding: 0.7rem 0.9rem; white-space: pre-wrap; overflow-x: auto;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em;
-    background: var(--code-bg); border-radius: 6px;
+    background: var(--code-bg); color: var(--code-fg); border: 1px solid var(--rule); border-radius: 8px;
   }
   .plotly-error {
     padding: 0.75rem; margin: 0; color: #e5484d; white-space: pre-wrap;
@@ -253,6 +270,41 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   }
   .plotly-controls button:disabled { opacity: 0.55 !important; cursor: default !important; }
   .plotly-controls .pc-status { opacity: 0.75; }
+
+  /* ---- Blend the Crepe/Milkdown editor with the site theme (both light + dark) ----
+     The Nord theme ships its own palette; remap its CSS variables to the editorial
+     tokens so the writing surface matches the published look instead of reading as a
+     bright/white sheet. Scoped under #editor-wrap so it out-specifies Nord's .milkdown.
+     The admin shell now honours data-theme, so these flip with the toggle. */
+  #editor-wrap .milkdown {
+    --crepe-color-background: var(--bg);
+    --crepe-color-on-background: var(--fg);
+    --crepe-color-surface: var(--bg);
+    --crepe-color-surface-low: var(--surface);
+    --crepe-color-on-surface: var(--fg);
+    --crepe-color-on-surface-variant: var(--muted);
+    --crepe-color-outline: var(--border);
+    --crepe-color-primary: var(--accent);
+    --crepe-color-secondary: color-mix(in srgb, var(--accent) 16%, transparent);
+    --crepe-color-on-secondary: var(--fg);
+    --crepe-color-inverse: var(--fg);
+    --crepe-color-on-inverse: var(--bg);
+    --crepe-color-inline-code: var(--accent);
+    --crepe-color-inline-area: var(--surface);
+    --crepe-color-error: #e5484d;
+    --crepe-color-hover: var(--admin-hover);
+    --crepe-color-selected: color-mix(in srgb, var(--accent) 14%, transparent);
+    --crepe-font-title: var(--serif-display);
+    --crepe-font-default: var(--serif-body);
+    --crepe-font-code: var(--font-mono);
+    background: var(--bg);
+    color: var(--fg);
+  }
+  /* The editor's inline code chip: match the reader's editorial inline code. */
+  #editor-wrap .milkdown code:not(pre code) {
+    background: var(--paper-2); border: 1px solid var(--rule); color: var(--accent);
+    border-radius: 4px; padding: 0.05em 0.35em;
+  }
 </style>
 
 <script>
@@ -412,15 +464,25 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   // the reader page renders the plot interactively (rehype-plotly + PlotlyReader);
   // Pyodide never runs for readers. Cells that produce no figure aren't cached.
   const plotlyFigureCache = new Map();
-  // After every ```python cell whose source has a cached figure, append a ```plotly
-  // fence carrying that figure JSON. Left untouched for non-plotting cells.
-  function injectPlotlyFigures(md) {
+  // Non-plot ```python cells that printed something: their captured stdout, keyed by
+  // source, so publish can embed it as a notebook-style output block for readers.
+  const pyOutputCache = new Map();
+  const escOut = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // After every ```python cell, embed its result so the reader sees it (Pyodide never
+  // runs for readers): a ```plotly fence for a plotting cell, or a <pre class="py-output">
+  // block for a cell that printed text. Cells with neither are left untouched.
+  function injectCellOutputs(md) {
     return md.replace(/```(?:python|py)[^\n]*\n([\s\S]*?)\n```/g, (whole, code) => {
-      const fig = plotlyFigureCache.get(code.trim());
-      if (!fig) return whole;
-      let json;
-      try { json = JSON.stringify(fig); } catch { return whole; }
-      return whole + '\n\n```plotly\n' + json + '\n```';
+      const key = code.trim();
+      const fig = plotlyFigureCache.get(key) || plotlyFigureCache.get(code);
+      if (fig) {
+        let json;
+        try { json = JSON.stringify(fig); } catch { return whole; }
+        return whole + '\n\n```plotly\n' + json + '\n```';
+      }
+      const out = pyOutputCache.get(key) || pyOutputCache.get(code);
+      if (out) return whole + '\n\n<pre class="py-output">' + escOut(out) + '</pre>';
+      return whole;
     });
   }
 
@@ -522,14 +584,17 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           plotlyFigureCache.set(code, figure);
         } else {
           // Non-plotting cell -> a notebook-style output block showing stdout. If the
-          // cell printed nothing, show nothing (no clutter).
+          // cell printed nothing, show nothing (no clutter). Cache the text so publish
+          // can embed it for readers (see injectCellOutputs).
           const out = (stdout || '').replace(/\s+$/, '');
           if (out) {
+            pyOutputCache.set(code, out);
             const pre = document.createElement('pre');
             pre.className = 'py-output';
             pre.textContent = out;
             panel.replaceChildren(pre);
           } else {
+            pyOutputCache.delete(code);
             panel.replaceChildren();
           }
         }
@@ -998,7 +1063,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
       // Title lives in frontmatter (rendered as the page <h1>), so drop a leading
       // "# Title" from the body to avoid a duplicate heading.
-      const body = injectPlotlyFigures(crepe.getMarkdown().replace(/^#\s+.+\n+/, ''));
+      const body = injectCellOutputs(crepe.getMarkdown().replace(/^#\s+.+\n+/, ''));
       // Preserve the original publish date when updating an existing post; a brand-new
       // post is dated today.
       const pubDate = (editing && editing.pubDate) || new Date().toISOString().slice(0, 10);
