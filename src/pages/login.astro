@@ -116,7 +116,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   // same build works on localhost, Cloudflare preview deploys, and prod.
   // IMPORTANT: this value must be present on Supabase's redirect allow-list or
   // Supabase will reject the redirect (see security notes in frontmatter).
-  const redirectTo = window.location.origin + '/account';
+  // Land on the HOMEPAGE after sign-in (the callback is consumed on any page by
+  // BaseLayout's auth handler), so a magic-link click doesn't dump the reader on a
+  // bare /account page.
+  const redirectTo = window.location.origin + '/';
   const msg = document.getElementById('auth-msg');
   const form = document.getElementById('magic-form');
 

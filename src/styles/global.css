@@ -113,6 +113,10 @@
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+/* The [hidden] attribute must always win, even over a component's own display rule
+   (e.g. a toggled panel that is display:grid/flex when shown). Without this, hiding
+   such an element via `.hidden = true` silently fails — the documented footgun. */
+[hidden] { display: none !important; }
 
 body {
   margin: 0;

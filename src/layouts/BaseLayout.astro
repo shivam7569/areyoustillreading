@@ -230,6 +230,26 @@ const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname =
         }
       }
     </script>
+    <script>
+      // Auth-callback consumer. Sign-in (magic-link / OAuth) redirects land on the
+      // HOMEPAGE now, so a callback can arrive on any public page. If the URL carries
+      // auth params, load the Supabase client (which consumes the session on init),
+      // then strip the params from the URL. Runs ONLY when params are actually present,
+      // so normal navigations load nothing extra.
+      {
+        const hasAuth =
+          /(?:access_token|refresh_token|provider_token|error_description)=/.test(location.hash) ||
+          /[?&](code|token_hash|error)=/.test(location.search);
+        if (hasAuth) {
+          import('../lib/supabase')
+            .then(async ({ supabase }) => {
+              try { await supabase.auth.getSession(); } catch {}
+              try { history.replaceState(null, '', location.pathname); } catch {}
+            })
+            .catch(() => {});
+        }
+      }
+    </script>
     {/* Editorial footer: wordmark · nav · social, over a centred copyline. */}
     <footer class="site-footer">
       <div class="wrap">
