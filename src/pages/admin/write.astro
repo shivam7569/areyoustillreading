@@ -416,7 +416,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     }
     const run = async () => {
       const d2 = await loadD2();
-      const res = await d2.compile(code, { pad: 20, noXMLTag: true });
+      const res = await d2.compile(code, { pad: 20, noXMLTag: true, themeID: 0, darkThemeID: 200 });
       const svg = await d2.render(res.diagram, res.renderOptions);
       d2Cache.set(code, svg);
       if (d2Cache.size > D2_CACHE_MAX) d2Cache.delete(d2Cache.keys().next().value);

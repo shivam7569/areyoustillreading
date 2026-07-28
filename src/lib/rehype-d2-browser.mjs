@@ -37,7 +37,9 @@ function loadD2() {
 
 export default function rehypeD2Browser(options = {}) {
   // Match plugins/rehype-d2.mjs exactly (dagre is D2's default; stated for parity).
-  const renderOpts = { layout: 'dagre', pad: 20, noXMLTag: true, ...options };
+  // themeID/darkThemeID: the SVG carries a prefers-color-scheme block so instant-
+  // published diagrams adapt to dark mode too (not a white box until the rebuild).
+  const renderOpts = { layout: 'dagre', pad: 20, noXMLTag: true, themeID: 0, darkThemeID: 200, ...options };
 
   return async (tree) => {
     const jobs = [];
