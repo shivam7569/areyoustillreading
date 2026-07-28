@@ -139,6 +139,12 @@ main {
   padding: clamp(2rem, 5vw, 3.5rem) var(--space);
   flex: 1 0 auto;
 }
+/* Editorial pages manage their own width via .wrap; opt out of the reading column. */
+main.wide {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
 
 /* ---- Headings ---- */
 h1, h2, h3, h4 { font-family: var(--serif-display); line-height: var(--lh-tight); font-weight: 600; letter-spacing: -0.02em; color: var(--fg); }

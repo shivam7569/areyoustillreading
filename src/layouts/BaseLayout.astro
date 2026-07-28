@@ -92,6 +92,9 @@ interface Props {
   title: string;
   description?: string;
   image?: string;
+  /** Full-bleed main for editorial pages that manage their own .wrap width
+   *  (home, archive, etc.). Default keeps the 68ch reading column for prose pages. */
+  wide?: boolean;
 }
 
 // Destructure incoming props. The default description is the site-wide tagline
@@ -101,6 +104,7 @@ const {
   title,
   description = 'Notes on LLM engineering, plus the projects behind them.',
   image,
+  wide = false,
 } = Astro.props;
 
 // Primary navigation, defined as data so the markup can render it with a single
@@ -190,8 +194,10 @@ const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname =
         </div>
       </div>
     </header>
-    {/* Page-specific content is injected here by the wrapping page via the slot. */}
-    <main>
+    {/* Page-specific content is injected here by the wrapping page via the slot.
+        `wide` opts out of the constrained reading column so editorial pages can run
+        their own full-width .wrap sections. */}
+    <main class={wide ? 'wide' : undefined}>
       <slot />
     </main>
     <script>

@@ -1,134 +1,209 @@
 ---
 /*
  * =============================================================================
- * FILE: src/pages/index.astro
- * ROUTE: "/"  (the site homepage / landing page)
+ * FILE: src/pages/index.astro  ·  ROUTE: "/"  (homepage)
  * =============================================================================
+ * The editorial landing page (Phase 5), rebuilt from the Claude Design "home"
+ * template onto the shared editorial system. Static SSG: everything in this
+ * fence runs ONCE at build time (no per-visitor server code).
  *
- * WHAT THIS IS
- * ------------
- * The Astro page component that renders the site root. Astro's file-based
- * router maps `src/pages/index.astro` -> the "/" URL. This file is compiled to
- * a fully STATIC HTML page at build time (`npm run build`) and shipped to
- * Cloudflare Pages via Wrangler direct upload (`npm run deploy`). There is NO
- * server-side execution at request time for this page: everything in the
- * frontmatter fence below runs ONCE during the build, not per-visitor.
+ * Structure (matches the template): a two-column hero (identity + pull-quote and
+ * stats), a featured "latest essay" card, a "recent writing" list, and the
+ * newsletter block. The hero copy + pull-quote are author-editable defaults; the
+ * featured/recent entries and the three stats are derived from REAL published
+ * posts, so nothing is fabricated.
  *
- * SINGLE RESPONSIBILITY
- * ---------------------
- * Present the marketing/landing surface: a hero blurb, a "Latest posts" teaser
- * (the 3 newest non-draft blog entries), and the newsletter subscribe form.
- * It intentionally does NO data mutation, auth, payments, or gating logic — it
- * is a read-only shop window that funnels visitors to /blog and to the
- * newsletter.
- *
- * HOW IT FITS THE ARCHITECTURE
- * ----------------------------
- *   - Wraps its content in <BaseLayout>, which supplies the <html>/<head>,
- *     global styles, nav, footer, and site-wide meta/OG plumbing. This page
- *     only owns the <body> content between the layout slots.
- *   - Reads the "blog" content collection (Markdown/MDX under src/content/blog,
- *     defined by the Zod schema in src/content/config.ts). getCollection is a
- *     BUILD-TIME API — the collection is resolved from local files on disk, not
- *     from Supabase. None of the backend stack (Supabase / PostgREST / RLS /
- *     Resend / Turnstile / Dodo Payments) is touched when rendering this page.
- *   - The interactive/backend concerns live entirely inside <SubscribeForm>
- *     (Turnstile bot check + a Pages Function that talks to Supabase/Resend).
- *     This page just drops that component in; it knows nothing about its guts.
- *
- * DEPENDS ON (imports)
- *   - ../layouts/BaseLayout.astro   -> page chrome + <head>
- *   - ../components/SubscribeForm.astro -> newsletter capture (self-contained)
- *   - astro:content getCollection   -> build-time blog entry loader
- *   - The "blog" collection schema (title, description, pubDate, draft, ...).
- *     If that schema's field names change, the template accessors below
- *     (data.title / data.description / data.pubDate / data.draft) must change too.
- *
- * DEPENDED ON BY
- *   - The Cloudflare Pages router only: this is the "/" entry point. No other
- *     module imports this file. Changing the exported markup only affects the
- *     homepage.
- *
- * SECURITY / GOTCHAS
- *   - No secrets, tokens, or user data are read here, so there is no RLS or
- *     signature-verification surface in THIS file. The security-sensitive path
- *     (honeypot, Turnstile token, RLS-guarded insert) is encapsulated in
- *     <SubscribeForm> and its backing Pages Function — audit those, not this.
- *   - Draft safety: the getCollection filter below is the ONLY thing keeping
- *     unpublished posts off the public homepage. Because the site is fully
- *     static, a draft that slips past this filter would be baked into public
- *     HTML with no runtime gate to catch it. Treat the `!data.draft` predicate
- *     as a publication guard, not a cosmetic sort option.
- *   - Never add HTML <!-- --> comments to the template region: they would ship
- *     to the browser. Use {/* ... *\/} JSX comments (stripped at build) instead.
+ * GUARDS / GOTCHAS
+ *   - `!data.draft` is the ONLY publication guard (static site → no runtime gate).
+ *   - <SubscribeForm> owns all bot-defense + the Supabase/Resend write; it is a
+ *     black box here. Exactly ONE instance per page (its ids are hard-coded).
+ *   - Uses <BaseLayout wide> so sections manage their own .wrap width.
+ *   - JSX comments only ({/* *\/}) — HTML comments would ship to the browser.
  */
-
-// Page chrome (html/head/nav/footer + global styles). This page only fills the slot.
 import BaseLayout from '../layouts/BaseLayout.astro';
-// Newsletter capture widget. Self-contained: owns its own Turnstile bot check,
-// honeypot, and the fetch to the subscribe Pages Function. Treated as a black box here.
 import SubscribeForm from '../components/SubscribeForm.astro';
-// Build-time loader for local content collections. NOT a network/DB call.
 import { getCollection } from 'astro:content';
 
-// Build the "Latest posts" teaser list. This executes ONCE at build time.
-//   1. getCollection('blog', filter) loads every entry in the blog collection,
-//      applying the predicate as a PUBLICATION GUARD: `!data.draft` drops any
-//      entry marked draft:true so unfinished posts are never baked into the
-//      public homepage (there is no runtime gate on a static page — see header).
-//   2. .sort() orders newest-first. pubDate is a Date (coerced by the collection
-//      schema); .valueOf() compares epoch millis, and b - a yields descending order.
-//   3. .slice(0, 3) keeps only the three most recent — this is a teaser, the full
-//      archive lives at /blog. If fewer than 3 exist, slice returns what's there.
+// Published posts, newest first. The draft filter is a publication guard.
 const posts = (await getCollection('blog', ({ data }) => !data.draft))
-  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
-  .slice(0, 3);
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+const featured = posts[0];
+const recent = posts.slice(1, 6);
+
+// Real, derived hero stats — never fabricated.
+const topics = new Set<string>();
+posts.forEach((p) => (p.data.tags ?? []).forEach((t) => topics.add(t)));
+const years = posts.map((p) => p.data.pubDate.getUTCFullYear());
+const sinceYear = years.length ? Math.min(...years) : new Date().getUTCFullYear();
+
+// Build-time helpers.
+const fmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).filter(Boolean).length ?? 0) / 200));
+
+// Featured post's series badge (only when it belongs to a multi-part series).
+const fSeries = featured?.data.series;
+const fBadge = fSeries ? `${featured.data.seriesTitle ?? fSeries} · Part ${featured.data.seriesOrder ?? 1}` : null;
 ---
 
-{/* title flows into BaseLayout's <head> (<title> + OG/meta). This page owns only the body slot. */}
-<BaseLayout title="areyoustillreading — LLM engineering notes">
-  {/* Static hero: fixed marketing copy + primary CTAs. No data binding. */}
+<BaseLayout title="areyoustillreading — LLM engineering notes" wide>
+  {/* ---------- HERO ---------- */}
   <section class="hero">
-    <h1>areyoustillreading</h1>
-    <p class="lede">
-      In-depth writing on LLM engineering — and the projects behind it.
-    </p>
-    <div class="hero-actions">
-      <a class="cta" href="/blog">Read the blog &rarr;</a>
-      <a class="cta-secondary" href="/projects">View projects</a>
+    <div class="wrap hero-grid">
+      <div>
+        <div class="kicker"><span class="line"></span><span class="eyebrow">Essays &amp; field notes</span></div>
+        <h1>In-depth writing on LLM engineering — and the <em>systems behind it.</em></h1>
+        <p class="lede">Long-form notes on building, shipping, and speeding up language-model systems. Measured, first-person, and free of hype.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#subscribe">Subscribe to the letter
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>
+          </a>
+          <a class="btn btn-ghost" href="/blog">Read the blog <span class="arrow">&rarr;</span></a>
+        </div>
+      </div>
+      <aside class="hero-aside">
+        <p class="q">&ldquo;Most latency lives in the places nobody profiles. The essay is where I go looking.&rdquo;</p>
+        <div class="attr">From the field notes</div>
+        <div class="hero-stats">
+          <div><div class="n">{posts.length}</div><div class="l">{posts.length === 1 ? 'Essay' : 'Essays'}</div></div>
+          <div><div class="n">{topics.size}</div><div class="l">{topics.size === 1 ? 'Topic' : 'Topics'}</div></div>
+          <div><div class="n">{sinceYear}</div><div class="l">Writing since</div></div>
+        </div>
+      </aside>
     </div>
   </section>
 
-  {/* Short-circuit: render the whole "Latest posts" section ONLY if at least one
-      published post exists, so a brand-new/empty site shows no dangling heading
-      or empty <ul>. `&&` returns false (renders nothing) when the list is empty. */}
-  {posts.length > 0 && (
-    <section>
-      <div class="section-head">
-        <h2>Latest posts</h2>
-        <a href="/blog">All posts &rarr;</a>
+  {featured && (
+    <Fragment>
+      <div class="wrap"><div class="rule-full"></div></div>
+
+      {/* ---------- FEATURED (latest essay) ---------- */}
+      <section class="featured">
+        <div class="wrap">
+          <div class="sec-head">
+            <h2>{fSeries ? 'The current series' : 'Latest essay'}</h2>
+            <a class="more" href="/blog">Browse the archive &rarr;</a>
+          </div>
+          <article class="feat-card">
+            <div class="feat-art">
+              {fBadge && <span class="series-badge">{fBadge}</span>}
+              <svg viewBox="0 0 480 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <defs>
+                  <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="var(--accent)" stop-opacity="0.28"/>
+                    <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <rect width="480" height="360" fill="url(#g1)"/>
+                <g stroke="var(--accent)" stroke-width="1.1" fill="none" opacity="0.5">
+                  <path d="M0 300 C90 300 90 210 180 210 S270 130 360 130 450 70 480 70"/>
+                  <path d="M0 320 C90 320 90 250 180 250 S270 180 360 180 450 130 480 130" opacity="0.6"/>
+                  <path d="M0 335 C90 335 90 300 180 300 S270 245 360 245 450 205 480 205" opacity="0.35"/>
+                </g>
+                <g fill="var(--accent)">
+                  <circle cx="180" cy="210" r="3.5"/><circle cx="360" cy="130" r="3.5"/><circle cx="270" cy="168" r="3"/>
+                </g>
+                <g stroke="var(--rule)" stroke-width="1" opacity="0.6">
+                  <line x1="0" y1="90" x2="480" y2="90"/><line x1="0" y1="180" x2="480" y2="180"/><line x1="0" y1="270" x2="480" y2="270"/>
+                </g>
+              </svg>
+            </div>
+            <div class="feat-body">
+              <div class="meta-caps">{fmt(featured.data.pubDate)} &nbsp;·&nbsp; {readMins(featured.body)} min read</div>
+              <h3><a href={`/blog/${featured.id}`}>{featured.data.title}</a></h3>
+              <p>{featured.data.description}</p>
+              <a class="go" href={`/blog/${featured.id}`}>{fSeries ? 'Continue the series' : 'Read the essay'} <span class="arrow">&rarr;</span></a>
+            </div>
+          </article>
+        </div>
+      </section>
+    </Fragment>
+  )}
+
+  {recent.length > 0 && (
+    <section class="recent">
+      <div class="wrap">
+        <div class="sec-head">
+          <h2>Recent writing</h2>
+          <a class="more" href="/blog">Browse the archive &rarr;</a>
+        </div>
+        <div class="post-list">
+          {recent.map((post, i) => (
+            <article class="post">
+              <div class="idx">{String(i + 1).padStart(2, '0')}</div>
+              <div>
+                <h3><a href={`/blog/${post.id}`}>{post.data.title}</a></h3>
+                <p>{post.data.description}</p>
+                {post.data.tags && post.data.tags.length > 0 && (
+                  <div class="tags">{post.data.tags.slice(0, 3).map((t) => (<span class="tag">{t}</span>))}</div>
+                )}
+              </div>
+              <div class="aside">
+                <span class="date">{fmt(post.data.pubDate)}</span>
+                <span class="rt">{readMins(post.body)} min</span>
+              </div>
+            </article>
+          ))}
+        </div>
       </div>
-      <ul class="post-list">
-        {/* One <li> per teaser entry. post.id is the collection slug used to build
-            the canonical /blog/<slug> permalink — it must match the blog route. */}
-        {posts.map((post) => (
-          <li>
-            <h2><a href={`/blog/${post.id}`}>{post.data.title}</a></h2>
-            {/* datetime carries the machine-readable ISO timestamp (for crawlers/AT);
-                the visible text is a human-friendly localized date. Both come from the
-                same pubDate so they never drift. */}
-            <time datetime={post.data.pubDate.toISOString()}>
-              {post.data.pubDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-            </time>
-            <p>{post.data.description}</p>
-          </li>
-        ))}
-      </ul>
     </section>
   )}
 
-  {/* Newsletter capture. All bot-defense (honeypot + Turnstile) and the
-      Supabase/Resend write happen inside this component + its Pages Function,
-      not here — see SubscribeForm for the security-sensitive logic. */}
-  <SubscribeForm />
+  {/* ---------- NEWSLETTER ---------- */}
+  <section class="sub-section" id="subscribe">
+    <div class="wrap">
+      <div class="sub-inner">
+        <SubscribeForm
+          heading="Get the next essay by email."
+          blurb="New posts on LLM engineering and the systems underneath — straight to your inbox. No spam, unsubscribe in one click."
+        />
+      </div>
+    </div>
+  </section>
 </BaseLayout>
+
+<style>
+  /* Home-specific layout ported from the Claude Design "home" template. Shared
+     bits (.btn/.sec-head/.eyebrow/.meta-caps/.post/.tag/.wrap) come from global.css. */
+  .hero { padding: clamp(56px, 9vw, 116px) 0 clamp(40px, 6vw, 64px); position: relative; }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: clamp(32px, 6vw, 80px); align-items: end; }
+  @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; gap: 40px; } }
+  .hero .kicker { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+  .hero .kicker .line { height: 1px; width: 52px; background: var(--accent); opacity: 0.6; }
+  .hero h1 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(40px, 7vw, 78px); line-height: 1.02; letter-spacing: -0.02em; margin: 0 0 0.5em; max-width: 16ch; }
+  .hero h1 em { font-style: italic; color: var(--accent); }
+  .hero .lede { font-size: clamp(19px, 2.3vw, 23px); line-height: 1.6; color: var(--ink-soft); max-width: 52ch; margin: 0 0 34px; }
+  .cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+
+  .hero-aside { border-left: 2px solid var(--accent); padding: 6px 0 6px 22px; }
+  .hero-aside .q { font-family: var(--serif-display); font-style: italic; font-size: 20px; line-height: 1.5; color: var(--ink); margin: 0; }
+  .hero-aside .attr { margin-top: 14px; font-family: var(--sans); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
+  .hero-stats { display: flex; gap: 28px; margin-top: 26px; }
+  .hero-stats .n { font-family: var(--serif-display); font-size: 30px; color: var(--accent); line-height: 1; }
+  .hero-stats .l { font-family: var(--sans); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); margin-top: 6px; }
+
+  .rule-full { height: 1px; background: var(--rule); margin: 0; }
+
+  .featured { padding: clamp(48px, 7vw, 80px) 0; }
+  .feat-card { display: grid; grid-template-columns: 1.15fr 1fr; gap: 0; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; box-shadow: var(--shadow); }
+  @media (max-width: 820px) { .feat-card { grid-template-columns: 1fr; } }
+  .feat-art { position: relative; min-height: 340px; background: radial-gradient(120% 120% at 15% 10%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 55%), var(--paper-2); border-right: 1px solid var(--rule); overflow: hidden; }
+  @media (max-width: 820px) { .feat-art { border-right: none; border-bottom: 1px solid var(--rule); min-height: 220px; } }
+  .feat-art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .series-badge { position: absolute; top: 22px; left: 22px; z-index: 2; font-family: var(--sans); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; background: var(--accent); color: var(--on-accent); padding: 7px 12px; border-radius: 2px; }
+  .feat-body { padding: clamp(28px, 3.4vw, 44px); display: flex; flex-direction: column; justify-content: center; }
+  .feat-body .meta-caps { margin-bottom: 16px; }
+  .feat-body h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(26px, 3.2vw, 36px); line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 16px; }
+  .feat-body h3 a { color: var(--ink); background-image: linear-gradient(var(--accent), var(--accent)); background-size: 0 1.5px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size 0.3s; }
+  .feat-body h3 a:hover { background-size: 100% 1.5px; }
+  .feat-body p { color: var(--ink-soft); margin: 0 0 22px; max-width: 46ch; }
+  .feat-body .go { font-family: var(--sans); font-size: 14px; color: var(--accent); display: inline-flex; align-items: center; gap: 8px; }
+  .feat-body .go .arrow { transition: transform 0.2s; }
+  .feat-card:hover .feat-body .go .arrow { transform: translateX(5px); }
+
+  .recent { padding: clamp(20px, 4vw, 40px) 0 clamp(56px, 8vw, 96px); }
+  .recent .post-list { border-top: 1px solid var(--rule); }
+
+  .sub-section { padding: 0 0 clamp(56px, 8vw, 96px); }
+  .sub-inner { max-width: 720px; }
+</style>
