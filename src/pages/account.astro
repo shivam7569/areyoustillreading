@@ -1,145 +1,283 @@
 ---
 /*
- * FILE: src/pages/account.astro
- * ROUTE: /account  (statically prerendered HTML shell; all logic is client-side)
+ * FILE: src/pages/account.astro  ·  ROUTE: /account
+ * =============================================================================
+ * The editorial account area (Phase 5), adapted from the Claude Design "account"
+ * template to THIS site's real model: there is no subscription plan — monetization
+ * is per-post pay-what-you-want unlocks (Dodo → `entitlements`) + a single
+ * newsletter. So the design's layout is kept (sticky sidebar + panels) but wired to:
+ *   - the Supabase session (identity),
+ *   - `entitlements` (RLS reads-own) → "Your library" of unlocked essays,
+ *   - is_admin() → a "Studio" panel/link (admins only),
+ *   - the newsletter (SubscribeForm),
+ * and the signed-out state is an inline sign-in card (magic-link + GitHub). Also the
+ * post-auth landing target (Supabase consumes the URL session here).
  *
- * WHAT THIS IS
- *   The signed-in user's minimal "account" page. Its single responsibility is to
- *   answer one question in the browser — "is there a Supabase session right now?" —
- *   and render one of two states accordingly:
- *     (a) signed in  -> greeting with the user's email + a "Sign out" button
- *     (b) signed out -> a prompt with a link to /login
- *   That is the entire scope. It intentionally does NOT fetch entitlements, posts,
- *   payments, or admin status; those live on other routes/functions.
- *
- * HOW IT FITS THE ARCHITECTURE
- *   This is a static Astro page deployed to Cloudflare Pages (direct upload via
- *   Wrangler, `npm run deploy`). There is NO server-side rendering here: the .astro
- *   frontmatter runs only at build time and emits a fixed HTML shell. Everything
- *   dynamic happens in the browser via the Supabase JS client, which reads the
- *   session from the auth token persisted in browser storage (localStorage by
- *   default) by the Supabase client.
- *
- *   Auth model (project-wide): Supabase email magic-link + GitHub OAuth. After a
- *   successful magic-link click or OAuth redirect, the provider bounces back to a
- *   URL carrying the session (hash/query params or PKCE code). The Supabase client
- *   detects and consumes that on load and fires onAuthStateChange — which is why
- *   this page can double as the post-auth landing spot and immediately reflect the
- *   new session (see the script below).
- *
- * DEPENDENCIES (imports)
- *   - ../layouts/BaseLayout.astro : site chrome (head, nav, styling shell).
- *   - ../lib/supabase (client-side <script> import) : the shared browser Supabase
- *       client. It holds the publishable/anon key and is safe to ship to the client;
- *       real data protection comes from Postgres Row-Level Security, NOT from hiding
- *       this key.
- *
- * WHAT DEPENDS ON THIS FILE
- *   - Nothing imports this page. It is referenced only as a navigation target
- *       (the /account link elsewhere in the site, and as a post-login destination).
- *
- * SECURITY ASSUMPTIONS / GOTCHAS
- *   - This page is PURELY presentational auth state. The email shown and the
- *       signed-in/out branch are client-trust only and can be spoofed by anyone
- *       editing their own browser — they grant zero authority. Every privileged
- *       action (reading gated content, admin toggles, payments via Dodo) is
- *       enforced server-side (Cloudflare Pages Functions) and by Supabase RLS +
- *       is_admin() in Postgres. Do not add trust-bearing logic here.
- *   - getSession() reads the LOCAL token; it does not hit the network to verify.
- *       That is acceptable here because we only decide what to display. Never gate
- *       a real resource on getSession() alone.
- *   - No secrets live in this file. The only key reachable from the client is the
- *       anon key inside ../lib/supabase, which is designed to be public.
+ * STATIC SSG: the frontmatter runs at build time only (it just bakes a slug→title
+ * map for the library). ALL behaviour is client-side under RLS. Client-shown state
+ * is display-only and grants zero authority — every real action is server-enforced.
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
+import SubscribeForm from '../components/SubscribeForm.astro';
+import { getCollection } from 'astro:content';
+
+// Build-time slug → {title, mins} map so the client can label entitlement rows
+// (posts are static Markdown, not DB rows). Baked into a JSON script below.
+const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).filter(Boolean).length ?? 0) / 200));
+const postsMeta: Record<string, { title: string; mins: number }> = {};
+for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
+  postsMeta[p.id] = { title: p.data.title, mins: readMins(p.body) };
+}
 ---
 
-<BaseLayout title="Account — areyoustillreading" description="Your account.">
-  {/*
-    Static shell only. The frontmatter runs at BUILD time, so the HTML shipped to
-    the browser always shows the "Checking your session…" placeholder. The real,
-    session-dependent content is swapped in by the client <script> below once the
-    Supabase client has resolved the session. This placeholder is the deliberate
-    loading state for the brief window before that runs (or if JS is disabled, it
-    is what a no-JS visitor sees — acceptable, since there is nothing sensitive here).
-  */}
-  <h1>Account</h1>
-  <div id="account-content">
-    <p>Checking your session…</p>
+<BaseLayout title="Your account — areyoustillreading" description="Your account." wide>
+  <div class="wrap">
+    {/* Loading state — replaced the moment the Supabase session resolves. */}
+    <div id="acct-checking" class="acct-checking"><p>Checking your session…</p></div>
+
+    {/* ---------- SIGNED OUT: inline sign-in ---------- */}
+    <section id="acct-signedout" class="signin" hidden>
+      <header class="page-head">
+        <div class="kicker"><span class="line"></span><span class="eyebrow">Account</span></div>
+        <h1>Sign in to <em>your account.</em></h1>
+        <p class="lede">One tap and you're in — for reading unlocked essays, saving highlights and notes, and managing the letter.</p>
+      </header>
+      <div class="card signin-card">
+        <button class="btn btn-primary" id="si-github" type="button">Continue with GitHub</button>
+        <div class="or">or</div>
+        <form class="si-magic" id="si-magic">
+          <input id="si-email" type="email" placeholder="you@example.com" aria-label="Email address" required />
+          <button class="btn btn-ghost" type="submit">Email me a link</button>
+        </form>
+        <p class="si-status" id="si-status" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    {/* ---------- SIGNED IN: the account ---------- */}
+    <div id="acct-signedin" class="acct" hidden>
+      <aside class="side">
+        <div class="who">
+          <div class="avatar" id="ac-initial" aria-hidden="true">·</div>
+          <div>
+            <div class="nm" id="ac-name">Reader</div>
+            <div class="em" id="ac-email"></div>
+          </div>
+        </div>
+        <nav>
+          <a href="#library">Your library</a>
+          <a href="#letter">The letter</a>
+          <a href="#studio" id="ac-studio-nav" hidden>Studio</a>
+        </nav>
+        <div class="out"><a href="#" id="ac-signout">Sign out</a></div>
+      </aside>
+
+      <div>
+        <header class="acct-head">
+          <div class="kicker"><span class="line"></span><span class="eyebrow">Your account</span></div>
+          <h1>Everything you've unlocked</h1>
+        </header>
+
+        <section class="panel" id="library">
+          <h2 id="lib-heading">Your library</h2>
+          <div class="lib" id="lib-list"></div>
+          <p class="lib-empty" id="lib-empty" hidden>You haven't unlocked any paid essays yet — most of the writing here is free. <a class="link" href="/blog">Browse the archive &rarr;</a></p>
+        </section>
+
+        <section class="panel" id="studio" hidden>
+          <h2>Studio</h2>
+          <a class="card studio-card" href="/admin">
+            <div>
+              <div class="sc-t">Open the Studio</div>
+              <div class="sc-s">Write and publish, manage posts, the audience, analytics and revenue.</div>
+            </div>
+            <span class="sc-go">Enter &rarr;</span>
+          </a>
+        </section>
+
+        <section class="panel" id="letter">
+          <h2>The letter</h2>
+          <SubscribeForm
+            heading="Get the next essay by email"
+            blurb="New essays on LLM engineering and the systems underneath. No noise — and you can unsubscribe from any email in one click."
+          />
+        </section>
+      </div>
+    </div>
   </div>
+
+  <script type="application/json" id="posts-meta" set:html={JSON.stringify(postsMeta)}></script>
 </BaseLayout>
 
 <script>
-  // This <script> is bundled by Astro/esbuild and runs in the BROWSER. It is where
-  // 100% of this page's behavior lives (the .astro frontmatter above is build-time
-  // only). Comments here are stripped by the production minifier, so they do not
-  // bloat the shipped bundle.
   import { supabase } from '../lib/supabase';
 
-  // The single mount point whose contents we replace based on auth state. Captured
-  // once; the shell HTML guarantees it exists before this module executes.
-  const content = document.getElementById('account-content');
+  const checking = document.getElementById('acct-checking')!;
+  const signedout = document.getElementById('acct-signedout')!;
+  const signedin = document.getElementById('acct-signedin')!;
+  const postsMeta: Record<string, { title: string; mins: number }> =
+    JSON.parse(document.getElementById('posts-meta')?.textContent || '{}');
 
-  // Renders the current auth state into #account-content. Idempotent and safe to
-  // call repeatedly — every call fully rebuilds the subtree, so re-running after
-  // sign-in/out never leaves stale UI behind.
-  async function render() {
-    // Reads the session from LOCAL storage only (no network round-trip). Fine here
-    // because we are choosing what to DISPLAY, not authorizing anything. `data` is
-    // always defined; `.session` is null when signed out — hence optional chaining.
-    const { data } = await supabase.auth.getSession();
-    const user = data.session?.user;
-    if (user) {
-      // --- Signed-in branch ---
-      // Clear the placeholder/previous render. Using textContent = '' (not
-      // innerHTML) avoids re-parsing markup and drops old listeners with the nodes.
-      content.textContent = '';
-      const p = document.createElement('p');
-      // Build the greeting via textContent (NOT innerHTML): user.email is
-      // user-controlled data, and textContent makes DOM-XSS impossible regardless
-      // of its contents. `?? 'your account'` covers OAuth identities with no email.
-      p.textContent = 'Signed in as ' + (user.email ?? 'your account') + '.';
-      const btn = document.createElement('button');
-      btn.textContent = 'Sign out';
-      btn.className = 'signout';
-      btn.addEventListener('click', async () => {
-        // Clear the local session/token, then re-render to show the signed-out view.
-        // signOut() also triggers onAuthStateChange, so render() may run twice — that
-        // is harmless given render() is idempotent (see above).
-        await supabase.auth.signOut();
-        render();
-      });
-      content.appendChild(p);
-      content.appendChild(btn);
-    } else {
-      // --- Signed-out branch ---
-      // Static, developer-authored markup with no interpolated data, so innerHTML is
-      // safe here (nothing user-controlled is injected). Links to the /login route.
-      content.innerHTML = 'You are not signed in. <a href="/login">Sign in</a>.';
+  const show = (el: HTMLElement) => {
+    for (const v of [checking, signedout, signedin]) (v as HTMLElement).hidden = v !== el;
+  };
+  const fmt = (iso: string) => {
+    const d = new Date(iso);
+    return isNaN(d.valueOf()) ? '' : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  // Build the "Your library" rows from the reader's entitlements (RLS reads-own).
+  async function loadLibrary() {
+    const list = document.getElementById('lib-list')!;
+    const empty = document.getElementById('lib-empty')!;
+    const heading = document.getElementById('lib-heading')!;
+    list.textContent = '';
+    let rows: Array<{ post_id: string; created_at: string }> = [];
+    try {
+      const { data } = await supabase
+        .from('entitlements')
+        .select('post_id, created_at')
+        .order('created_at', { ascending: false });
+      rows = data || [];
+    } catch { rows = []; }
+    if (!rows.length) {
+      empty.hidden = false;
+      heading.textContent = 'Your library';
+      return;
+    }
+    empty.hidden = true;
+    heading.textContent = `Your library — ${rows.length} ${rows.length === 1 ? 'essay' : 'essays'}`;
+    for (const r of rows) {
+      const meta = postsMeta[r.post_id];
+      const a = document.createElement('a');
+      a.className = 'lib-row';
+      a.href = `/blog/${r.post_id}`;
+      const t = document.createElement('span');
+      t.className = 't';
+      // textContent for all values (post title comes from our build map, but keep the
+      // XSS-safe habit for the slug fallback too).
+      t.textContent = meta ? meta.title : r.post_id;
+      const small = document.createElement('small');
+      small.textContent = `Unlocked ${fmt(r.created_at)}${meta ? ` · ${meta.mins} min` : ''}`;
+      t.appendChild(small);
+      const st = document.createElement('span');
+      st.className = 'st';
+      st.textContent = 'Owned';
+      const go = document.createElement('span');
+      go.className = 'go';
+      go.textContent = 'Read again →';
+      a.append(t, st, go);
+      list.appendChild(a);
     }
   }
 
-  // Supabase parses the magic-link / OAuth session out of the URL on load.
-  // Subscribing BEFORE the initial render() means that if this page is the
-  // post-auth landing target, the moment the client finishes consuming the URL
-  // session (SIGNED_IN event) we re-render to the signed-in view without a manual
-  // reload. It also keeps the UI in sync across tabs and after the sign-out above.
-  // NOTE: the returned subscription is deliberately never unsubscribed. This is a
-  // whole page (not a mount/unmount component island), so the listener is meant to
-  // live for the full page lifetime and is torn down naturally on navigation/reload
-  // — there is no leak to clean up here.
+  async function render() {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (!user) { show(signedout); return; }
+
+    const email = user.email ?? '';
+    (document.getElementById('ac-email') as HTMLElement).textContent = email;
+    const name = (user.user_metadata?.user_name || user.user_metadata?.name || (email ? email.split('@')[0] : 'Reader')) as string;
+    (document.getElementById('ac-name') as HTMLElement).textContent = name;
+    (document.getElementById('ac-initial') as HTMLElement).textContent = (name || 'r').trim().charAt(0).toUpperCase() || 'R';
+    show(signedin);
+
+    loadLibrary();
+
+    // Admins get the Studio panel + sidebar link.
+    try {
+      const { data: isAdmin } = await supabase.rpc('is_admin');
+      if (isAdmin === true) {
+        (document.getElementById('studio') as HTMLElement).hidden = false;
+        (document.getElementById('ac-studio-nav') as HTMLElement).hidden = false;
+      }
+    } catch { /* not admin / RPC unavailable — leave hidden */ }
+  }
+
+  // Sign-in actions (signed-out card). Redirect back to /account so the session
+  // finalizes here. Kept identical in contract to /login.
+  const origin = window.location.origin;
+  document.getElementById('si-github')?.addEventListener('click', async () => {
+    const s = document.getElementById('si-status');
+    if (s) s.textContent = 'Redirecting to GitHub…';
+    await supabase.auth.signInWithOAuth({ provider: 'github', options: { redirectTo: origin + '/account' } });
+  });
+  document.getElementById('si-magic')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = (document.getElementById('si-email') as HTMLInputElement).value.trim();
+    const s = document.getElementById('si-status');
+    if (!email) return;
+    if (s) s.textContent = 'Sending…';
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: origin + '/account' } });
+    if (s) s.textContent = error ? error.message : 'Check your email for the sign-in link.';
+  });
+
+  // Sign out from the sidebar.
+  document.getElementById('ac-signout')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    await supabase.auth.signOut();
+    render();
+  });
+
+  // Re-render on auth changes without reloading (SIGNED_IN fires on load/refocus).
   supabase.auth.onAuthStateChange(() => render());
-  // First paint: replace the "Checking your session…" placeholder with real state.
   render();
 </script>
 
 <style>
-  .signout {
-    padding: 0.5rem 1rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg);
-    color: var(--fg);
-    cursor: pointer;
-  }
+  .acct-checking { padding: clamp(60px, 12vw, 140px) 0; color: var(--ink-faint); font-family: var(--sans); }
+
+  /* ---- signed-out sign-in ---- */
+  .signin { padding-bottom: clamp(56px, 8vw, 96px); }
+  .signin .page-head h1 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(36px, 6vw, 60px); line-height: 1.04; letter-spacing: -0.02em; margin: 0; }
+  .signin .page-head h1 em { font-style: italic; color: var(--accent); }
+  .signin-card { max-width: 420px; padding: clamp(26px, 4vw, 36px); margin-top: clamp(24px, 3vw, 36px); }
+  .signin-card .btn-primary { width: 100%; justify-content: center; }
+  .signin-card .or { text-align: center; margin: 16px 0; font-family: var(--sans); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+  .si-magic { display: flex; gap: 10px; flex-wrap: wrap; }
+  .si-magic input { flex: 1; min-width: 200px; font-family: var(--sans); font-size: 15px; padding: 13px 16px; border-radius: 2px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); }
+  .si-magic input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  .si-status { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); margin: 14px 0 0; }
+
+  /* ---- signed-in account ---- */
+  .acct { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: clamp(28px, 5vw, 64px); padding: clamp(40px, 6vw, 72px) 0 clamp(56px, 8vw, 96px); align-items: start; }
+  @media (max-width: 900px) { .acct { grid-template-columns: 1fr; gap: 32px; } }
+  .side { position: sticky; top: 96px; }
+  @media (max-width: 900px) { .side { position: static; } }
+  .who { display: flex; align-items: center; gap: 14px; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--rule); }
+  .who .avatar { width: 46px; height: 46px; border-radius: 999px; background: radial-gradient(120% 120% at 30% 20%, var(--accent-soft), var(--accent)); display: grid; place-items: center; color: var(--on-accent); font-family: var(--serif-display); font-size: 19px; flex: none; }
+  .who .nm { font-family: var(--serif-display); font-size: 19px; line-height: 1.2; }
+  .who .em { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); margin-top: 3px; word-break: break-all; }
+  .side nav { display: flex; flex-direction: column; gap: 2px; font-family: var(--sans); font-size: 14.5px; }
+  .side nav a { padding: 9px 12px; border-radius: 3px; color: var(--ink-soft); transition: background 0.2s, color 0.2s; }
+  .side nav a:hover { background: var(--paper-2); color: var(--ink); }
+  .side .out { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--rule); font-family: var(--sans); font-size: 13.5px; }
+  .side .out a { color: var(--ink-faint); transition: color 0.2s; }
+  .side .out a:hover { color: var(--accent); }
+
+  .acct-head { padding: 0 0 clamp(24px, 3vw, 34px); }
+  .acct-head .kicker { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  .acct-head .kicker .line { height: 1px; width: 48px; background: var(--accent); opacity: 0.6; }
+  .acct-head h1 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(32px, 4.6vw, 48px); line-height: 1.06; letter-spacing: -0.02em; margin: 0; }
+
+  .panel { margin-bottom: clamp(28px, 4vw, 44px); scroll-margin-top: 84px; }
+  .panel > h2 { font-family: var(--sans); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 16px; font-weight: 600; }
+
+  .lib { border-top: 1px solid var(--rule); }
+  .lib-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 130px; gap: 20px; align-items: center; padding: 18px 6px; border-bottom: 1px solid var(--rule); transition: background 0.22s; }
+  .lib-row:hover { background: var(--paper-2); }
+  @media (max-width: 760px) { .lib-row { grid-template-columns: 1fr; gap: 8px; } }
+  .lib-row .t { font-family: var(--serif-display); font-size: 19px; line-height: 1.25; color: var(--ink); }
+  .lib-row .t small { display: block; font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); margin-top: 5px; letter-spacing: 0.02em; }
+  .lib-row .st { font-family: var(--sans); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+  .lib-row .go { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); text-align: right; }
+  @media (max-width: 760px) { .lib-row .go { text-align: left; } }
+  .lib-row:hover .go { color: var(--accent); }
+  .lib-empty { color: var(--ink-faint); font-family: var(--sans); font-size: 15px; padding: 8px 0; }
+
+  .studio-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: clamp(22px, 2.6vw, 28px); }
+  .studio-card .sc-t { font-family: var(--serif-display); font-size: 21px; color: var(--ink); }
+  .studio-card .sc-s { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); margin-top: 5px; max-width: 46ch; }
+  .studio-card .sc-go { font-family: var(--sans); font-size: 14px; color: var(--accent); white-space: nowrap; }
+  .studio-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--rule)); }
 </style>
