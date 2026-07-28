@@ -70,6 +70,10 @@
 
 // Self-hosted Inter (variable) — CSP-safe, bundled by Astro (no external CDN).
 import '@fontsource-variable/inter';
+// Self-hosted editorial serifs (Charter body + Newsreader display placeholder).
+// @font-face only — the tokens that consume these families land with the design
+// foundation port; declaring them here is inert until referenced (no font fetch).
+import '../styles/fonts.css';
 // Bundle the global stylesheet into every page (single shared import point).
 import '../styles/global.css';
 // Delegate all <head> construction (SEO/OG/canonical/meta) to BaseHead.

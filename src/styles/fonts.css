@@ -1,0 +1,69 @@
+/*
+ * fonts.css — self-hosted serif webfonts for the editorial site.
+ * =============================================================================
+ * WHY SELF-HOSTED (not the design's Google Fonts @import, not system stacks):
+ * the two serif faces must render IDENTICALLY on every platform and with ZERO
+ * external requests (the enforced CSP allows font-src 'self' only — no
+ * fonts.gstatic.com). So we ship the actual WOFF2 files and force their use.
+ * There is deliberately NO local() source — a local() would prefer an OS copy
+ * and reintroduce the per-platform drift we're removing.
+ *
+ * FILES live in /public/fonts (served at /fonts/*). font-display:swap → text
+ * paints immediately in the fallback and swaps once the webface loads.
+ *
+ *   Display serif — Source Serif 4 (SIL OFL 1.1). Variable weight axis, roman +
+ *                   italic; the design uses 400 + 600.  → --serif-display
+ *   Body serif    — Charis SIL     (SIL OFL 1.1). Four discrete styles; a Charter
+ *                   descendant with a large glyph set.   → --serif-body
+ *
+ * The family names below MUST match the design tokens verbatim ("Source Serif 4",
+ * "Charis SIL"); each token keeps a Georgia/serif fallback so any load gap
+ * degrades gracefully, never to nothing. Licenses kept in /public/fonts.
+ * =============================================================================
+ */
+
+/* --- Source Serif 4 — display serif (variable weight), roman + italic --- */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('/fonts/SourceSerif4-Variable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('/fonts/SourceSerif4-Italic-Variable.woff2') format('woff2');
+}
+
+/* --- Charis SIL — body serif (4 discrete styles) --- */
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/CharisSIL-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/CharisSIL-Italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/CharisSIL-Bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/CharisSIL-BoldItalic.woff2') format('woff2');
+}
