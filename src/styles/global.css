@@ -15,14 +15,48 @@
  * =========================================================================
  */
 :root {
-  /* ---- Layout ---- */
-  --measure: 68ch;              /* prose reading width */
-  --page: 46rem;                /* chrome + landing max width */
-  --space: 1rem;
+  /* ============================================================================
+     EDITORIAL design tokens (Phase 5) — the SOURCE OF TRUTH for colour.
+     The pre-existing token names (--bg/--fg/--accent/--border/--muted/…) are kept
+     as ALIASES below because admin.css + ~160 references across the app bind to
+     those exact names — only their VALUES moved to the editorial palette. Never
+     rename a token; add/alias instead. Accent is plum in light, bronze in dark
+     (a deliberate per-theme hue; always use var(--accent), never a literal).
+     ============================================================================ */
+  --paper: #faf7f1; --paper-2: #f3eee3;
+  --ink: #1c1813; --ink-soft: #443c30; --ink-faint: #726752;
+  --rule: #d8cfbd; --rule-soft: #e6dfd0; --card: #fffdf8;
+  --accent: #5e3560; --accent-soft: #764a78; --on-accent: #faf3fa;
+  --code-fg: #e7ddc9;
 
-  /* ---- Type ---- */
+  /* Serif faces are self-hosted (src/styles/fonts.css); names MUST match verbatim.
+     UI/chrome stays on the existing sans stack (--font-sans) for now — the editorial
+     header/footer restyle lands in the next increment and uses --sans. */
+  --serif-display: "Source Serif 4", Georgia, Cambria, "Times New Roman", serif;
+  --serif-body: "Charis SIL", Georgia, Cambria, "Times New Roman", serif;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --gutter: clamp(20px, 5vw, 72px);
+
+  /* ---- Back-compat colour aliases (values remapped; names unchanged) ---- */
+  --bg: var(--paper);
+  --surface: var(--paper-2);
+  --fg: var(--ink);
+  --muted: var(--ink-soft);
+  --faint: var(--ink-faint);
+  --accent-ink: var(--accent-soft);
+  --border: var(--rule-soft);
+  --border-strong: var(--rule);
+  --code-bg: #f2ecdf;           /* warm light code surface (theme-following; dark override below) */
+
+  /* ---- Type family aliases: UI keeps the current sans; body/headings go serif ---- */
   --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-mono: var(--mono);
+
+  /* ---- Preserved layout / type / effect tokens (no editorial equivalent) ---- */
+  --measure: 68ch;              /* prose reading width */
+  --page: 46rem;                /* chrome + landing max width (existing pages) */
+  --space: 1rem;
   --fs-xs: 0.78rem;
   --fs-sm: 0.885rem;
   --fs-base: 1.06rem;
@@ -32,42 +66,49 @@
   --fs-hero: clamp(2.4rem, 6vw, 3.5rem);
   --lh-tight: 1.14;
   --lh-body: 1.72;
-
-  /* ---- Colour (light) ---- */
-  --bg: #ffffff;
-  --surface: #f8f8fa;           /* subtly raised: cards, hovers */
-  --fg: #17181b;
-  --muted: #5b5e67;
-  --faint: #8a8d96;             /* meta / timestamps */
-  --accent: #3a5bff;
-  --accent-ink: #2a45d8;        /* accent on hover (light) */
-  --border: #ececef;
-  --border-strong: #dedee3;
-  --code-bg: #f6f6f8;
-
-  /* ---- Effects ---- */
   --radius-sm: 6px;
   --radius: 10px;
   --radius-lg: 16px;
-  --shadow: 0 1px 2px rgba(20, 22, 28, 0.04), 0 10px 30px rgba(20, 22, 28, 0.06);
+  --shadow: 24px 40px 80px -48px rgba(40, 28, 14, 0.45);
   --dur: 160ms;
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Dark palette. Defined under BOTH the OS preference AND a data-theme="dark"
+   attribute (the manual toggle ships next increment) so nothing renders half-dark.
+   Only the editorial SOURCE tokens flip here; every --bg/--fg/… alias follows
+   automatically through var(). data-theme is currently set by nothing, so these
+   attribute blocks are inert until the toggle lands. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0c0d10;
-    --surface: #14161b;
-    --fg: #e9eaec;
-    --muted: #9a9da6;
-    --faint: #6d707a;
-    --accent: #8aa2ff;
-    --accent-ink: #a8b8ff;
-    --border: #20222a;
-    --border-strong: #2c2f38;
-    --code-bg: #14161b;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 34px rgba(0, 0, 0, 0.4);
+    --paper: #181510; --paper-2: #211c15;
+    --ink: #ece3d1; --ink-soft: #c8bda6; --ink-faint: #94886f;
+    --rule: #38301f; --rule-soft: #2a2318; --card: #211c14;
+    --accent: #d6a75f; --accent-soft: #e3bd84; --on-accent: #221809;
+    --code-fg: #ddd2bd;
+    --code-bg: #14120c;
+    --shadow: 24px 44px 90px -50px rgba(0, 0, 0, 0.72);
   }
+}
+:root[data-theme="dark"] {
+  --paper: #181510; --paper-2: #211c15;
+  --ink: #ece3d1; --ink-soft: #c8bda6; --ink-faint: #94886f;
+  --rule: #38301f; --rule-soft: #2a2318; --card: #211c14;
+  --accent: #d6a75f; --accent-soft: #e3bd84; --on-accent: #221809;
+  --code-fg: #ddd2bd;
+  --code-bg: #14120c;
+  --shadow: 24px 44px 90px -50px rgba(0, 0, 0, 0.72);
+}
+/* Re-assert light (higher specificity than the @media :root) so a manual
+   light choice wins even when the OS prefers dark. */
+:root[data-theme="light"] {
+  --paper: #faf7f1; --paper-2: #f3eee3;
+  --ink: #1c1813; --ink-soft: #443c30; --ink-faint: #726752;
+  --rule: #d8cfbd; --rule-soft: #e6dfd0; --card: #fffdf8;
+  --accent: #5e3560; --accent-soft: #764a78; --on-accent: #faf3fa;
+  --code-fg: #e7ddc9;
+  --code-bg: #f2ecdf;
+  --shadow: 24px 40px 80px -48px rgba(40, 28, 14, 0.45);
 }
 
 * { box-sizing: border-box; }
@@ -75,7 +116,7 @@ html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  font-family: var(--font-sans);
+  font-family: var(--serif-body);   /* editorial: Charis SIL body serif */
   font-size: var(--fs-base);
   line-height: var(--lh-body);
   color: var(--fg);
@@ -100,7 +141,7 @@ main {
 }
 
 /* ---- Headings ---- */
-h1, h2, h3, h4 { line-height: var(--lh-tight); font-weight: 680; letter-spacing: -0.02em; color: var(--fg); }
+h1, h2, h3, h4 { font-family: var(--serif-display); line-height: var(--lh-tight); font-weight: 600; letter-spacing: -0.02em; color: var(--fg); }
 h1 { font-size: var(--fs-2xl); margin: 0 0 0.6rem; }
 h2 { font-size: var(--fs-xl); margin: 2.5rem 0 0.85rem; }
 h3 { font-size: var(--fs-lg); margin: 1.9rem 0 0.6rem; letter-spacing: -0.012em; }
@@ -238,6 +279,13 @@ article time { color: var(--faint); font-size: var(--fs-sm); }
     color: var(--shiki-dark) !important;
     background-color: var(--shiki-dark-bg) !important;
   }
+}
+/* Mirror for the manual toggle so code blocks follow data-theme="dark" too
+   (added now; inert until the toggle ships). */
+:root[data-theme="dark"] .astro-code,
+:root[data-theme="dark"] .astro-code span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
 }
 
 /* ---- Tags ---- */

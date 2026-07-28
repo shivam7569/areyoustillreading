@@ -61,6 +61,12 @@
   }
 }
 
+/* The public site's body font is the editorial body SERIF (Charis SIL). The
+   dashboard is a tool, not a reading surface, so keep it on the UI sans stack.
+   Guards both the authenticated shell (.admin) and the pre-auth gate view. */
+.admin, .admin-gate { font-family: var(--font-sans); }
+.admin :where(h1, h2, h3, h4), .admin-gate :where(h1, h2, h3, h4) { font-family: var(--font-sans); }
+
 /* ---- Shell layout ------------------------------------------------------- */
 /* AdminLayout does NOT use global.css's constrained <main>; it renders its own
    full-viewport grid: fixed sidebar + fluid content column. */
