@@ -165,7 +165,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         const emailBtn = p.draft
           ? ''
           : p.emailed
-            ? `<button class="btn btn-sm btn-ghost" disabled title="Already emailed${p.emailedAt ? ' · ' + esc(fmtDate(p.emailedAt)) : ''}">✓ Emailed</button>`
+            ? (p.emailedFailed > 0
+                ? `<button class="btn btn-sm" data-act="retry-email" data-slug="${esc(p.slug)}" title="${p.emailedFailed} delivery failure(s) — resend to just those">↻ Retry ${p.emailedFailed}</button>`
+                : `<button class="btn btn-sm btn-ghost" disabled title="Already emailed${p.emailedAt ? ' · ' + esc(fmtDate(p.emailedAt)) : ''}">✓ Emailed</button>`)
             : `<button class="btn btn-sm" data-act="email" data-slug="${esc(p.slug)}">✉ Email</button>`;
         const del = `<button class="btn btn-sm ${armed ? 'btn-danger' : 'btn-ghost'}" data-act="delete" data-slug="${esc(p.slug)}">${armed ? 'Confirm delete' : 'Delete'}</button>`;
         return `<tr data-slug="${esc(p.slug)}">
@@ -226,6 +228,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     const act = btn.dataset.act!;
     const slug = btn.dataset.slug!;
     if (act === 'email') openEmail(slug);
+    else if (act === 'retry-email') retryEmail(slug);
     else if (act === 'delete') {
       if (armedDelete === slug) {
         del(slug);
@@ -376,6 +379,29 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       emStatus.textContent = e.message || 'Something went wrong.';
       emSend.disabled = false;
     }
+  }
+
+  // Retry a broadcast for ONLY the recipients it previously failed to reach.
+  async function retryEmail(slug: string) {
+    const p = all.find((x) => x.slug === slug);
+    if (!p) return;
+    if (!confirm(`Retry sending “${p.title}” to the ${p.emailedFailed} subscriber(s) it couldn't reach?`)) return;
+    try {
+      const r = await adminFetch('/api/admin/broadcast', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug, title: p.title, description: p.description || '', retry: true }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) {
+        alert(d.remaining > 0 ? `Retried — ${d.sent} delivered, ${d.remaining} still failing.` : `Retried — all delivered.`);
+      } else {
+        alert(d.error || 'Retry failed');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Retry failed');
+    }
+    await load();
   }
 
   document.getElementById('em-cancel')!.addEventListener('click', closeEmail);

@@ -83,6 +83,8 @@ export async function onRequestGet({ request, env }) {
       // metadata) counts as sent; a mid-flight 'sending' reservation does not.
       emailed: bc ? bc.status !== 'sending' : false,
       emailedAt: bc && bc.sentAt ? bc.sentAt : null,
+      // failed recipient count from the last send (for a targeted "retry failed").
+      emailedFailed: bc && typeof bc.failed === 'number' ? bc.failed : 0,
     };
   });
 

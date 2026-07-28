@@ -24,6 +24,22 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       <div class="kpi card"><p class="kpi-label">Total</p><div class="kpi-value loading" id="a-total">—</div><div class="kpi-foot">all-time signups</div></div>
     </div>
 
+    <div class="card card-pad" style="margin-bottom:1.25rem">
+      <strong>Send a digest</strong>
+      <p class="muted" style="margin:0.25rem 0 0.8rem;font-size:0.92rem">Email a roundup of your recent posts to all confirmed subscribers. Each email includes a one-click unsubscribe.</p>
+      <div style="display:flex;flex-direction:column;gap:0.6rem;max-width:520px">
+        <textarea class="input" id="digest-intro" rows="2" placeholder="Optional intro line — e.g. “A few things I wrote this month…”"></textarea>
+        <div style="display:flex;gap:0.7rem;align-items:center;flex-wrap:wrap">
+          <label class="muted" style="font-size:0.9rem">Include latest
+            <select class="select" id="digest-count"><option>3</option><option selected>5</option><option>8</option></select>
+            posts
+          </label>
+          <button class="btn btn-primary btn-sm" id="digest-send" type="button">Send digest</button>
+          <span class="muted" id="digest-status" style="font-size:0.85rem"></span>
+        </div>
+      </div>
+    </div>
+
     <div class="toolbar">
       <input class="input search" id="q" type="search" placeholder="Search email…" autocomplete="off" />
       <select class="select" id="filter">
@@ -113,6 +129,38 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     searchTimer = window.setTimeout(loadRows, 300);
   });
   document.getElementById('refresh')!.addEventListener('click', () => { loadCounts(); loadRows(); });
+
+  // --- Send a digest of recent posts to confirmed subscribers --------------
+  async function sendDigest(force = false) {
+    const st = document.getElementById('digest-status')!;
+    const btn = document.getElementById('digest-send') as HTMLButtonElement;
+    const intro = (document.getElementById('digest-intro') as HTMLTextAreaElement).value.trim();
+    const count = parseInt((document.getElementById('digest-count') as HTMLSelectElement).value, 10) || 5;
+    if (!force && !confirm(`Email a digest of your latest ${count} posts to all confirmed subscribers?`)) return;
+    btn.disabled = true;
+    st.textContent = 'Sending…';
+    try {
+      const r = await adminFetch('/api/admin/digest', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ count, intro, force }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) {
+        st.textContent = d.sent > 0 ? `Sent to ${fmtNum(d.sent)} subscriber${d.sent === 1 ? '' : 's'}.` : (d.message || 'Nothing to send.');
+      } else if (d.recentlySent) {
+        if (confirm('A digest was already sent within the last hour. Send another anyway?')) { btn.disabled = false; return sendDigest(true); }
+        st.textContent = 'Cancelled.';
+      } else {
+        st.textContent = d.error || ('Failed (HTTP ' + r.status + ')');
+      }
+    } catch (e: any) {
+      st.textContent = 'Error: ' + (e.message || e);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  document.getElementById('digest-send')!.addEventListener('click', () => sendDigest(false));
 
   whenAdmin.then(() => { loadCounts(); loadRows(); });
 </script>

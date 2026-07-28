@@ -122,6 +122,68 @@ function renderEmail({ title, description, postUrl, unsubUrl, siteHost, mailAddr
   return { html, text };
 }
 
+// Send `recipients` ([{email, unsubscribe_token}]) via Resend batch (<=100/call),
+// each with its own one-click unsubscribe link. Returns { sent, failed, failedRecipients }
+// where failedRecipients are the members of any chunk that failed WHOLESALE (network /
+// timeout / non-2xx) — i.e. the ones worth retrying. Within-chunk address rejections
+// (permissive mode) are counted in `failed` but not retried (a bad address won't fix
+// itself on a resend), so `sent`/`failed` stay truthful while retries target real gaps.
+async function sendBatches(recipients, ctx) {
+  const { env, from, title, desc, postUrl, siteHost, mailAddress, site } = ctx;
+  let sent = 0;
+  let failed = 0;
+  const failedRecipients = [];
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+    const chunk = recipients.slice(i, i + BATCH_SIZE);
+    const batch = chunk.map((s) => {
+      const unsubUrl = `${site}/api/unsubscribe?token=${s.unsubscribe_token}`;
+      const { html, text } = renderEmail({ title, description: desc, postUrl, unsubUrl, siteHost, mailAddress });
+      return {
+        from,
+        to: [s.email],
+        subject: `New post: ${title}`,
+        html,
+        text,
+        headers: {
+          'List-Unsubscribe': `<${unsubUrl}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
+      };
+    });
+    try {
+      const r = await fetch(RESEND_BATCH_URL, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${env.RESEND_API_KEY}`,
+          'content-type': 'application/json',
+          'x-batch-validation': 'permissive',
+        },
+        body: JSON.stringify(batch),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (r.ok) {
+        let okCount = chunk.length;
+        try {
+          const jr = await r.json();
+          if (jr && Array.isArray(jr.data)) okCount = jr.data.filter((x) => x && x.id).length;
+        } catch { /* keep the optimistic default */ }
+        okCount = Math.max(0, Math.min(chunk.length, okCount));
+        sent += okCount;
+        failed += chunk.length - okCount;
+      } else {
+        failed += chunk.length;
+        for (const s of chunk) failedRecipients.push(s);
+        console.error('resend batch failed', r.status, (await r.text()).slice(0, 300));
+      }
+    } catch (e) {
+      failed += chunk.length;
+      for (const s of chunk) failedRecipients.push(s);
+      console.error('resend batch error', (e && e.message) || e);
+    }
+  }
+  return { sent, failed, failedRecipients };
+}
+
 // Outer wrapper: any unexpected throw becomes a readable 400 (never a 5xx that
 // Cloudflare would mask into an opaque "Bad gateway").
 export async function onRequestPost(ctx) {
@@ -144,7 +206,7 @@ async function handleBroadcast({ request, env }) {
   } catch {
     return json({ error: 'Invalid JSON body' }, 400);
   }
-  const { slug, title, description, force } = body || {};
+  const { slug, title, description, force, retry } = body || {};
   if (typeof slug !== 'string' || !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug)) {
     return json({ error: 'Invalid slug' }, 400);
   }
@@ -157,17 +219,58 @@ async function handleBroadcast({ request, env }) {
   const sb = env.SUPABASE_URL;
   const service = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!sb || !service) return json({ error: 'Server not configured (Supabase).' }, 400);
+  const auth = { Authorization: `Bearer ${service}`, apikey: service };
 
   const site = (env.SITE_URL || 'https://areyoustillreading.dev').replace(/\/+$/, '');
   const siteHost = site.replace(/^https?:\/\//, '');
   const from = env.EMAIL_FROM || 'areyoustillreading <hello@areyoustillreading.dev>';
   const mailAddress = env.MAIL_ADDRESS || '';
   const postUrl = `${site}/blog/${slug}/`;
+  // Shared render/send context for sendBatches (normal + retry paths).
+  const ctx = { env, from, title, desc, postUrl, siteHost, mailAddress, site };
+
+  const kv = env.POSTS_HTML; // reuse the instant-publish namespace
+  const guardKey = `broadcast:${slug}`;
+
+  // --- Retry path: re-send ONLY the recipients a prior send failed on --------
+  if (retry === true) {
+    if (!kv) return json({ error: 'Retry needs the guard store (POSTS_HTML).' }, 400);
+    let prev = {};
+    try { prev = JSON.parse((await kv.get(guardKey)) || '{}') || {}; } catch { /* corrupt */ }
+    const failedEmails = Array.isArray(prev.failedEmails) ? prev.failedEmails : [];
+    if (failedEmails.length === 0) {
+      return json({ ok: true, retried: true, sent: 0, failed: 0, message: 'Nothing to retry.' });
+    }
+    // Re-fetch those subscribers (still confirmed) for their current unsubscribe tokens.
+    const inClause = failedEmails.slice(0, 2000).map((e) => JSON.stringify(String(e))).join(',');
+    const rq = await fetch(
+      `${sb}/rest/v1/subscribers?status=eq.confirmed&email=in.(${encodeURIComponent(inClause)})&select=email,unsubscribe_token`,
+      { headers: auth },
+    );
+    if (!rq.ok) return json({ error: `Could not load subscribers (${rq.status})` }, 400);
+    let recips = await rq.json();
+    recips = (Array.isArray(recips) ? recips : []).filter((s) => s && s.email && s.unsubscribe_token);
+    if (recips.length === 0) {
+      // The failed addresses are no longer confirmed subscribers — clear them.
+      try { await kv.put(guardKey, JSON.stringify({ ...prev, failedEmails: [], failed: 0 }), { metadata: { status: 'sent', sentAt: prev.sentAt || null, sent: prev.sent || 0, failed: 0 } }); } catch {}
+      return json({ ok: true, retried: true, sent: 0, failed: 0, message: 'No retriable subscribers remain.' });
+    }
+    const res = await sendBatches(recips, ctx);
+    const stillFailed = res.failedRecipients.map((r) => r.email);
+    const sentAt = new Date().toISOString();
+    const totalSent = (prev.sent || 0) + res.sent;
+    try {
+      await kv.put(
+        guardKey,
+        JSON.stringify({ status: 'sent', sentAt, sent: totalSent, failed: stillFailed.length, failedEmails: stillFailed, title: prev.title || title }),
+        { metadata: { status: 'sent', sentAt, sent: totalSent, failed: stillFailed.length } },
+      );
+    } catch { /* best-effort */ }
+    return json({ ok: true, retried: true, sent: res.sent, failed: stillFailed.length, remaining: stillFailed.length });
+  }
 
   // --- Idempotency guard: reserve the slug before sending -------------------
   // FAIL-CLOSED: never broadcast without a double-send guard unless explicitly forced.
-  const kv = env.POSTS_HTML; // reuse the instant-publish namespace
-  const guardKey = `broadcast:${slug}`;
   if (!kv && !force) {
     return json({ error: 'Double-send guard unavailable (POSTS_HTML unbound); refusing to broadcast. Pass force:true to override.' }, 400);
   }
@@ -191,8 +294,7 @@ async function handleBroadcast({ request, env }) {
   // --- Load confirmed subscribers (email + per-row unsubscribe token) --------
   // Only 'confirmed' rows ever get mail (double opt-in); pending/unsubscribed are
   // excluded by the filter. unsubscribe_token is NOT NULL in the schema, so every
-  // row yields a valid one-click link.
-  const auth = { Authorization: `Bearer ${service}`, apikey: service };
+  // row yields a valid one-click link. (`auth` is defined once near the top.)
   const listRes = await fetch(
     `${sb}/rest/v1/subscribers?status=eq.confirmed&select=email,unsubscribe_token`,
     { headers: auth },
@@ -217,64 +319,8 @@ async function handleBroadcast({ request, env }) {
   }
 
   // --- Send via Resend batch (<=100/call), per-recipient unsubscribe link -----
-  // Permissive validation: a single bad address returns in an errors array instead
-  // of failing (strict-mode) the whole 100-email chunk. We count per Resend's
-  // response so `sent`/`failed` reflect what actually went out.
-  let sent = 0;
-  let failed = 0;
-  for (let i = 0; i < subs.length; i += BATCH_SIZE) {
-    const chunk = subs.slice(i, i + BATCH_SIZE);
-    const batch = chunk.map((s) => {
-      const unsubUrl = `${site}/api/unsubscribe?token=${s.unsubscribe_token}`;
-      const { html, text } = renderEmail({ title, description: desc, postUrl, unsubUrl, siteHost, mailAddress });
-      return {
-        from,
-        to: [s.email],
-        subject: `New post: ${title}`,
-        html,
-        text,
-        // RFC 8058 one-click unsubscribe — required for bulk senders (Gmail/Yahoo)
-        // and honored by functions/api/unsubscribe.js's onRequestPost.
-        headers: {
-          'List-Unsubscribe': `<${unsubUrl}>`,
-          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-        },
-      };
-    });
-    try {
-      const r = await fetch(RESEND_BATCH_URL, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${env.RESEND_API_KEY}`,
-          'content-type': 'application/json',
-          'x-batch-validation': 'permissive',
-        },
-        body: JSON.stringify(batch),
-        signal: AbortSignal.timeout(20000),
-      });
-      if (r.ok) {
-        // Under permissive mode the response carries a `data` array of accepted
-        // sends (and optionally an `errors` array). Count accepted; treat the rest
-        // of the chunk as failed. Fall back to "all accepted" if the body is
-        // unparseable (strict mode / older API returns data length == chunk).
-        let okCount = chunk.length;
-        try {
-          const jr = await r.json();
-          if (jr && Array.isArray(jr.data)) okCount = jr.data.filter((x) => x && x.id).length;
-        } catch { /* keep the optimistic default */ }
-        if (okCount < 0) okCount = 0;
-        if (okCount > chunk.length) okCount = chunk.length;
-        sent += okCount;
-        failed += chunk.length - okCount;
-      } else {
-        failed += chunk.length;
-        console.error('resend batch failed', r.status, (await r.text()).slice(0, 300));
-      }
-    } catch (e) {
-      failed += chunk.length;
-      console.error('resend batch error', (e && e.message) || e);
-    }
-  }
+  const { sent, failed, failedRecipients } = await sendBatches(subs, ctx);
+  const failedEmails = failedRecipients.map((r) => r.email);
 
   // --- Finalize the guard ---------------------------------------------------
   // TOTAL failure (nobody reached): release the reservation and report an ERROR so
@@ -284,15 +330,16 @@ async function handleBroadcast({ request, env }) {
     return json({ error: `Email failed to send to all ${failed} subscriber${failed === 1 ? '' : 's'}. Nobody was notified — re-publish to retry.`, sent: 0, failed }, 400);
   }
   // Reached at least one recipient: record the send so a re-publish won't re-blast.
-  // (On a PARTIAL failure the guard is still written to avoid duplicate-mailing the
-  // ones who succeeded; the author is told the failed count and can force a resend.)
+  // On a PARTIAL failure the guard is still written (don't re-mail the ones who got
+  // it), but we persist `failedEmails` so a targeted "retry failed" re-sends ONLY to
+  // the gaps. `failed` is mirrored into KV metadata so the Posts panel can offer it.
   if (kv) {
     try {
       const sentAt = new Date().toISOString();
       await kv.put(
         guardKey,
-        JSON.stringify({ status: 'sent', sentAt, sent, failed, title }),
-        { metadata: { status: 'sent', sentAt, sent } },
+        JSON.stringify({ status: 'sent', sentAt, sent, failed, failedEmails, title }),
+        { metadata: { status: 'sent', sentAt, sent, failed } },
       );
     } catch { /* guard write is best-effort */ }
   }
