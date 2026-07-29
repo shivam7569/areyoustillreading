@@ -49,7 +49,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       <h2 class="em-title">Series</h2>
       <p class="em-body" id="sr-body"></p>
       <div class="sr-fields">
-        <label class="sr-field"><span>Series name</span><input class="input" id="sr-name" type="text" placeholder="e.g. LLMs from scratch" autocomplete="off" /></label>
+        <label class="sr-field"><span>Series name</span><input class="input" id="sr-name" type="text" placeholder="e.g. LLMs from scratch" autocomplete="off" list="sr-name-options" /><datalist id="sr-name-options"></datalist></label>
         <label class="sr-field sr-part"><span>Part</span><input class="input" id="sr-order" type="number" min="1" step="1" placeholder="1" /></label>
       </div>
       <div class="em-actions">
@@ -81,7 +81,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 <style>
   .em-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 1rem; }
   .em-overlay[hidden] { display: none; }
-  .em-card { background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 14px; padding: 1.5rem 1.6rem; max-width: 440px; width: 100%; box-shadow: 0 24px 64px rgba(0,0,0,0.4); }
+  .em-card { background: var(--card); color: var(--fg); border: 1px solid var(--border-strong); border-radius: var(--admin-radius); padding: 1.5rem 1.6rem; max-width: 440px; width: 100%; box-shadow: 0 24px 64px rgba(0,0,0,0.4); }
   .em-title { margin: 0 0 0.5rem; font-size: 1.15rem; letter-spacing: -0.01em; }
   .em-body { margin: 0 0 1.4rem; color: var(--muted); line-height: 1.6; }
   .em-body strong { color: var(--fg); }
@@ -118,6 +118,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   const srModal = document.getElementById('series-modal')!;
   const srBody = document.getElementById('sr-body')!;
   const srName = document.getElementById('sr-name') as HTMLInputElement;
+  const srNameList = document.getElementById('sr-name-options') as HTMLDataListElement;
   const srOrder = document.getElementById('sr-order') as HTMLInputElement;
   const srStatus = document.getElementById('sr-status')!;
   const srSave = document.getElementById('sr-save') as HTMLButtonElement;
@@ -479,6 +480,24 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !emModal.hidden) closeEmail(); });
 
   // --- Series membership (add / edit / remove) -----------------------------
+  // Distinct existing series names for the #sr-name autocomplete. De-dupe by the
+  // series SLUG (the server's grouping key) so each real series shows once; display
+  // the author-facing seriesTitle. Rebuilt on every open so it tracks `all`.
+  function fillSeriesOptions() {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const p of all) {
+      const name = String(p.seriesTitle || p.series || '').trim();
+      if (!name) continue;
+      const key = String(p.series || name).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(name);
+    }
+    names.sort((a, b) => a.localeCompare(b));
+    srNameList.innerHTML = names.map((n) => `<option value="${esc(n)}"></option>`).join('');
+  }
+
   function openSeries(slug: string) {
     const p = all.find((x) => x.slug === slug);
     if (!p) return;
@@ -490,6 +509,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     srSave.disabled = false;
     srRemove.disabled = false;
     srRemove.hidden = !p.series; // only offer "remove" when it's in one
+    fillSeriesOptions(); // populate autocomplete from the freshest `all`
     srModal.hidden = false;
     srName.focus();
   }

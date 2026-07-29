@@ -26,20 +26,20 @@
   /* Surfaces derived from the theme tokens so they flip automatically in dark mode. */
   --admin-surface: color-mix(in srgb, var(--fg) 2.5%, var(--bg));
   --admin-surface-2: color-mix(in srgb, var(--fg) 5%, var(--bg));
-  --admin-sidebar-bg: color-mix(in srgb, var(--fg) 3.5%, var(--bg));
+  --admin-sidebar-bg: var(--paper-2);
   --admin-hover: color-mix(in srgb, var(--fg) 6%, transparent);
   --admin-accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
   --admin-accent-ring: color-mix(in srgb, var(--accent) 26%, transparent);
   --admin-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 8%, transparent),
                   0 8px 28px color-mix(in srgb, var(--fg) 6%, transparent);
-  --admin-radius: 14px;
-  --admin-radius-sm: 10px;
+  --admin-radius: 8px;      /* was 14px — echoes the editorial 6px .card, crisper than a SaaS panel */
+  --admin-radius-sm: 6px;   /* was 10px — nav items, inputs, notices */
   --admin-sidebar-w: 248px;
   --admin-topbar-h: 60px;
   --admin-content-max: 1120px;
-  /* Filled-button background. In light mode --accent (#2f5bff) carries white text at
-     ~5.2:1; in dark mode --accent lightens to #7aa2ff where white would be ~2.5:1, so
-     the dark override below darkens the FILL (not the link accent) back to legible. */
+  /* Filled-button background = the editorial accent (plum light / bronze dark).
+     --on-accent is purpose-built to stay legible on --accent in BOTH themes, so no
+     per-theme fill darkening is needed (that machinery was for the retired blue accent). */
   --btn-fill: var(--accent);
   --btn-fill-hover: color-mix(in srgb, var(--accent) 88%, #000);
 
@@ -55,9 +55,6 @@
     --ok: #3fb950;    --ok-bg: color-mix(in srgb, #3fb950 18%, transparent);
     --warn: #d29922;  --warn-bg: color-mix(in srgb, #d29922 20%, transparent);
     --danger: #f85149; --danger-bg: color-mix(in srgb, #f85149 16%, transparent);
-    /* Darken the button fill so its text stays legible (WCAG AA) on dark backgrounds. */
-    --btn-fill: color-mix(in srgb, var(--accent) 58%, #06080d);
-    --btn-fill-hover: color-mix(in srgb, var(--accent) 66%, #06080d);
   }
 }
 /* Manual-toggle mirrors: the Studio now sets data-theme on <html> (matching the
@@ -68,15 +65,11 @@
   --ok: #3fb950;    --ok-bg: color-mix(in srgb, #3fb950 18%, transparent);
   --warn: #d29922;  --warn-bg: color-mix(in srgb, #d29922 20%, transparent);
   --danger: #f85149; --danger-bg: color-mix(in srgb, #f85149 16%, transparent);
-  --btn-fill: color-mix(in srgb, var(--accent) 58%, #06080d);
-  --btn-fill-hover: color-mix(in srgb, var(--accent) 66%, #06080d);
 }
 :root[data-theme="light"] {
   --ok: #1a7f37;    --ok-bg: color-mix(in srgb, #1a7f37 14%, transparent);
   --warn: #9a6700;  --warn-bg: color-mix(in srgb, #9a6700 16%, transparent);
   --danger: #cf222e; --danger-bg: color-mix(in srgb, #cf222e 12%, transparent);
-  --btn-fill: var(--accent);
-  --btn-fill-hover: color-mix(in srgb, var(--accent) 88%, #000);
 }
 
 /* Studio topbar theme toggle (mirrors the public one; icon swaps by data-theme). */
@@ -100,7 +93,12 @@
    dashboard is a tool, not a reading surface, so keep it on the UI sans stack.
    Guards both the authenticated shell (.admin) and the pre-auth gate view. */
 .admin, .admin-gate { font-family: var(--font-sans); }
-.admin :where(h1, h2, h3, h4), .admin-gate :where(h1, h2, h3, h4) { font-family: var(--font-sans); }
+/* Display headings keep the editorial serif so the Studio reads as the same family
+   as the public site; body text, form labels, table headers and micro-caps (none of
+   which are h1–h4) stay on the UI sans stack. */
+.admin :where(h1, h2, h3, h4), .admin-gate :where(h1, h2, h3, h4) {
+  font-family: var(--serif-display); font-weight: 600; letter-spacing: -0.015em;
+}
 
 /* ---- Shell layout ------------------------------------------------------- */
 /* AdminLayout does NOT use global.css's constrained <main>; it renders its own
@@ -118,7 +116,8 @@
 .admin-brand {
   display: flex; align-items: center; gap: 0.55rem;
   padding: 0.35rem 0.6rem 0.85rem; margin-bottom: 0.35rem;
-  font-weight: 700; color: var(--fg); letter-spacing: -0.01em;
+  font-family: var(--serif-display); font-weight: 600; font-size: 1.12rem;
+  color: var(--fg); letter-spacing: -0.01em;
   text-decoration: none; /* it's a link back to the site */
 }
 .admin-brand:hover { text-decoration: none; opacity: 0.8; }
@@ -148,10 +147,10 @@
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   height: var(--admin-topbar-h); padding: 0 1.4rem;
   background: color-mix(in srgb, var(--bg) 86%, transparent);
-  backdrop-filter: saturate(140%) blur(8px);
-  border-bottom: 1px solid var(--border);
+  backdrop-filter: saturate(140%) blur(14px);
+  border-bottom: 1px solid var(--border-strong);
 }
-.admin-topbar .tb-title { font-size: 1.05rem; font-weight: 650; letter-spacing: -0.01em; }
+.admin-topbar .tb-title { font-family: var(--serif-display); font-size: 1.2rem; font-weight: 600; letter-spacing: -0.015em; }
 .admin-topbar .tb-actions { display: flex; align-items: center; gap: 0.6rem; }
 
 .admin-main { padding: 1.6rem 1.4rem 4rem; width: 100%; max-width: var(--admin-content-max); margin: 0 auto; }
@@ -163,7 +162,7 @@
 
 /* ---- Cards & KPI tiles -------------------------------------------------- */
 .card {
-  background: var(--admin-surface); border: 1px solid var(--border);
+  background: var(--card); border: 1px solid var(--border-strong);
   border-radius: var(--admin-radius); box-shadow: var(--admin-shadow);
 }
 .card-pad { padding: 1.15rem 1.25rem; }
@@ -176,7 +175,7 @@
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.4rem; }
 .kpi { padding: 1.05rem 1.15rem; }
 .kpi .kpi-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.5rem; }
-.kpi .kpi-value { font-size: 1.9rem; font-weight: 680; letter-spacing: -0.02em; line-height: 1.05; }
+.kpi .kpi-value { font-family: var(--serif-display); font-size: 2.1rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.02; }
 .kpi .kpi-value.loading { color: var(--muted); opacity: 0.5; }
 .kpi .kpi-foot { margin-top: 0.45rem; font-size: 0.82rem; color: var(--muted); display: flex; align-items: center; gap: 0.35rem; }
 .kpi .delta { font-weight: 600; }
@@ -184,7 +183,7 @@
 .kpi .delta.down { color: var(--danger); }
 
 /* ---- Tables ------------------------------------------------------------- */
-.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--admin-radius); background: var(--admin-surface); box-shadow: var(--admin-shadow); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border-strong); border-radius: var(--admin-radius); background: var(--card); box-shadow: var(--admin-shadow); }
 table.table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
 .table thead th {
   text-align: left; font-weight: 600; font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase;
@@ -205,14 +204,14 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
 /* ---- Buttons ------------------------------------------------------------ */
 .btn {
   display: inline-flex; align-items: center; gap: 0.4rem; justify-content: center;
-  padding: 0.5rem 0.9rem; border: 1px solid var(--border); border-radius: var(--admin-radius-sm);
+  padding: 0.5rem 0.9rem; border: 1px solid var(--border); border-radius: 4px;
   background: var(--admin-surface); color: inherit; font: inherit; font-weight: 600; font-size: 0.9rem;
   cursor: pointer; text-decoration: none; transition: background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease; white-space: nowrap;
 }
 .btn:hover { background: var(--admin-hover); text-decoration: none; }
 .btn:disabled { opacity: 0.55; cursor: default; }
 .btn-sm { padding: 0.35rem 0.65rem; font-size: 0.82rem; }
-.btn-primary { background: var(--btn-fill); border-color: var(--btn-fill); color: #fff; }
+.btn-primary { background: var(--btn-fill); border-color: var(--btn-fill); color: var(--on-accent); }
 .btn-primary:hover { background: var(--btn-fill-hover); border-color: var(--btn-fill-hover); }
 .btn-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
 .btn-danger:hover { background: var(--danger-bg); }

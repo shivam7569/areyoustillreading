@@ -202,7 +202,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .pm-label { display: block; margin-bottom: 0.35rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
   .pm-card input[type="text"], .pm-card input[type="email"], .pm-card input[type="number"], .pm-card textarea {
     width: 100%; padding: 0.6rem 0.75rem; font: inherit; color: var(--fg);
-    border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--admin-radius-sm); background: var(--surface);
   }
   .pm-card input::placeholder, .pm-card textarea::placeholder { color: var(--muted); }
   .pm-card textarea { resize: vertical; line-height: 1.5; }
@@ -210,7 +210,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     outline: none; border-color: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
   }
-  .pm-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.4rem; border: 1px solid var(--border); border-radius: 10px; }
+  .pm-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--admin-radius-sm); }
   .pm-tags input { flex: 1; min-width: 6rem; border: 0 !important; padding: 0.25rem 0.35rem !important; background: transparent !important; box-shadow: none !important; }
   .pm-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.85em; background: color-mix(in srgb, var(--accent) 16%, transparent); }
   .pm-chip button { border: 0; background: transparent; color: var(--muted); font-size: 1.05em; line-height: 1; cursor: pointer; padding: 0; }
@@ -218,9 +218,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .pm-slug { color: var(--accent); border-radius: 4px; padding: 0 0.15rem; outline: none; }
   .pm-toggle { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 1.35rem; font-size: 0.9rem; color: var(--muted); cursor: pointer; }
   .pm-actions { display: flex; align-items: center; gap: 1rem; }
-  .pm-btn { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+  .pm-btn { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: var(--admin-radius-sm); background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
   .pm-btn:disabled { opacity: 0.6; cursor: default; }
-  .pm-btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .pm-btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   #pm-signin .pm-btn-primary { width: 100%; }
   #pm-form .pm-btn-primary { padding-inline: 1.6rem; }
   .pm-or { margin: 0.9rem 0; text-align: center; font-size: 0.8rem; color: var(--muted); }
