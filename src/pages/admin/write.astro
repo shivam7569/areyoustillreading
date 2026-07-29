@@ -130,7 +130,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           <label class="pm-toggle"><input id="pm-email-subs" type="checkbox" /> <span id="pm-email-subs-label">Email subscribers about this post</span></label>
           <div class="pm-actions">
             <button class="pm-btn pm-btn-primary" id="pm-publish" type="button">Publish</button>
-            <span class="pm-status" id="pm-form-status"></span>
+            <span class="pm-progress" aria-hidden="true"></span>
+            <span class="pm-status" id="pm-form-status" role="status" aria-live="polite"></span>
           </div>
         </div>
       </div>
@@ -217,7 +218,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .pm-permalink { margin: 0.1rem 0 1.1rem; font-size: 0.85rem; color: var(--muted); }
   .pm-slug { color: var(--accent); border-radius: 4px; padding: 0 0.15rem; outline: none; }
   .pm-toggle { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 1.35rem; font-size: 0.9rem; color: var(--muted); cursor: pointer; }
-  .pm-actions { display: flex; align-items: center; gap: 1rem; }
+  .pm-actions { display: flex; align-items: center; gap: 0.85rem; }
   .pm-btn { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: var(--admin-radius-sm); background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
   .pm-btn:disabled { opacity: 0.6; cursor: default; }
   .pm-btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
@@ -226,7 +227,19 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .pm-or { margin: 0.9rem 0; text-align: center; font-size: 0.8rem; color: var(--muted); }
   .pm-magic { display: flex; gap: 0.5rem; }
   .pm-magic input { flex: 1; }
-  .pm-status { font-size: 0.85rem; color: var(--muted); }
+  /* Publish/update status: a live accent ring while the work is in flight (the
+     Publish button is disabled), then a settled result line — reads as motion, not
+     a static grey label. */
+  .pm-status { font-size: 0.88rem; color: var(--fg); font-family: var(--font-sans); line-height: 1.4; transition: color 0.2s ease; }
+  .pm-status:empty { display: none; }
+  .pm-status a { color: var(--accent); text-decoration: underline; }
+  .pm-progress {
+    display: none; width: 15px; height: 15px; flex: none; border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+    border-top-color: var(--accent); animation: pm-spin 0.7s linear infinite;
+  }
+  .pm-actions:has(#pm-publish:disabled) .pm-progress { display: inline-block; }
+  @keyframes pm-spin { to { transform: rotate(360deg); } }
 </style>
 
 <!-- Global (unscoped) styles: the code-block preview DOM is created by Milkdown at
@@ -1120,17 +1133,27 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       try {
         // Heavy render pipeline (markdown-remark + Shiki + browser-D2) + shell assembler
         // are loaded on demand here, so they never weigh down the editor's initial load.
-        const [{ renderPostBodyBrowser }, { assemblePostHtml }] = await Promise.all([
-          import('../../lib/render-post-browser.mjs'),
-          import('../../lib/assemble-post.mjs'),
+        // BOUNDED by a timeout: the render is the one unbounded await in the publish
+        // path, so a stalled render (a heavy edited post, a wedged WASM backend) must not
+        // be able to hang the whole publish — if assembly overruns, we skip the instant
+        // copy and let the git commit + rebuild make the post live instead.
+        assembledHtml = await Promise.race([
+          (async () => {
+            const [{ renderPostBodyBrowser }, { assemblePostHtml }] = await Promise.all([
+              import('../../lib/render-post-browser.mjs'),
+              import('../../lib/assemble-post.mjs'),
+            ]);
+            const bodyHtml = await renderPostBodyBrowser(body);
+            const shellHtml = await (await fetch('/post-shell', { cache: 'no-store' })).text();
+            return assemblePostHtml(shellHtml, {
+              slug, title, description, author: authorName, pubDate, tags: pubTags, bodyMarkdown: body, bodyHtml,
+            });
+          })(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('instant-assembly timed out')), 12000)),
         ]);
-        const bodyHtml = await renderPostBodyBrowser(body);
-        const shellHtml = await (await fetch('/post-shell', { cache: 'no-store' })).text();
-        assembledHtml = assemblePostHtml(shellHtml, {
-          slug, title, description, author: authorName, pubDate, tags: pubTags, bodyMarkdown: body, bodyHtml,
-        });
       } catch (e) {
-        console.error('[publish] instant-assembly failed; committing rebuild-only', e);
+        console.error('[publish] instant-assembly failed/timed out; committing rebuild-only', e);
+        assembledHtml = null;
       }
 
       status.textContent = 'Publishing…';
