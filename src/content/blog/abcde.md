@@ -4,7 +4,7 @@ description: "dfdfgsg"
 author: "deadletters"
 pubDate: "2026-07-29"
 tags: []
-draft: false
+draft: true
 gateable: false
 ---
 Start writing.
