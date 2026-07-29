@@ -90,6 +90,10 @@ const blog = defineCollection({
     // Free-form tag list. Defaults to [] so downstream code can always iterate
     // without a null/undefined guard (fail-safe against missing frontmatter).
     tags: z.array(z.string()).default([]),
+    // Byline author (optional). Set at publish time to the publisher's pen name
+    // (their account display name); legacy posts without it fall back to the site
+    // author in BlogPost.astro. Display-only — never a security/identity boundary.
+    author: z.string().optional(),
     // --- Series (optional) --------------------------------------------------
     // A post belongs to a series when `series` is set to a shared slug. All posts
     // with the same `series` are grouped and ordered by `seriesOrder` (ascending;

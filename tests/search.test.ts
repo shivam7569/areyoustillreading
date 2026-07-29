@@ -86,22 +86,17 @@ describe('Pagefind search', () => {
     expect(files.some((f) => f.startsWith('pagefind') && f.endsWith('.js'))).toBe(true);
   });
 
-  it('wires a search UI on the blog index', () => {
+  it('wires the in-page filter UI on the blog index', () => {
     // Read the built blog index page as raw HTML and assert on its markup. We
     // check the emitted HTML (not the .astro source) because the goal is to
-    // confirm the search UI actually shipped to the browser after compilation.
+    // confirm the filter UI actually shipped to the browser after compilation.
     const html = readFileSync(join(dist, 'blog', 'index.html'), 'utf-8');
 
-    // `id="search"` is the mount point the Pagefind UI attaches to at runtime.
-    // If the search component is removed or its container id is renamed, the UI
-    // has nowhere to render — this assertion guards that contract.
-    expect(html).toContain('id="search"');
-
-    // The page must also load Pagefind's self-contained UI bundle. This path is
-    // served from the `dist/pagefind/` artifact verified by the test above, so
-    // the two tests together confirm both "the index exists" and "the page asks
-    // the browser to load it". A missing/renamed script tag breaks search even
-    // if the mount point is present.
-    expect(html).toContain('/pagefind/pagefind-ui.js');
+    // The editorial archive filters the rendered list IN-PAGE (deliberately
+    // replacing the Pagefind modal here): a search box (`id="q"`) + tag chips
+    // (`id="chips"`). If either is renamed/removed, the filter has nothing to
+    // bind to — this assertion guards that contract.
+    expect(html).toContain('id="q"');
+    expect(html).toContain('id="chips"');
   });
 });

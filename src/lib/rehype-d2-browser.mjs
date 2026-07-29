@@ -37,9 +37,12 @@ function loadD2() {
 
 export default function rehypeD2Browser(options = {}) {
   // Match plugins/rehype-d2.mjs exactly (dagre is D2's default; stated for parity).
-  // themeID/darkThemeID: the SVG carries a prefers-color-scheme block so instant-
-  // published diagrams adapt to dark mode too (not a white box until the rebuild).
-  const renderOpts = { layout: 'dagre', pad: 20, noXMLTag: true, themeID: 0, darkThemeID: 200, ...options };
+  // theme: NEUTRAL GREY (1) for BOTH light + dark. D2's only dark preset (200
+  // "Dark Mauve") clashes hard with the editorial palette, so we render a single
+  // clean grayscale "ink" diagram and let the .d2-diagram figure frame supply a
+  // warm, theme-consistent canvas (see global.css). Grey never fights the plum/
+  // bronze accent, so the same diagram sits right in both themes.
+  const renderOpts = { layout: 'dagre', pad: 20, noXMLTag: true, themeID: 1, darkThemeID: 1, ...options };
 
   return async (tree) => {
     const jobs = [];

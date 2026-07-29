@@ -28,13 +28,14 @@ function fmtDateUTC(d) {
  * @param {string} post.slug
  * @param {string} post.title
  * @param {string} post.description
+ * @param {string} [post.author]           byline pen name (defaults to the site author)
  * @param {string} post.pubDate            YYYY-MM-DD
  * @param {string[]} [post.tags]
  * @param {string} [post.bodyMarkdown]     title-stripped body markdown (for reading time)
  * @param {string} [post.bodyHtml]         rendered body HTML
  * @returns {string} full page HTML
  */
-export function assemblePostHtml(shellHtml, { slug, title, description, pubDate, tags = [], bodyMarkdown = '', bodyHtml = '' }) {
+export function assemblePostHtml(shellHtml, { slug, title, description, author = 'Shivam Chaudhary', pubDate, tags = [], bodyMarkdown = '', bodyHtml = '' }) {
   const d = new Date(`${pubDate}T00:00:00.000Z`);
   const iso = d.toISOString();
   const human = fmtDateUTC(d);
@@ -50,6 +51,7 @@ export function assemblePostHtml(shellHtml, { slug, title, description, pubDate,
     // canonical + og:url). split/join replaces every occurrence.
     .split('AYSRZZTITLE').join(esc(title))
     .split('AYSRZZDESC').join(esc(description))
+    .split('AYSRZZAUTHOR').join(esc(author))
     .split('AYSRZZID').join(slug)
     .split('/post-shell/').join(`/blog/${slug}/`)
     // Single-occurrence byline bits.

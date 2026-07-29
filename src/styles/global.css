@@ -176,9 +176,32 @@ a.link:hover { border-color: var(--accent); }
 /* Inline code: editorial pill on the warm surface with an accent glyph. */
 code { font-family: var(--font-mono); font-size: 0.86em; background: var(--paper-2); border: 1px solid var(--rule); color: var(--accent); padding: 0.1em 0.4em; border-radius: 4px; }
 /* Block code: an always-dark framed slab (Shiki 'css-variables' theme; palette below),
-   so it reads like the design in BOTH page themes. */
-pre { background: var(--code-bg); color: var(--code-fg); margin: 1.9em 0; padding: 0; border-radius: 6px; overflow-x: auto; border: 1px solid var(--rule); box-shadow: var(--shadow); }
+   so it reads like the design in BOTH page themes. rehype-code-chrome wraps each block
+   in .codeblock (header strip + language tag) — see the editorial code-card rules below. */
+pre { background: var(--code-bg); color: var(--code-fg); margin: 1.9em 0; padding: 0; border-radius: 8px; overflow-x: auto; border: 1px solid color-mix(in srgb, var(--code-bg) 55%, var(--rule)); box-shadow: var(--shadow); }
 pre code { display: block; background: none; border: 0; color: inherit; padding: 18px 20px; font-size: 0.86rem; line-height: 1.75; min-width: max-content; }
+
+/* ---- Editorial code card (R12): header strip with muted dots + a language tag,
+   so a code block is a deliberate framed panel that separates cleanly from the page
+   in BOTH themes (the near-black slab used to vanish against the dark paper). ---- */
+.post-body .codeblock {
+  margin: 2.1em 0; border-radius: 10px; overflow: hidden; background: var(--code-bg);
+  border: 1px solid color-mix(in srgb, var(--code-bg) 52%, var(--rule));
+  box-shadow: 0 16px 38px rgba(20, 12, 4, 0.30);
+}
+.post-body .codeblock .code-top {
+  display: flex; align-items: center; gap: 12px; padding: 9px 16px;
+  background: color-mix(in srgb, var(--code-bg) 84%, #ffffff 16%);
+  border-bottom: 1px solid color-mix(in srgb, var(--code-bg) 62%, #ffffff 38%);
+}
+.post-body .code-dots { display: inline-flex; gap: 7px; }
+.post-body .code-dots .dot { width: 9px; height: 9px; border-radius: 50%; background: color-mix(in srgb, var(--code-fg) 24%, transparent); }
+.post-body .code-lang { margin-left: auto; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: color-mix(in srgb, var(--code-fg) 60%, transparent); }
+/* The wrapped <pre> loses its own frame — the .codeblock supplies it. */
+.post-body .codeblock pre { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+/* When a code card is immediately followed by its python output, fuse the two into
+   one notebook-style cell (code on top, result below). */
+.post-body .codeblock:has(+ pre.py-output) { margin-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 /* Warm token palette for Shiki's 'css-variables' theme — matches the design's code
    colours. Code is always dark, so these apply in both page themes. */
 .astro-code {
@@ -232,12 +255,15 @@ li { margin: 0.35rem 0; }
 .post-body ul, .post-body ol { padding-left: 1.4em; margin: 0 0 1.35em; }
 .post-body li { margin: 0.4em 0; }
 .post-body img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--rule); }
-/* Build-time D2 diagrams get the editorial framed-card treatment, sized to the
-   reading column and scrolling if wider. */
+/* Build-time D2 diagrams get the editorial framed-figure treatment (R11). The
+   diagram itself is neutral grey ink (D2 theme 1), sitting on a WARM light canvas
+   that stays consistent in both themes — a "printed figure" that never clashes
+   with the page. In dark mode the canvas is a lit inset framed by the rule. */
 .post-body .d2-diagram {
-  margin: 2.2em 0; border: 1px solid var(--rule); border-radius: 6px;
-  background: var(--card); box-shadow: var(--shadow); padding: 22px; overflow-x: auto;
+  margin: 2.4em 0; border: 1px solid var(--rule); border-radius: 8px;
+  background: #f6f2ea; box-shadow: var(--shadow); padding: clamp(16px, 3vw, 26px); overflow-x: auto;
 }
+:root[data-theme="dark"] .post-body .d2-diagram { border-color: #2c2519; box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
 
 /* D2 diagrams — inline SVG at build + publish time. Centered, scale to column,
    scroll if wider. `.d2-error` is the bad-diagram fallback box. */
@@ -264,11 +290,21 @@ li { margin: 0.35rem 0; }
 .plotly-figure { width: 100%; }
 .plotly-holder { width: 100%; min-height: 300px; }
 /* Notebook-style stdout from a non-plotting python cell, embedded at publish as raw
-   <pre class="py-output">. Reuses the dark code slab (global `pre`) with an accent edge
-   marking it as output, sitting just under its source block. */
+   <pre class="py-output"> (R12). Deliberately NOT another dark slab — it's a warm
+   "result" panel with an Output label + accent edge, so code and its output read as
+   two distinct things. When it follows a code card it fuses to the bottom of it. */
 .post-body pre.py-output {
-  margin: 0.5em 0 1.9em; padding: 14px 18px; font-family: var(--mono); font-size: 0.84rem;
-  line-height: 1.7; white-space: pre-wrap; box-shadow: none; border-left: 3px solid var(--accent);
+  margin: 0 0 2.1em; padding: 12px 18px 16px; font-family: var(--mono); font-size: 0.82rem;
+  line-height: 1.7; white-space: pre-wrap; box-shadow: none;
+  background: var(--paper-2); color: var(--ink-soft);
+  border: 1px solid color-mix(in srgb, var(--code-bg) 52%, var(--rule));
+  border-top: 0; border-left: 3px solid var(--accent);
+  border-radius: 0 0 10px 10px;
+}
+.post-body pre.py-output::before {
+  content: "Output"; display: block; margin-bottom: 8px;
+  font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--ink-faint);
 }
 
 /* ============================================================================
@@ -291,12 +327,46 @@ li { margin: 0.35rem 0; }
 .wordmark:hover { color: var(--ink); }
 .wordmark .are { color: var(--accent); }
 .nav-primary { display: flex; align-items: center; gap: 6px; font-family: var(--sans); }
-.nav-primary a { font-size: 14px; padding: 8px 14px; border-radius: 999px; color: var(--ink-soft); transition: color var(--dur) var(--ease), background var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.nav-primary a { position: relative; font-size: 14px; padding: 8px 14px; border-radius: 999px; color: var(--ink-soft); transition: color var(--dur) var(--ease), background var(--dur) var(--ease); }
 .nav-primary a:hover { color: var(--ink); background: var(--paper-2); }
 .nav-primary a[aria-current="page"] { color: var(--ink); }
-.nav-primary a.account { color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--rule)); }
-.nav-primary a.account:hover { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+/* Active-page indicator: a small accent underline centered under the item (replaces
+   the old Account "oval ring"). */
+.nav-primary a[aria-current="page"]::after {
+  content: ""; position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 1px; width: 16px; height: 2px; border-radius: 2px; background: var(--accent);
+}
+/* Account is a subtle accent link (no persistent ring). */
+.nav-primary a.account { color: var(--accent); }
+.nav-primary a.account:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
 .nav-primary a.nav-studio { color: var(--accent); }
+/* Blog dropdown (R7): a hover/focus menu that also surfaces Series. Desktop
+   enhancement — the trigger link still navigates to /blog on click/tap. */
+.nav-group { position: relative; display: flex; align-items: center; }
+.nav-trigger { display: inline-flex; align-items: center; gap: 5px; }
+.nav-trigger .caret { opacity: 0.55; transition: transform var(--dur) var(--ease); }
+.nav-group:hover .caret, .nav-group:focus-within .caret { transform: rotate(180deg); }
+.nav-group.is-active > .nav-trigger { color: var(--ink); }
+.nav-group.is-active > .nav-trigger::after {
+  content: ""; position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 1px; width: 16px; height: 2px; border-radius: 2px; background: var(--accent);
+}
+/* Invisible bridge so the pointer can cross from trigger to menu without dropping hover. */
+.nav-group::before { content: ""; position: absolute; top: 100%; left: 0; right: 0; height: 12px; }
+.nav-menu {
+  position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(-4px);
+  min-width: 158px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--card); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow);
+  opacity: 0; visibility: hidden; pointer-events: none; z-index: 60;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), visibility var(--dur);
+}
+.nav-group:hover .nav-menu, .nav-group:focus-within .nav-menu {
+  opacity: 1; visibility: visible; pointer-events: auto; transform: translateX(-50%) translateY(0);
+}
+.nav-menu a { display: block; width: 100%; padding: 9px 12px; border-radius: 8px; font-size: 14px; color: var(--ink-soft); white-space: nowrap; }
+.nav-menu a::after { display: none !important; }
+.nav-menu a:hover { background: var(--paper-2); color: var(--ink); }
+.nav-menu a[aria-current="page"] { color: var(--accent); }
 .theme-toggle { margin-left: 2px; width: 36px; height: 36px; border-radius: 999px; cursor: pointer; border: 1px solid var(--rule); background: transparent; color: var(--ink-soft); display: grid; place-items: center; transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
 .theme-toggle:hover { background: var(--paper-2); color: var(--ink); }
 .theme-toggle svg { width: 18px; height: 18px; }

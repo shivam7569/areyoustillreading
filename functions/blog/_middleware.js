@@ -172,7 +172,7 @@ async function listingOverlay(url, kv, next) {
       (p) => p && p.slug && p.publishedAt &&
         (!builtAt || p.publishedAt > builtAt) &&   // published after this build
         !html.includes(`/blog/${p.slug}"`)          // and not already in the static list
-    );
+    ).sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0)); // newest first
     if (!fresh.length) return new Response(html, res);
     // Inject a "Just published" group at the archive's stable anchor. The client
     // filter script picks up these .post rows automatically (they're in the DOM at

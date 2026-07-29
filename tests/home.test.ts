@@ -73,9 +73,9 @@ const home = readFileSync(join(process.cwd(), 'dist', 'index.html'), 'utf-8');
 
 describe('homepage', () => {
   it('surfaces the latest posts', () => {
-    // The "Latest posts" section heading must render — proves the homepage's
-    // content-collection-driven feed block was emitted at all.
-    expect(home).toContain('Latest posts');
+    // The "Recent writing" section heading must render — proves the homepage's
+    // content-collection-driven feed block was emitted at all (editorial home).
+    expect(home).toContain('Recent writing');
     // The feed must contain at least one real post link — proves it's actually
     // populated (not an empty list) and the collection query works. Matched by
     // shape (`/blog/<slug>`), not a specific slug, so adding/removing posts

@@ -81,11 +81,12 @@ function isD2Code(code) {
 
 export default function rehypeD2(options = {}) {
   // dagre layout (D2's default) avoids spawning the separate ELK layout worker.
-  // themeID/darkThemeID make D2 embed a `@media (prefers-color-scheme: dark)` block
-  // in the SVG, so a diagram renders light on light pages and dark on dark ones —
-  // no jarring white box on the dark theme. Mirror these in the editor's live D2
-  // preview (src/pages/admin/write.astro) so the preview matches the built site.
-  const renderOpts = { layout: 'dagre', pad: 20, noXMLTag: true, themeID: 0, darkThemeID: 200, ...options };
+  // theme: NEUTRAL GREY (1) for BOTH light + dark. D2's only dark preset (200
+  // "Dark Mauve") clashes with the editorial palette, so we render one clean
+  // grayscale "ink" diagram and let the .d2-diagram figure frame (global.css)
+  // supply a warm, theme-consistent canvas. Grey never fights the plum/bronze
+  // accent. Mirror these in the editor's live D2 preview (admin/write.astro).
+  const renderOpts = { layout: 'dagre', pad: 20, noXMLTag: true, themeID: 1, darkThemeID: 1, ...options };
 
   return async (tree) => {
     // PASS 1: collect. We do NOT render inside visit() because visit is synchronous

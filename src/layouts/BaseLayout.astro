@@ -113,9 +113,14 @@ const {
 // control; page-level auth + Supabase RLS govern what each route actually does.
 // Primary nav (Account renders separately as the editorial pill; About joins
 // once its page is built). Data-driven so a link change is one line here.
+// The Blog item is a dropdown: its trigger goes to the full archive, and the
+// menu also surfaces Series (which otherwise lived only in the footer).
 const nav = [
   { href: '/', label: 'Home' },
-  { href: '/blog', label: 'Blog' },
+  { href: '/blog', label: 'Blog', children: [
+    { href: '/blog', label: 'All essays' },
+    { href: '/series', label: 'Series' },
+  ] },
   { href: '/projects', label: 'Projects' },
   { href: '/resume', label: 'Resume' },
   { href: '/about', label: 'About' },
@@ -125,6 +130,10 @@ const nav = [
 // matches exactly; the rest match on prefix so /blog/<post> keeps Blog active.
 const pathname = Astro.url.pathname.replace(/\/$/, '') || '/';
 const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/'));
+// A dropdown group counts as active when its trigger OR any child route is active
+// (so the "Blog" trigger stays lit while browsing /series).
+const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
+  isActive(item.href) || (item.children ?? []).some((c) => isActive(c.href));
 ---
 
 {/* Root document. lang="en" set once here so every page inherits it (a11y/SEO). */}
@@ -177,10 +186,23 @@ const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname =
         <div class="bar">
           <a href="/" class="wordmark"><span class="are">are</span>youstillreading</a>
           <nav class="nav-primary">
-            {/* Data-driven primary links; aria-current marks (and styles) the active section. */}
-            {nav.map((item) => (
+            {/* Data-driven primary links; aria-current marks (and styles) the active section.
+                An item with `children` renders as a hover/focus dropdown (Blog → Series). */}
+            {nav.map((item) => (item.children ? (
+              <div class={`nav-group${isGroupActive(item) ? ' is-active' : ''}`}>
+                <a href={item.href} class="nav-trigger" aria-current={isActive(item.href) ? 'page' : undefined} aria-haspopup="true">
+                  {item.label}
+                  <svg class="caret" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                </a>
+                <div class="nav-menu" role="menu">
+                  {item.children.map((c) => (
+                    <a href={c.href} role="menuitem" aria-current={isActive(c.href) ? 'page' : undefined}>{c.label}</a>
+                  ))}
+                </div>
+              </div>
+            ) : (
               <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>{item.label}</a>
-            ))}
+            )))}
             <a href="/account" class="account" aria-current={isActive('/account') ? 'page' : undefined}>Account</a>
             {/* Studio (admin dashboard) entry — hidden by default; the script below reveals
                 it only for a signed-in admin. Link visibility is UX only; /admin and every

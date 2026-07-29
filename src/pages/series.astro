@@ -28,7 +28,7 @@ for (const p of all) {
   bySeries.get(s)!.push(p);
 }
 const seriesList = [...bySeries.entries()]
-  .filter(([, m]) => m.length >= 2)
+  .filter(([, m]) => m.length >= 1)
   .map(([slug, members]) => {
     members.sort(bySeriesOrder);
     const title = members.map((p) => p.data.seriesTitle).find((t) => t && t.trim())?.trim() || prettify(slug);

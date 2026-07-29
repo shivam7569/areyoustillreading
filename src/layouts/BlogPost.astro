@@ -38,6 +38,11 @@ type Props = { post: CollectionEntry<'blog'> };
 const { post } = Astro.props;
 const { title, description, pubDate, updatedDate, tags } = post.data;
 
+// Byline author: the publisher's pen name (baked into frontmatter at publish
+// time); legacy posts without an `author` fall back to the site author.
+const SITE_AUTHOR = 'Shivam Chaudhary';
+const byline = (post.data.author ?? '').trim() || SITE_AUTHOR;
+
 // Human-readable date (stable 'en-US' locale for deterministic build output).
 const fmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -76,7 +81,7 @@ const eyebrow = tags[0] ? `${tags[0]} · Field notes` : 'Field notes';
         {description && <p class="standfirst">{description}</p>}
         <div class="byline">
           <div class="avatar" aria-hidden="true">a</div>
-          <div class="who"><b>The author</b> &middot; <time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time></div>
+          <div class="who"><b>{byline}</b> &middot; <time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time></div>
           <span class="dot">&mdash;</span>
           <span class="meta-caps">{minutes} min read</span>
           {updatedDate && <span class="meta-caps">&middot; updated {fmt(updatedDate)}</span>}

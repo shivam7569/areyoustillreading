@@ -45,12 +45,12 @@ const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).f
 let n = 0;
 ---
 
-<BaseLayout title="The archive — areyoustillreading" description="Every essay on LLM engineering and the systems underneath, grouped by year." wide>
+<BaseLayout title="Blog — areyoustillreading" description="Every essay on LLM engineering and the systems underneath, grouped by year." wide>
   <div class="wrap">
     <header class="page-head">
-      <div class="kicker"><span class="line"></span><span class="eyebrow">Archive</span></div>
+      <div class="kicker"><span class="line"></span><span class="eyebrow">The blog</span></div>
       <h1>Every essay, <em>in the order it arrived.</em></h1>
-      <p class="lede">Everything published here on LLM engineering and the systems underneath. Filter by subject or search the titles — nothing is hidden by hindsight.</p>
+      <p class="lede">The complete archive — everything published here on LLM engineering and the systems underneath. Filter by subject or search the titles; for multi-part reads, see the <a class="link" href="/series">series</a>.</p>
     </header>
 
     {posts.length > 0 ? (
@@ -82,6 +82,12 @@ let n = 0;
                   <article class="post" data-tags={dataTags}>
                     <div class="idx">{idx}</div>
                     <div>
+                      {post.data.series && (
+                        <a class="series-flag" href="/series">
+                          <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M12 2 15 9l7 .5-5.4 4.5L18.5 21 12 17l-6.5 4 1.9-7L2 9.5 9 9z"/></svg>
+                          {post.data.seriesTitle ?? post.data.series}{post.data.seriesOrder ? ` · Part ${post.data.seriesOrder}` : ''}
+                        </a>
+                      )}
                       <h3><a href={`/blog/${post.id}`}>{post.data.title}</a></h3>
                       <p>{post.data.description}</p>
                       {post.data.tags && post.data.tags.length > 0 && (
@@ -132,6 +138,10 @@ let n = 0;
   .yr .n { font-family: var(--sans); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
   .yr .rule { flex: 1; height: 1px; background: var(--rule); }
   .post-list { border-top: 1px solid var(--rule); }
+  /* Series membership flag on an archive row (R8). */
+  .series-flag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 9px; transition: opacity 0.2s; }
+  .series-flag svg { opacity: 0.85; }
+  .series-flag:hover { opacity: 0.72; }
   .post.is-hidden { display: none; }
   .yr.is-hidden, .post-list.is-hidden { display: none; }
   .empty { padding: 60px 8px; text-align: center; color: var(--ink-faint); font-family: var(--sans); font-size: 15px; display: none; }

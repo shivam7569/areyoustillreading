@@ -107,8 +107,8 @@ describe('blog pipeline', () => {
   it('renders the post markdown to HTML', () => {
     expect(exists('blog/hello-world/index.html')).toBe(true);
     const html = read('blog/hello-world/index.html');
-    expect(html).toContain('<h1>Hello, world</h1>'); // heading transformed to real element
-    expect(html).toContain('A heading');             // body text preserved
+    expect(html).toContain('Hello, world</h1>');     // title rendered as the post <h1>
+    expect(html).toContain('<h2 id="a-heading">A heading</h2>'); // body heading transformed
     expect(html).toContain('<li>one</li>');          // list item transformed to real element
   });
 });
