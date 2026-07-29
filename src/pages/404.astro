@@ -1,70 +1,75 @@
 ---
 /**
- * 404.astro — Site-wide "page not found" fallback.
+ * 404.astro — Site-wide "page not found" fallback (Editorial skin).
  * ---------------------------------------------------------------------------
  * WHAT THIS IS
  *   The custom Not-Found page for areyoustillreading.dev. Astro treats a
  *   top-level `src/pages/404.astro` specially: at build time it emits
  *   `dist/404.html`, which Cloudflare Pages serves automatically for any
- *   request that matches no static asset and no Pages Function route. This is
- *   the single most-hit "error" surface on the site, so it is intentionally
- *   tiny and dependency-light.
+ *   request that matches no static asset and no Pages Function route.
  *
  * SINGLE RESPONSIBILITY
  *   Render a friendly, correctly-chromed 404 page and point the visitor back
- *   to two known-good destinations (the blog index and the home page). It does
- *   NOTHING else — no data fetching, no auth, no gating, no side effects.
- *
- * HOW IT FITS THE ARCHITECTURE
- *   - This is a fully STATIC page. It is prerendered at build (`npm run deploy`,
- *     Wrangler direct upload) into `404.html`. There is no runtime code here and
- *     no Pages Function backing it.
- *   - Cloudflare Pages routing order matters: a real asset wins, then a Pages
- *     Function/redirect can win, and only if nothing matches does Pages fall
- *     back to serving `404.html` with an HTTP 404 status. So this page is the
- *     LAST responder, not a router — it never sees the attempted path and must
- *     not try to reason about it.
- *
- * DEPENDS ON
- *   - `../layouts/BaseLayout.astro` — supplies <html>/<head>/<body>, the shared
- *     site nav/footer, meta tags, and the OG/SEO scaffolding. `title` and
- *     `description` are forwarded to BaseLayout, which owns the <title> and
- *     <meta name="description">. Keep those props in sync with BaseLayout's
- *     prop contract (title: string, description?: string, image?: string); if
- *     BaseLayout's signature changes, this page must follow.
- *   - The optional `image` prop is deliberately NOT passed, so BaseHead (via
- *     BaseLayout) falls back to its default OG/social share image for this page.
- *   - BaseLayout also renders the shared header nav, which already links to Home
- *     and Blog. The two links in the body below are therefore SUPPLEMENTARY,
- *     in-content escape hatches — intentionally redundant with the nav so a lost
- *     visitor has an obvious next step without hunting for the header.
- *
- * DEPENDED ON BY
- *   - Nothing imports this file. Its only "consumer" is Cloudflare Pages' static
- *     not-found fallback (the emitted 404.html). Renaming/moving it would break
- *     that convention and the site would fall back to a generic Pages 404.
+ *   to known-good destinations. It does NOTHING else — no data fetching, no
+ *   auth, no gating, no side effects.
  *
  * SECURITY / GOTCHAS
  *   - No user input is read, echoed, or reflected here (no requested-path
- *     display), which deliberately avoids reflected-XSS / open-redirect risk on
- *     the error path. Keep it that way: do not interpolate `Astro.url`,
- *     referrers, or query params into the markup.
- *   - Both links are hard-coded, same-origin relative paths ("/blog", "/") —
- *     safe, cacheable, and independent of any backend (Supabase/PostgREST,
- *     RLS, Resend, Turnstile, Dodo Payments). None of those systems are touched
- *     by a 404, by design: the error page must render even if every backend is
- *     down.
- *   - Because this ships as prerendered HTML, keep it lightweight; avoid adding
- *     client scripts or HTML comments (they would bloat every miss).
+ *     display), which deliberately avoids reflected-XSS / open-redirect risk.
+ *     Keep it that way: do not interpolate `Astro.url`, referrers, or query
+ *     params into the markup.
+ *   - Every link is a hard-coded, same-origin relative path — safe, cacheable,
+ *     and independent of any backend. None of those systems are touched by a
+ *     404, by design: the error page must render even if every backend is down.
+ *   - Because this ships as prerendered HTML, keep it lightweight and
+ *     script-free; avoid client scripts or HTML comments.
+ *
+ * DEPENDS ON
+ *   - `../layouts/BaseLayout.astro` — supplies <html>/<head>/<body>, shared
+ *     header nav/footer, meta and OG/SEO scaffolding. `title`/`description` are
+ *     forwarded there. The `wide` prop opts this page out of the constrained
+ *     reading column so the full-bleed editorial layout can run.
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-{/* Delegate all page chrome (head, nav, footer, meta) to BaseLayout. `title`
-    and `description` become the <title>/<meta> tags for this error page. */}
-<BaseLayout title="Not found — areyoustillreading" description="Page not found.">
-  <h1>404 — not found</h1>
-  {/* Two escape hatches to KNOWN-GOOD, hard-coded same-origin routes. Never
-      derive these from the requested URL or referrer — see security note. */}
-  <p>That page doesn't exist. Try the <a href="/blog">blog</a>, or head back <a href="/">home</a>.</p>
+<BaseLayout title="Not found — areyoustillreading" description="Page not found." wide>
+  <div class="wrap lost">
+    <div>
+      <p class="num">404</p>
+      <h1>You've read past the end of the page.</h1>
+      <p>Nothing lives at this address. The link was probably wrong before it reached you, or the page has since moved.</p>
+      {/* Escape hatches to KNOWN-GOOD, hard-coded same-origin routes. Never
+          derive these from the requested URL or referrer — see security note. */}
+      <div class="acts">
+        <a class="btn btn-primary" href="/blog">Browse the archive</a>
+        <a class="btn btn-ghost" href="/">Back to the front <span class="arrow">→</span></a>
+      </div>
+    </div>
+
+    <div class="picks">
+      <h2>Try one of these instead</h2>
+      <a class="pick" href="/blog"><span class="t">The archive</span><span class="m">Every essay · Newest first</span></a>
+      <a class="pick" href="/projects"><span class="t">Projects</span><span class="m">Things I've built</span></a>
+      <a class="pick" href="/resume"><span class="t">Resume</span><span class="m">The short version</span></a>
+    </div>
+  </div>
 </BaseLayout>
+
+<style>
+  /* BaseLayout owns <main> (padding:0 via .wide), so the full-height vertical
+     centering the editorial template put on <main> lives on .lost here. */
+  .lost{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:clamp(36px,7vw,88px);align-items:center;align-content:center;width:100%;min-height:calc(100vh - 210px);padding:clamp(48px,8vw,90px) 0}
+  @media(max-width:900px){.lost{grid-template-columns:1fr;gap:40px}}
+  .num{font-family:var(--serif-display);font-weight:600;font-size:clamp(88px,15vw,168px);line-height:.82;letter-spacing:-.045em;color:var(--accent);margin:0 0 26px}
+  .lost h1{font-family:var(--serif-display);font-weight:600;font-size:clamp(28px,3.8vw,42px);line-height:1.12;letter-spacing:-.02em;margin:0 0 18px;max-width:18ch}
+  .lost p{color:var(--ink-soft);font-size:19px;max-width:46ch;margin:0 0 30px}
+  .acts{display:flex;gap:14px;flex-wrap:wrap}
+  .picks{border-top:1px solid var(--rule)}
+  .picks h2{font-family:var(--sans);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-faint);margin:24px 0 6px;font-weight:600}
+  .pick{display:block;padding:18px 0;border-bottom:1px solid var(--rule);transition:padding-left .22s}
+  .pick:hover{padding-left:8px}
+  .pick .t{font-family:var(--serif-display);font-size:20px;line-height:1.25;display:block;margin-bottom:6px}
+  .pick:hover .t{color:var(--accent)}
+  .pick .m{font-family:var(--sans);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
+</style>

@@ -6,9 +6,9 @@
  * ============================================================================
  *
  * WHAT THIS IS
- *   The static "Projects" portfolio page. It renders a hard-coded list of
- *   featured projects as a responsive card grid, plus a trailing "More on
- *   GitHub" card. That's the whole job.
+ *   The static "Projects" portfolio page, Phase-5 EDITORIAL skin. It renders a
+ *   hard-coded list of featured projects as a responsive card grid, plus a
+ *   trailing "More on GitHub" note. That's the whole job.
  *
  * SINGLE RESPONSIBILITY
  *   Present a curated, author-maintained list of portfolio projects. Nothing
@@ -16,59 +16,46 @@
  *   reads no database, requires no auth, and ships zero client-side JS of its
  *   own. It is fully rendered to HTML at build time.
  *
- * HOW IT FITS THE ARCHITECTURE
- *   The wider site (areyoustillreading.dev) is an Astro static build deployed
- *   to Cloudflare Pages, backed by Cloudflare Pages Functions + Supabase +
- *   Resend + Turnstile + Dodo Payments for the dynamic/paywalled features.
- *   THIS page touches NONE of that backend surface. It is intentionally one of
- *   the "boring", purely-static leaf pages. Treat it as content, not code.
+ * DESIGN
+ *   Editorial reskin only — no behavior change. Header/footer/nav/theme come
+ *   from BaseLayout; the shared editorial utility classes (.wrap .page-head
+ *   .eyebrow .meta-caps .sec-head .card .ph .tag .tags) live in global.css.
+ *   Only the page-specific classes (.grid .proj .status .note) are scoped
+ *   below, copied verbatim from the editorial template.
  *
  * DEPENDENCIES (what it imports)
- *   - ../layouts/BaseLayout.astro : the shared site shell. It owns <html>,
- *     <head> (meta/OG/canonical), global CSS variables (--space, --border,
- *     --accent, --muted, --font-mono, etc. used by the <style> block below),
- *     header/nav, footer, and Pagefind indexing. The `title` and `description`
- *     props passed to it drive the <title> tag and meta description / OG image.
+ *   - ../layouts/BaseLayout.astro : the shared site shell. Owns <html>, <head>
+ *     (meta/OG/canonical), global CSS variables + editorial utilities,
+ *     header/nav, footer, and Pagefind indexing. `wide` opts this page out of
+ *     the constrained reading column so the editorial grid can breathe.
  *
- * WHAT DEPENDS ON THIS FILE
- *   - The site nav (in BaseLayout / the header component) links here as
- *     "/projects". Pagefind indexes the rendered output for site search.
- *   - The `projects` array is local and private to this file — nothing imports
- *     it. To add/remove a project, edit the array below; no other file changes.
- *
- * SECURITY / RLS / GOTCHAS
- *   - No secrets, no tokens, no entitlement checks, no RLS reliance here —
- *     there is no data source to protect. Do not add fetches to Supabase or
- *     Pages Functions from this page without a deliberate reason; keeping it
- *     static is what makes it cache-forever cheap and un-attackable.
- *   - The CSS variables referenced in <style> (--space, --border, --accent,
- *     --muted, --font-mono) are NOT defined here; they come from BaseLayout's
- *     global stylesheet. If those are ever renamed globally, this file's
- *     styling silently breaks — grep for them before renaming.
- *   - `href` values are author-controlled constants (not user input), so the
- *     bare <a href={p.href}> is safe. If this list ever becomes data-driven
- *     from an untrusted source, revisit link safety (rel/target, sanitizing).
+ * SECURITY / GOTCHAS
+ *   - No secrets, no tokens, no entitlement checks — there is no data source to
+ *     protect. `href` values are author-controlled constants, so the bare
+ *     <a href={p.href}> is safe. Keep this page static.
  * ============================================================================
  */
 
-// The shared page shell (see doc block above). Owns <head>, nav, footer, and
-// the global CSS custom properties this page's <style> block consumes.
+// The shared page shell. Owns <head>, nav, footer, and the editorial tokens
+// (--paper/--ink/--rule/--accent/--serif-*) this page's <style> consumes.
 import BaseLayout from '../layouts/BaseLayout.astro';
 
 // Shape of a single portfolio entry. Compile-time only (TS interface erased at
 // build); exists to keep the hand-authored `projects` array below honest.
 interface Project {
-  name: string;        // Card heading / link text.
+  name: string;        // Card heading.
   description: string; // One-paragraph blurb rendered as the card body.
-  href: string;        // Outbound URL for the card's title link (author-set).
-  tags: string[];      // Short pill labels (tech/keywords) shown under the blurb.
+  href: string;        // Primary outbound URL (author-set).
+  tags: string[];      // Short pill labels (tech/keywords).
+  status: string;      // Editorial status pill (e.g. "Maintained").
+  meta: string;        // Small-caps meta shown next to the status pill.
+  shot: string;        // Mono label naming the screenshot placeholder.
 }
 
-// The curated, hand-maintained source of truth for this page. This is
-// deliberately a static array rather than a CMS/DB query: the list is tiny,
-// author-owned, and rarely changes, so build-time constants keep the page fully
-// static (no runtime fetch, no auth, cacheable indefinitely). To feature a new
-// project, add an object here — that is the ONLY edit required.
+// The curated, hand-maintained source of truth for this page. Static array
+// (not a CMS/DB query): the list is tiny, author-owned, and rarely changes, so
+// build-time constants keep the page fully static. To feature a new project,
+// add an object here — that is the ONLY edit required.
 const projects: Project[] = [
   {
     name: 'Deep-Learning Architectures from Scratch',
@@ -76,94 +63,80 @@ const projects: Project[] = [
       'Open-source PyTorch library implementing 25+ computer-vision architectures — CNNs (ResNet, ConvNeXt), Vision Transformers (DeiT, Swin), and segmentation networks — reimplemented from their original papers. Modular, packaged codebase with unit tests, GitHub Actions CI/CD, config-driven training, experiment logging, and hosted docs.',
     href: 'https://shivam7569.github.io/cv/',
     tags: ['pytorch', 'computer-vision', 'open-source'],
+    status: 'Maintained',
+    meta: 'Open source',
+    shot: 'Screenshot — architecture library docs',
   },
 ];
+
+const GITHUB = 'https://github.com/shivam7569';
 ---
 
 {/*
-  BaseLayout wraps this page's markup in the site shell. `title` becomes the
-  <title>/OG title and `description` the meta/OG description (both live in
-  BaseLayout's <head>). Everything between the tags is projected into the
-  layout's <slot />.
+  BaseLayout wraps this page in the site shell. `title` becomes the <title>/OG
+  title and `description` the meta/OG description. `wide` gives the editorial
+  grid a full-bleed main. Everything below is projected into the layout's slot.
 */}
-<BaseLayout title="Projects — areyoustillreading" description="Selected engineering and research projects by Shivam Chaudhary.">
-  <h1>Projects</h1>
-  <p class="lede">Selected engineering and research work.</p>
+<BaseLayout title="Projects — areyoustillreading" description="Selected engineering and research projects by Shivam Chaudhary." wide>
+  <div class="wrap">
+    <header class="page-head">
+      <div class="kicker"><span class="line"></span><span class="eyebrow">Things I built</span></div>
+      <h1>Work that <em>earned its writing.</em></h1>
+      <p class="lede">Selected engineering and research work — the kind of project I couldn't write about honestly until I'd built it first.</p>
+    </header>
 
-  <ul class="project-grid">
-    {/*
-      Render one <li class="card"> per curated project. Keyless map is fine
-      here: this is static server-rendered HTML (no client hydration / no
-      reconciliation), so React-style `key` warnings don't apply.
-    */}
-    {projects.map((p) => (
-      <li class="card">
-        {/* Title doubles as the outbound link to the project (author-set href). */}
-        <h2 class="card-title"><a href={p.href}>{p.name}</a></h2>
-        <p class="card-desc">{p.description}</p>
-        <ul class="tags">
-          {/* Tags are plain display pills — no filtering/linking behavior. */}
-          {p.tags.map((tag) => <li class="tag">{tag}</li>)}
-        </ul>
-      </li>
-    ))}
-    {/*
-      Trailing "catch-all" card, intentionally hard-coded OUTSIDE the map (it's
-      a fixed CTA to the GitHub profile, not a Project entry). It reuses .card
-      styling but omits the .tags list. &rarr; is the → arrow entity.
-    */}
-    <li class="card">
-      <h2 class="card-title"><a href="https://github.com/shivam7569">More on GitHub &rarr;</a></h2>
-      <p class="card-desc">Additional experiments and open-source work.</p>
-    </li>
-  </ul>
+    <div class="grid">
+      {/* One .proj card per curated project. Keyless map is fine: static SSG, no hydration. */}
+      {projects.map((p) => (
+        <article class="card proj">
+          <div class="ph"><span>{p.shot}</span></div>
+          <div class="body">
+            <div class="top"><span class="status">{p.status}</span><span class="meta-caps">{p.meta}</span></div>
+            <h3>{p.name}</h3>
+            <p>{p.description}</p>
+            <div class="tags">
+              {p.tags.map((tag) => <span class="tag">{tag}</span>)}
+            </div>
+            <div class="links">
+              <a href={GITHUB}><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.3-1.1.6-1.4-2.2-.2-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.6 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.3.1 2.6.6.7 1 1.6 1 2.7 0 3.8-2.4 4.7-4.6 4.9.3.3.6.9.6 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>Repository</a>
+              <a href={p.href}>Documentation →</a>
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+
+    {/* Closing note carries the "More on GitHub" catch-all from the pre-skin page. */}
+    <div class="note">
+      <span>Everything here is open source — MIT unless the repository says otherwise.</span>
+      <span>More on GitHub <a href={GITHUB}>github.com/shivam7569 →</a></span>
+    </div>
+  </div>
 </BaseLayout>
 
 {/*
-  Scoped styles. Astro auto-scopes this <style> to elements rendered by THIS
-  component (via a generated data-astro-cid attribute), so these class names
-  won't collide with the rest of the site. Colors/spacing come from global CSS
-  custom properties defined in BaseLayout (see file-top doc block).
+  Page-specific classes only (copied verbatim from the editorial template). The
+  shared editorial utilities (.wrap .page-head .eyebrow .meta-caps .card .ph
+  .tag .tags) live in global.css. Colors come from the editorial tokens
+  (--paper/--ink/--rule/--accent/--serif-*) defined globally.
 */}
 <style>
-  /* Responsive auto-fitting card grid: as many ~260px+ columns as fit, each
-     flexing to fill the row. No media queries needed — auto-fill + minmax
-     handles the reflow from wide desktop down to a single mobile column. */
-  .project-grid {
-    list-style: none;
-    padding: 0;
-    margin: 1.75rem 0 0;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1rem;
-  }
-  /* Column flexbox so the tag row can be pinned to the bottom (see .tags
-     margin-top:auto) — keeps all cards' tags aligned despite blurbs of
-     differing length. Subtle raise + hover lift for a premium, tactile feel. */
-  .card {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-    padding: 1.25rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
-  }
-  .card:hover { border-color: var(--border-strong); transform: translateY(-2px); box-shadow: var(--shadow); }
-  .card-title { margin: 0; font-size: 1.12rem; letter-spacing: -0.015em; line-height: 1.3; }
-  .card-title a { color: var(--fg); }
-  .card-title a:hover { color: var(--accent); }
-  .card-desc { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
-  /* margin-top:auto pushes the tag row to the bottom so tags bottom-align across cards. */
-  .tags { list-style: none; padding: 0; margin: 0.35rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  .tag {
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    color: var(--muted);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 0.12rem 0.6rem;
-  }
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(20px,3vw,32px)}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+  .proj{overflow:hidden;display:flex;flex-direction:column;transition:transform .22s,border-color .22s}
+  .proj:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--accent) 40%,var(--rule))}
+  .proj .ph{min-height:200px}
+  .proj .body{padding:clamp(22px,2.6vw,30px);display:flex;flex-direction:column;flex:1}
+  .proj .top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .status{font-family:var(--sans);font-size:11px;letter-spacing:.14em;text-transform:uppercase;padding:5px 10px;border-radius:2px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
+  .status.quiet{background:transparent;border:1px solid var(--rule);color:var(--ink-faint)}
+  .proj h3{font-family:var(--serif-display);font-weight:600;font-size:26px;letter-spacing:-.01em;margin:0 0 12px;line-height:1.15}
+  .proj p{color:var(--ink-soft);margin:0 0 20px;font-size:17px}
+  .proj .tags{margin-bottom:22px}
+  .proj .links{display:flex;flex-wrap:wrap;gap:18px;margin-top:auto;padding-top:18px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:14px}
+  .proj .links a{color:var(--accent);display:inline-flex;align-items:center;gap:7px;border-bottom:1px solid transparent;transition:border-color .2s}
+  .proj .links a:hover{border-color:var(--accent)}
+  .proj .links svg{width:14px;height:14px}
+  .note{margin-top:clamp(44px,6vw,72px);padding:26px 0 0;border-top:1px solid var(--rule);font-family:var(--sans);font-size:14px;color:var(--ink-faint);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .note a{color:var(--accent)}
 </style>

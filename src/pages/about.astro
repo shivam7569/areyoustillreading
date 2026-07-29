@@ -1,0 +1,117 @@
+---
+/*
+ * =============================================================================
+ * FILE: src/pages/about.astro  ·  ROUTE: /about
+ * =============================================================================
+ * The editorial "About" page (Phase 5), built from the Claude Design "about"
+ * template onto the shared editorial system. Static SSG: this page fetches
+ * nothing, reads no database, requires no auth, and ships zero client JS. It is
+ * fully rendered to HTML at build time — a boring, cache-forever leaf page.
+ *
+ * WHAT THIS IS
+ *   A two-column bio (prose + sticky portrait placeholder), a colophon
+ *   (Type / Built with / Elsewhere), and a contact card. All copy is an
+ *   author-editable DEFAULT grounded in real facts about THIS site — it makes
+ *   no fabricated biographical claims (no invented employer/location).
+ *
+ * DEPENDENCIES
+ *   - ../layouts/BaseLayout.astro : the shared shell. Owns <html>/<head>
+ *     (meta/OG/canonical), header/nav, footer, theme toggle, and the global
+ *     editorial CSS tokens (--paper/--ink/--rule/--accent/--serif-display/
+ *     --sans/--shadow/…) plus utility classes (.wrap .eyebrow .btn .card .ph)
+ *     that this page's markup and <style> block consume. `wide` gives this page
+ *     a full-bleed <main> so its own .wrap controls the measure.
+ *
+ * GOTCHAS
+ *   - The CSS custom properties in <style> are NOT defined here (BaseLayout).
+ *   - Elsewhere links point only to REAL endpoints: the site RSS feed and the
+ *     author's GitHub. Contact uses a placeholder mailbox for the author to set.
+ *   - JSX comments only ({/* *\/}); HTML comments would ship to the browser.
+ * =============================================================================
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="About — areyoustillreading" description="About the site and the person writing it: measured, first-person notes on LLM engineering and the systems underneath." wide>
+  <div class="wrap">
+    <div class="about">
+      <div>
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px"><span style="height:1px;width:48px;background:var(--accent);opacity:.6"></span><span class="eyebrow">About</span></div>
+        <h1>The name is <em>a question I ask myself</em> while editing.</h1>
+        <div class="prose">
+          <p>I'm Shivam — I work on machine-learning systems, and I write here about LLM engineering and the unglamorous infrastructure underneath it. The day job is making inference fast and reliable; the evenings are for writing down the parts that were harder than the papers implied.</p>
+          <p>This site exists because the good stuff kept getting lost. A profiling session would turn up something genuinely surprising — a cache policy that behaved backwards under load, a retrieval metric that flattered a broken system — and it would end up in a Slack thread, then nowhere. Writing it down properly forces the second question: <em>do I actually understand this, or did I just get it working?</em> Usually the answer is uncomfortable, and the essay gets better.</p>
+          <p>Everything here is first-person and measured. If I claim a number, I ran it; if I'm guessing, I say so. I don't cover launches, I don't do hot takes, and I try very hard not to write anything that could have been a tweet.</p>
+          <blockquote><p>Most of what I know I learned by being wrong in public, slowly.</p></blockquote>
+          <p>Most of the writing is free. A few of the longer essays sit behind a one-time $6 unlock — that's a single payment for that piece, not a subscription and nothing recurring. It's less a growth strategy than a filter: paying a little usually means you intend to finish, which is the only readership metric I care about.</p>
+          <p>If something here is wrong, tell me. Corrections get a note at the bottom of the piece with your name on it, unless you'd rather they didn't.</p>
+        </div>
+      </div>
+
+      <aside class="portrait">
+        <div class="ph"><span>Portrait — 4:5, desk or outdoors</span></div>
+        <p class="cap">A photo goes here — something plain and unstaged. Same warm paper tone as the rest of the site, nothing glossy.</p>
+      </aside>
+    </div>
+
+    <section class="colophon">
+      <h2>Colophon</h2>
+      <div class="col-grid">
+        <div>
+          <h4>Type</h4>
+          <p>Headings in Source Serif 4, body in Charis SIL — a descendant of Bitstream Charter — with interface text in the system sans. Both serifs are self-hosted, so the site reads the same on every platform.</p>
+        </div>
+        <div>
+          <h4>Built with</h4>
+          <p>Astro, built to static HTML and deployed on Cloudflare Pages on every push. Written in plain Markdown, with diagrams and plots rendered from source at build time.</p>
+        </div>
+        <div>
+          <h4>Elsewhere</h4>
+          <p><a class="link" href="/rss.xml">RSS</a> — the whole feed, full text.<br><a class="link" href="https://github.com/shivam7569">GitHub</a> — the code behind the essays.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card contact">
+      <div>
+        <h3>Say something</h3>
+        <p>Corrections, arguments, and job questions all welcome. I read everything and reply to most of it.</p>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <a class="btn btn-primary" href="mailto:hello@areyoustillreading.dev">hello@areyoustillreading.dev</a>
+        <a class="btn btn-ghost" href="/blog">Read the archive <span class="arrow">&rarr;</span></a>
+      </div>
+    </section>
+  </div>
+</BaseLayout>
+
+{/*
+  Scoped styles: ONLY the about-page-specific classes, copied from the editorial
+  template. Shared tokens (--paper/--ink/--rule/--accent/--serif-display/--sans/
+  --shadow/…) and utilities (.wrap/.eyebrow/.btn/.card/.ph/.arrow/.link) come
+  from BaseLayout's global.css.
+*/}
+<style>
+  .about { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: clamp(32px, 6vw, 80px); align-items: start; padding: clamp(44px, 7vw, 88px) 0 0; }
+  @media (max-width: 900px) { .about { grid-template-columns: 1fr; gap: 36px; } }
+  .about h1 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(36px, 5.4vw, 58px); line-height: 1.04; letter-spacing: -0.02em; margin: 0 0 28px; max-width: 16ch; }
+  .about h1 em { font-style: italic; color: var(--accent); }
+  .prose p { margin: 0 0 1.3em; color: var(--ink); max-width: 60ch; font-size: 19px; }
+  .prose p:first-of-type { font-size: 22px; line-height: 1.55; color: var(--ink-soft); font-family: var(--serif-display); }
+  .portrait { position: sticky; top: 96px; }
+  @media (max-width: 900px) { .portrait { position: static; } }
+  .portrait .ph { min-height: 400px; border: 1px solid var(--rule); border-radius: 4px; box-shadow: var(--shadow); }
+  .portrait .cap { font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); margin-top: 12px; line-height: 1.5; }
+  blockquote { margin: 2em 0; padding: 6px 0 6px 26px; border-left: 2px solid var(--accent); }
+  blockquote p { font-family: var(--serif-display); font-style: italic; font-size: 24px; line-height: 1.5; color: var(--ink); margin: 0; max-width: 44ch; }
+  .colophon { margin-top: clamp(48px, 7vw, 88px); padding-top: clamp(32px, 4vw, 48px); border-top: 1px solid var(--rule); }
+  .colophon h2 { font-family: var(--sans); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin: 0 0 26px; font-weight: 600; }
+  .col-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(24px, 4vw, 48px); }
+  @media (max-width: 760px) { .col-grid { grid-template-columns: 1fr; gap: 26px; } }
+  .col-grid h4 { font-family: var(--serif-display); font-weight: 600; font-size: 19px; margin: 0 0 10px; }
+  .col-grid p { margin: 0; font-family: var(--sans); font-size: 14.5px; line-height: 1.65; color: var(--ink-soft); }
+  .col-grid a { color: var(--accent); }
+  .contact { margin-top: clamp(40px, 5vw, 64px); padding: clamp(28px, 4vw, 44px); display: flex; align-items: center; justify-content: space-between; gap: 28px; flex-wrap: wrap; }
+  .contact h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(24px, 3vw, 30px); margin: 0 0 8px; letter-spacing: -0.01em; }
+  .contact p { margin: 0; color: var(--ink-soft); font-size: 17px; max-width: 44ch; }
+</style>
