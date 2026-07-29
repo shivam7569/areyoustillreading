@@ -254,6 +254,41 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
       }
     </script>
     <script>
+      // Hide newsletter/subscribe blocks for signed-in ADMINS only (N4). Admins are
+      // subscribed by default, so a subscribe CTA is noise for them. Every subscribe
+      // SECTION opts in with data-hide-admin; anonymous/regular readers keep it. This
+      // MIRRORS the Studio-reveal script above in reverse: optimistic hide from the
+      // cached admin flag, then revalidate — and a purely-anonymous visitor (no cache
+      // flag AND no local Supabase session) NEVER imports the gate, so Supabase isn't
+      // loaded just to evaluate this. checkAdmin() is memoized → shares the same
+      // is_admin() round-trip as the Studio script (no extra network cost).
+      {
+        const marks = Array.from(document.querySelectorAll('[data-hide-admin]'));
+        if (marks.length) {
+          // Toggle inline display (NOT the [hidden] attribute): some wrappers set their
+          // own display in scoped CSS and a class/[hidden] rule could be overridden (the
+          // known [hidden] footgun). Inline style is bulletproof and reverts cleanly.
+          const setHidden = (on) => marks.forEach((el) => { el.style.display = on ? 'none' : ''; });
+          let cached = false, hasSession = false;
+          try {
+            cached = localStorage.getItem('aysr:admin-ok') === '1';
+            if (cached) setHidden(true); // known admin: hide instantly, no flash
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k && k.startsWith('sb-') && k.includes('auth-token')) { hasSession = true; break; }
+            }
+          } catch {}
+          if (cached || hasSession) {
+            import('../lib/admin-gate').then(async ({ checkAdmin }) => {
+              const r = await checkAdmin();
+              setHidden(r.state === 'admin'); // un-hide if revalidation says not-admin
+            }).catch(() => {});
+          }
+          // Pure anonymous (no cache, no session): import skipped; blocks stay visible.
+        }
+      }
+    </script>
+    <script>
       // Auth-callback consumer. Sign-in (magic-link / OAuth) redirects land on the
       // HOMEPAGE now, so a callback can arrive on any public page. If the URL carries
       // auth params, load the Supabase client (which consumes the session on init),

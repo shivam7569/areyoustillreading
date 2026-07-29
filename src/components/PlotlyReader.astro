@@ -43,6 +43,12 @@
       delete layout.width;
       delete layout.height;
       layout.autosize = true;
+      // Draw the plot on the frame's warm editorial canvas (global.css .py-plot),
+      // consistent in both themes — force Plotly's own backgrounds transparent. Cover
+      // the 2D figure (paper/plot) AND the 3D scene cube (separate bg key).
+      layout.paper_bgcolor = 'rgba(0,0,0,0)';
+      layout.plot_bgcolor = 'rgba(0,0,0,0)';
+      if (layout.scene) layout.scene = Object.assign({}, layout.scene, { bgcolor: 'rgba(0,0,0,0)' });
       loadPlotly().then(function (P) {
         P.newPlot(holder, figure.data || [], layout, { responsive: true, displaylogo: false });
       }).catch(function () {

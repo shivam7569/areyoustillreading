@@ -56,15 +56,26 @@ const gid = (slug: string) => 'sg-' + slug.replace(/[^a-z0-9]+/gi, '');
             <span class="badge">{s.parts.length} {s.parts.length === 1 ? 'part' : 'parts'}</span>
             <svg viewBox="0 0 300 190" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
               <defs>
-                <linearGradient id={gid(s.slug)} x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="var(--accent)" stop-opacity="0.26"/>
+                <radialGradient id={gid(s.slug)} cx="0.5" cy="0.4" r="0.72">
+                  <stop offset="0" stop-color="var(--accent)" stop-opacity="0.16"/>
                   <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
-                </linearGradient>
+                </radialGradient>
               </defs>
               <rect width="300" height="190" fill={`url(#${gid(s.slug)})`}/>
-              <g stroke="var(--rule)" stroke-width="1" opacity="0.6"><line x1="0" y1="48" x2="300" y2="48"/><line x1="0" y1="95" x2="300" y2="95"/><line x1="0" y1="142" x2="300" y2="142"/></g>
-              <path d="M0 160 C60 160 60 110 120 110 S200 70 250 62 300 40 300 40" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
-              <g fill="var(--accent)"><circle cx="120" cy="110" r="3.5"/><circle cx="250" cy="62" r="3.5"/></g>
+              {/* A bound collection: two sheets fanned behind one upright page. */}
+              <g fill="var(--card)" stroke="var(--rule)" stroke-width="1.5" stroke-linejoin="round">
+                <rect x="104" y="36" width="92" height="128" rx="3" transform="rotate(-12 150 176)"/>
+                <rect x="104" y="36" width="92" height="128" rx="3" transform="rotate(12 150 176)"/>
+                <rect x="104" y="34" width="92" height="128" rx="3"/>
+              </g>
+              <line x1="120" y1="60" x2="180" y2="60" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>
+              <g stroke="var(--rule)" stroke-width="2" stroke-linecap="round">
+                <line x1="120" y1="80" x2="180" y2="80"/>
+                <line x1="120" y1="92" x2="180" y2="92"/>
+                <line x1="120" y1="104" x2="166" y2="104"/>
+              </g>
+              <circle cx="150" cy="134" r="13" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+              <circle cx="150" cy="134" r="4" fill="var(--accent)"/>
             </svg>
           </a>
           <div>
@@ -93,7 +104,7 @@ const gid = (slug: string) => 'sg-' + slug.replace(/[^a-z0-9]+/gi, '');
       <p class="empty">No multi-part series yet. When two essays share a series, they'll gather here. <a class="link" href="/blog">Browse the archive &rarr;</a></p>
     )}
 
-    <div class="series-foot">
+    <div class="series-foot" data-hide-admin>
       <div class="sub-inner">
         <SubscribeForm
           heading="Get the next part when it lands"
