@@ -8,6 +8,7 @@ draft: false
 series: "llm-curriculum"
 seriesTitle: "LLM Curriculum"
 seriesOrder: 3
+gateable: true
 ---
 Start writing. fdgs
 
