@@ -59,7 +59,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   <h1>Sign in</h1>
   <p>Sign in to comment, highlight, and keep private notes on posts.</p>
 
-  {/* Magic-link form. `id="magic-form"` is the hook the client script binds to.
+  {/* Step 1 — email form. `id="magic-form"` is the hook the client script binds to.
       No `action`/`method`: submission is intercepted in JS (preventDefault) and
       routed through Supabase — this form never POSTs to our server. */}
   <form id="magic-form" class="auth-form">
@@ -67,7 +67,15 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         we ever call Supabase. aria-label supplies an accessible name since the
         visible label is only the placeholder. */}
     <input type="email" name="email" required placeholder="you@example.com" aria-label="Email address" />
-    <button type="submit">Email me a sign-in link</button>
+    <button type="submit">Email me a sign-in code</button>
+  </form>
+
+  {/* Step 2 — code entry. Verifying the emailed code finishes sign-in RIGHT HERE
+      in this tab (no link click, so no second tab opens). Hidden until step 1 sends. */}
+  <form id="code-form" class="auth-form" hidden>
+    <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder="6-digit code" aria-label="Sign-in code" />
+    <button type="submit">Verify &amp; sign in</button>
+    <button type="button" id="code-back" class="linkish">Use a different email</button>
   </form>
 
   <p class="divider">or</p>
@@ -103,6 +111,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     cursor: pointer;
   }
   .oauth-btn { background: var(--bg); color: var(--fg); }
+  .linkish { background: none; border: 0; color: var(--muted); font-weight: 500; cursor: pointer; text-decoration: underline; padding: 0.55rem 0.4rem; flex: 0 0 auto; }
+  .linkish:hover { color: var(--fg); }
   .divider { color: var(--muted); max-width: 420px; text-align: center; }
   .auth-msg { color: var(--muted); min-height: 1.2em; }
 </style>
@@ -122,27 +132,54 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   const redirectTo = window.location.origin + '/';
   const msg = document.getElementById('auth-msg');
   const form = document.getElementById('magic-form');
+  const codeForm = document.getElementById('code-form');
+  let pendingEmail = '';
 
-  // --- Magic-link (email OTP) flow -----------------------------------------
-  // Optional-chained binding: if the element is missing (e.g. markup changed)
-  // we no-op instead of throwing at module load.
+  // --- Email OTP flow, SAME-TAB (R10) --------------------------------------
+  // Step 1 emails a 6-digit code (the template also carries a link as a fallback);
+  // step 2 verifies the code here, so sign-in finishes in THIS tab and never opens
+  // a second one. Optional-chained binding: no-op if the markup changed.
   form?.addEventListener('submit', async (e) => {
     // Stop the native form POST/navigation — we handle everything in JS.
     e.preventDefault();
-    const email = form.querySelector('[name="email"]').value;
+    const email = form.querySelector('[name="email"]').value.trim();
     // Immediate feedback so the user isn't left wondering during the network call.
     msg.textContent = 'Sending…';
-    // signInWithOtp emails a one-time sign-in link. `emailRedirectTo` is where
-    // the user lands after clicking it. Supabase always responds success-shaped
-    // here (it does NOT reveal whether the email exists) to avoid account
-    // enumeration — so we show a generic "check your inbox" regardless.
+    // signInWithOtp emails the code (and a link). Supabase always responds
+    // success-shaped here (it does NOT reveal whether the email exists) to avoid
+    // account enumeration — so we advance to the code step regardless.
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
     });
-    // Surface Supabase's own error text (e.g. rate-limit) or the generic
-    // success message. We deliberately don't distinguish "unknown email".
-    msg.textContent = error ? error.message : 'Check your inbox for a sign-in link.';
+    if (error) { msg.textContent = error.message; return; }
+    pendingEmail = email;
+    form.hidden = true;
+    if (codeForm) codeForm.hidden = false;
+    msg.textContent = 'We emailed you a 6-digit code. Enter it here to finish signing in.';
+    codeForm?.querySelector('[name="code"]')?.focus();
+  });
+
+  // Step 2 — verify the emailed code and finish sign-in in-tab.
+  codeForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const token = codeForm.querySelector('[name="code"]').value.trim();
+    if (!token) { msg.textContent = 'Enter the code from your email.'; return; }
+    msg.textContent = 'Verifying…';
+    // type 'email' verifies a magic-link/OTP token for an email sign-in.
+    const { error } = await supabase.auth.verifyOtp({ email: pendingEmail, token, type: 'email' });
+    if (error) { msg.textContent = error.message; return; }
+    // Session is now established in THIS tab — continue here, no new tab.
+    msg.textContent = 'Signed in — taking you in…';
+    window.location.assign('/');
+  });
+
+  // "Use a different email" — back to step 1.
+  document.getElementById('code-back')?.addEventListener('click', () => {
+    if (codeForm) codeForm.hidden = true;
+    if (form) form.hidden = false;
+    msg.textContent = '';
+    form?.querySelector('[name="email"]')?.focus();
   });
 
   // --- GitHub OAuth flow ----------------------------------------------------
