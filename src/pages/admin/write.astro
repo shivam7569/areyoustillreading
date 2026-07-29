@@ -486,6 +486,17 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     });
   }
 
+  // Inverse of injectCellOutputs: remove the publish-injected artifacts (a
+  // <pre class="py-output"> block or a ```plotly figure fence) so that loading a
+  // published post for editing shows only the SOURCE cells. Milkdown would otherwise
+  // render the raw injected HTML/JSON as literal text; the live cells re-run in the
+  // editor and injectCellOutputs regenerates fresh output on the next publish.
+  function stripCellOutputs(md) {
+    return md
+      .replace(/\n*<pre class="py-output">[\s\S]*?<\/pre>\n*/g, '\n\n')
+      .replace(/\n*```plotly\n[\s\S]*?\n```\n*/g, '\n\n');
+  }
+
   function renderD2(code) {
     if (d2Cache.has(code)) {
       // Refresh recency: re-insert so it's treated as most-recently-used.
@@ -732,8 +743,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         if (!res.ok) throw new Error(j.error || 'Could not load post');
         const fm = j.frontmatter || {};
         // Strip the frontmatter block; re-add the title as an H1 so the editor shows
-        // it the way a new post starts (publish strips the leading H1 back out).
-        const bodyOnly = String(j.markdown || '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
+        // it the way a new post starts (publish strips the leading H1 back out). Also
+        // strip PUBLISH-injected cell outputs so they don't round-trip into the editor
+        // as literal text — the live cells re-run to regenerate fresh output on publish.
+        const bodyOnly = stripCellOutputs(String(j.markdown || '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, ''));
         const title = typeof fm.title === 'string' && fm.title ? fm.title : editSlug;
         startDoc = `# ${title}\n\n${bodyOnly.replace(/^\n+/, '')}`;
         editing = {

@@ -27,13 +27,30 @@ for (const p of all) {
   if (!bySeries.has(s)) bySeries.set(s, []);
   bySeries.get(s)!.push(p);
 }
+// Decorative line-chart motif per card, VARIED by series so every collection gets a
+// distinct-but-consistent chart (six curated curves + matching markers + gridlines).
+// Picked deterministically from the series slug so a card's chart is stable.
+const LINE_VARIANTS = [
+  { path: 'M0 160 C60 160 60 110 120 110 S200 70 250 62 300 40 300 40', dots: [[120, 110], [250, 62]], grid: [48, 95, 142] },
+  { path: 'M0 120 C50 150 95 150 130 118 S215 58 300 52', dots: [[130, 118], [232, 74]], grid: [55, 105, 150] },
+  { path: 'M0 168 C80 160 120 150 165 108 S245 48 300 30', dots: [[165, 108], [262, 45]], grid: [50, 100, 150] },
+  { path: 'M0 128 C50 90 92 90 132 122 S212 152 252 112 300 72', dots: [[132, 122], [252, 112]], grid: [45, 95, 150] },
+  { path: 'M0 150 C40 112 82 112 112 132 S168 82 210 102 262 60 300 82', dots: [[112, 132], [262, 60]], grid: [52, 100, 148] },
+  { path: 'M0 156 C90 150 120 118 172 104 S262 70 300 58', dots: [[172, 104], [262, 70]], grid: [50, 98, 146] },
+];
+const lineChart = (slug: string) => {
+  let h = 0;
+  for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
+  return LINE_VARIANTS[h % LINE_VARIANTS.length];
+};
+
 const seriesList = [...bySeries.entries()]
   .filter(([, m]) => m.length >= 1)
   .map(([slug, members]) => {
     members.sort(bySeriesOrder);
     const title = members.map((p) => p.data.seriesTitle).find((t) => t && t.trim())?.trim() || prettify(slug);
     const parts = members.map((p) => ({ slug: p.id, title: p.data.title, date: p.data.pubDate, mins: readMins(p.body) }));
-    return { slug, title, parts, description: members[0].data.description, latest: parts[parts.length - 1].date, first: parts[0].date };
+    return { slug, title, parts, description: members[0].data.description, latest: parts[parts.length - 1].date, first: parts[0].date, chart: lineChart(slug) };
   })
   .sort((a, b) => b.latest.valueOf() - a.latest.valueOf());
 
@@ -56,26 +73,19 @@ const gid = (slug: string) => 'sg-' + slug.replace(/[^a-z0-9]+/gi, '');
             <span class="badge">{s.parts.length} {s.parts.length === 1 ? 'part' : 'parts'}</span>
             <svg viewBox="0 0 300 190" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
               <defs>
-                <radialGradient id={gid(s.slug)} cx="0.5" cy="0.4" r="0.72">
-                  <stop offset="0" stop-color="var(--accent)" stop-opacity="0.16"/>
+                <linearGradient id={gid(s.slug)} x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="var(--accent)" stop-opacity="0.26"/>
                   <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
-                </radialGradient>
+                </linearGradient>
               </defs>
               <rect width="300" height="190" fill={`url(#${gid(s.slug)})`}/>
-              {/* A bound collection: two sheets fanned behind one upright page. */}
-              <g fill="var(--card)" stroke="var(--rule)" stroke-width="1.5" stroke-linejoin="round">
-                <rect x="104" y="36" width="92" height="128" rx="3" transform="rotate(-12 150 176)"/>
-                <rect x="104" y="36" width="92" height="128" rx="3" transform="rotate(12 150 176)"/>
-                <rect x="104" y="34" width="92" height="128" rx="3"/>
+              <g stroke="var(--rule)" stroke-width="1" opacity="0.6">
+                {s.chart.grid.map((y) => (<line x1="0" y1={y} x2="300" y2={y}/>))}
               </g>
-              <line x1="120" y1="60" x2="180" y2="60" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>
-              <g stroke="var(--rule)" stroke-width="2" stroke-linecap="round">
-                <line x1="120" y1="80" x2="180" y2="80"/>
-                <line x1="120" y1="92" x2="180" y2="92"/>
-                <line x1="120" y1="104" x2="166" y2="104"/>
+              <path d={s.chart.path} fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+              <g fill="var(--accent)">
+                {s.chart.dots.map((d) => (<circle cx={d[0]} cy={d[1]} r="3.5"/>))}
               </g>
-              <circle cx="150" cy="134" r="13" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
-              <circle cx="150" cy="134" r="4" fill="var(--accent)"/>
             </svg>
           </a>
           <div>

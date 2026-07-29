@@ -42,6 +42,10 @@
      per-theme fill darkening is needed (that machinery was for the retired blue accent). */
   --btn-fill: var(--accent);
   --btn-fill-hover: color-mix(in srgb, var(--accent) 88%, #000);
+  /* Paywall/visibility toggle "on" colour — its own token (NOT --btn-fill, which is
+     now the bright CTA accent) so the switch keeps its pre-round-4 look: accent in
+     light, a deeper accent in dark. */
+  --pw-on: var(--accent);
 
   /* Semantic state colors (light). Each has a dark override below. */
   --ok: #1a7f37;      --ok-bg: color-mix(in srgb, #1a7f37 14%, transparent);
@@ -55,6 +59,7 @@
     --ok: #3fb950;    --ok-bg: color-mix(in srgb, #3fb950 18%, transparent);
     --warn: #d29922;  --warn-bg: color-mix(in srgb, #d29922 20%, transparent);
     --danger: #f85149; --danger-bg: color-mix(in srgb, #f85149 16%, transparent);
+    --pw-on: color-mix(in srgb, var(--accent) 58%, #06080d);
   }
 }
 /* Manual-toggle mirrors: the Studio now sets data-theme on <html> (matching the
@@ -65,6 +70,7 @@
   --ok: #3fb950;    --ok-bg: color-mix(in srgb, #3fb950 18%, transparent);
   --warn: #d29922;  --warn-bg: color-mix(in srgb, #d29922 20%, transparent);
   --danger: #f85149; --danger-bg: color-mix(in srgb, #f85149 16%, transparent);
+  --pw-on: color-mix(in srgb, var(--accent) 58%, #06080d);
 }
 :root[data-theme="light"] {
   --ok: #1a7f37;    --ok-bg: color-mix(in srgb, #1a7f37 14%, transparent);
@@ -250,7 +256,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
   background: #fff; box-shadow: 0 1px 3px color-mix(in srgb, var(--fg) 45%, transparent);
   transition: transform 0.15s ease; pointer-events: none;
 }
-.pw-toggle input:checked ~ .track { background: var(--btn-fill); }
+.pw-toggle input:checked ~ .track { background: var(--pw-on); }
 .pw-toggle input:checked ~ .track .knob { transform: translateX(17px); }
 .pw-toggle input:focus-visible ~ .track { box-shadow: 0 0 0 3px var(--admin-accent-ring); }
 .pw-price { display: inline-flex; align-items: center; gap: 0.15rem; color: var(--muted); font-size: 0.9rem; }
