@@ -32,11 +32,13 @@
   --admin-accent-ring: color-mix(in srgb, var(--accent) 26%, transparent);
   --admin-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 8%, transparent),
                   0 8px 28px color-mix(in srgb, var(--fg) 6%, transparent);
-  --admin-radius: 8px;      /* was 14px — echoes the editorial 6px .card, crisper than a SaaS panel */
-  --admin-radius-sm: 6px;   /* was 10px — nav items, inputs, notices */
-  --admin-sidebar-w: 248px;
-  --admin-topbar-h: 60px;
-  --admin-content-max: 1120px;
+  /* Studio design system (editorial/studio.css): flat panels, crisp radii. */
+  --admin-radius: 4px;      /* panels / tiles / cards */
+  --admin-radius-sm: 2px;   /* inputs, pills, buttons, notices */
+  --admin-radius-nav: 3px;  /* sidebar nav items */
+  --admin-sidebar-w: 262px;
+  --admin-topbar-h: 64px;
+  --admin-content-max: 1180px;
   /* Filled-button background = the editorial accent (plum light / bronze dark).
      --on-accent is purpose-built to stay legible on --accent in BOTH themes, so no
      per-theme fill darkening is needed (that machinery was for the retired blue accent). */
@@ -113,10 +115,10 @@
 
 .admin-sidebar {
   position: sticky; top: 0; align-self: start; height: 100vh;
-  display: flex; flex-direction: column; gap: 0.25rem;
+  display: flex; flex-direction: column;
   background: var(--admin-sidebar-bg);
-  border-right: 1px solid var(--border);
-  padding: 1rem 0.75rem;
+  border-right: 1px solid var(--rule);
+  padding: 20px 14px 16px;
   overflow-y: auto;
 }
 /* The Studio brand echoes the public wordmark exactly — serif, with the plum "are" —
@@ -131,92 +133,93 @@
 .admin-brand .wm { font-family: var(--serif-display); font-weight: 600; font-size: 1.2rem; letter-spacing: -0.01em; color: var(--fg); line-height: 1; }
 .admin-brand .wm .are { color: var(--accent); }
 .admin-brand:hover .wm { opacity: 0.82; }
-.admin-brand-tag { font-family: var(--font-sans); font-size: 0.62rem; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
+.admin-brand-tag { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-sans); font-size: 10px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-faint); }
+.admin-brand-tag .brand-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); flex: none; }
 
-.admin-nav { display: flex; flex-direction: column; gap: 2px; }
+.admin-nav { display: flex; flex-direction: column; gap: 1px; margin-top: 24px; }
 .admin-nav a {
-  display: flex; align-items: center; gap: 0.7rem;
-  padding: 0.55rem 0.65rem; border-radius: var(--admin-radius-sm);
-  color: var(--muted); font-weight: 550; font-size: 0.95rem;
-  text-decoration: none; transition: background 0.12s ease, color 0.12s ease;
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 11px; border-radius: var(--admin-radius-nav);
+  color: var(--ink-soft); font-weight: 500; font-size: 14px;
+  text-decoration: none; transition: background 0.18s ease, color 0.18s ease;
 }
-.admin-nav a:hover { background: var(--admin-hover); color: var(--fg); text-decoration: none; }
-/* Active section: an accent rail + tint (the vertical-nav analogue of the public
-   site's active underline), not a heavy filled pill. */
-.admin-nav a.is-active { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent); box-shadow: inset 2.5px 0 0 var(--accent); }
-.admin-nav a svg { width: 18px; height: 18px; flex: none; opacity: 0.9; }
-.admin-nav .nav-label-sm { margin: 0.9rem 0.65rem 0.3rem; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.8; }
+.admin-nav a:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); text-decoration: none; }
+/* Active section: a flat accent tint (matches the design's .snav a.on). */
+.admin-nav a.is-active { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); }
+.admin-nav a svg { width: 16px; height: 16px; flex: none; opacity: 0.9; }
+.admin-nav .nav-label-sm { margin: 0.95rem 0.65rem 0.3rem; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
 .admin-nav-spacer { flex: 1 1 auto; }
 
-.admin-side-foot { border-top: 1px solid var(--border); margin-top: 0.5rem; padding-top: 0.6rem; }
-.admin-side-foot .who { padding: 0.2rem 0.65rem 0.5rem; font-size: 0.78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-side-foot { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 14px; }
+.admin-side-foot .who { padding: 0 8px 0.5rem; font-size: 12.5px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- Content column ----------------------------------------------------- */
 .admin-content { display: flex; flex-direction: column; min-width: 0; }
 .admin-topbar {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-  height: var(--admin-topbar-h); padding: 0 1.4rem;
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
-  backdrop-filter: saturate(140%) blur(14px);
-  border-bottom: 1px solid var(--border-strong);
+  min-height: var(--admin-topbar-h); padding: 12px clamp(18px, 3vw, 38px);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: saturate(140%) blur(12px);
+  border-bottom: 1px solid var(--rule);
 }
-.admin-topbar .tb-title { font-family: var(--serif-display); font-size: 1.2rem; font-weight: 600; letter-spacing: -0.015em; }
+.admin-topbar .tb-title { font-family: var(--serif-display); font-size: 21px; font-weight: 600; letter-spacing: -0.01em; }
 .admin-topbar .tb-actions { display: flex; align-items: center; gap: 0.6rem; }
 
 .admin-main { padding: 1.6rem 1.4rem 4rem; width: 100%; max-width: var(--admin-content-max); margin: 0 auto; }
 
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.35rem; }
-.page-head h1 { font-size: 1.55rem; margin: 0 0 0.15rem; letter-spacing: -0.015em; }
-.page-head .sub { margin: 0; color: var(--muted); font-size: 0.95rem; }
+.page-head h1 { font-family: var(--serif-display); font-size: 1.5rem; margin: 0 0 0.15rem; letter-spacing: -0.015em; font-weight: 600; }
+.page-head .sub { margin: 0; color: var(--ink-faint); font-size: 0.9rem; }
 .page-head .head-actions { display: flex; gap: 0.6rem; align-items: center; }
 
-/* ---- Cards & KPI tiles -------------------------------------------------- */
+/* ---- Panels & KPI tiles (flat, editorial — no shadow, just a rule) ------- */
 .card {
-  background: var(--card); border: 1px solid var(--border-strong);
-  border-radius: var(--admin-radius); box-shadow: var(--admin-shadow);
+  background: var(--card); border: 1px solid var(--rule);
+  border-radius: var(--admin-radius);
 }
-.card-pad { padding: 1.15rem 1.25rem; }
-.card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); }
-.card-head h2 { font-size: 1.05rem; margin: 0; }
-.card-head .muted { font-size: 0.85rem; }
+.card-pad { padding: 17px; }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; padding: 15px 17px; border-bottom: 1px solid var(--rule); }
+.card-head h2 { font-family: var(--serif-display); font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.card-head .muted { font-size: 11.5px; }
 
 /* auto-fit (not auto-fill): collapse empty trailing tracks so present tiles stretch to
    fill the row — e.g. Revenue's 3 KPIs don't leave a dead 4th column. */
-.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.4rem; }
-.kpi { padding: 1.05rem 1.15rem; }
-.kpi .kpi-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.5rem; }
-.kpi .kpi-value { font-family: var(--serif-display); font-size: 2.1rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.02; }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 13px; margin-bottom: 1.4rem; }
+.kpi { padding: 16px 17px; }
+.kpi .kpi-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-faint); margin: 0 0 9px; }
+.kpi .kpi-value { font-family: var(--serif-display); font-size: 31px; font-weight: 600; letter-spacing: -0.015em; line-height: 1; }
 .kpi .kpi-value.loading { color: var(--muted); opacity: 0.5; }
-.kpi .kpi-foot { margin-top: 0.45rem; font-size: 0.82rem; color: var(--muted); display: flex; align-items: center; gap: 0.35rem; }
+.kpi .kpi-foot { margin-top: 8px; font-size: 12px; color: var(--ink-faint); display: flex; align-items: center; gap: 0.35rem; }
 .kpi .delta { font-weight: 600; }
 .kpi .delta.up { color: var(--ok); }
 .kpi .delta.down { color: var(--danger); }
 
 /* ---- Tables ------------------------------------------------------------- */
-.table-wrap { overflow-x: auto; border: 1px solid var(--border-strong); border-radius: var(--admin-radius); background: var(--card); box-shadow: var(--admin-shadow); }
-table.table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--admin-radius); background: var(--card); }
+table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .table thead th {
-  text-align: left; font-weight: 600; font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase;
-  color: var(--muted); padding: 0.7rem 1rem; border-bottom: 1px solid var(--border); white-space: nowrap;
-  background: var(--admin-surface-2);
+  text-align: left; font-weight: 500; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-faint); padding: 11px 17px; border-bottom: 1px solid var(--rule); white-space: nowrap;
+  background: var(--paper-2);
 }
-.table tbody td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.table tbody td { padding: 12px 17px; border-bottom: 1px solid var(--rule-soft); vertical-align: middle; color: var(--ink-soft); }
 .table tbody tr:last-child td { border-bottom: 0; }
-.table tbody tr:hover td { background: var(--admin-hover); }
+.table tbody tr:hover td { background: var(--paper-2); }
 .table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* Scope-independent so a title reads the same in a table cell OR a plain div
-   (e.g. the Revenue "Paywall & pricing" rows, which aren't a table). */
-.t-title { font-weight: 600; color: var(--fg); }
+   (e.g. the Revenue "Paywall & pricing" rows, which aren't a table). The design sets
+   post titles in the display serif (.ti). */
+.t-title { font-family: var(--serif-display); font-size: 16px; font-weight: 600; color: var(--ink); line-height: 1.3; }
 .t-title a { color: inherit; }
-.table .t-sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.1rem; }
+.table .t-sub, .t-sub { color: var(--ink-faint); font-size: 11.5px; margin-top: 3px; }
 .row-actions { display: flex; gap: 0.4rem; justify-content: flex-end; flex-wrap: wrap; }
 
 /* ---- Buttons ------------------------------------------------------------ */
 .btn {
   display: inline-flex; align-items: center; gap: 0.4rem; justify-content: center;
-  padding: 0.5rem 0.9rem; border: 1px solid var(--border); border-radius: 4px;
-  background: var(--admin-surface); color: inherit; font: inherit; font-weight: 600; font-size: 0.9rem;
+  padding: 0.5rem 0.85rem; border: 1px solid var(--rule); border-radius: var(--admin-radius-sm);
+  background: transparent; color: inherit; font: inherit; font-weight: 600; font-size: 0.88rem;
   cursor: pointer; text-decoration: none; transition: background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease; white-space: nowrap;
 }
 .btn:hover { background: var(--admin-hover); text-decoration: none; }
@@ -233,16 +236,15 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
 
 /* ---- Inputs ------------------------------------------------------------- */
 .input, .select, textarea.input {
-  width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--border);
-  border-radius: var(--admin-radius-sm); background: var(--bg); color: var(--fg);
-  font: inherit; font-size: 0.92rem;
+  width: 100%; padding: 9px 11px; border: 1px solid var(--rule);
+  border-radius: var(--admin-radius-sm); background: var(--paper); color: var(--ink);
+  font: inherit; font-size: 13.5px;
 }
 .input:focus, .select:focus, textarea.input:focus {
-  outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--admin-accent-ring);
+  outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; box-shadow: none;
 }
 .field { display: block; margin-bottom: 0.9rem; }
-.field > .lbl { display: block; margin-bottom: 0.35rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.field > .lbl { display: block; margin-bottom: 0.35rem; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-faint); }
 .toolbar { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
 .toolbar .grow { flex: 1 1 auto; }
 .toolbar .input, .toolbar .select { width: auto; }
@@ -250,40 +252,39 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
 
 /* ---- Paywall toggle (visual switch, used in the Posts manager) ----------- */
 .pw-cell { display: inline-flex; align-items: center; gap: 0.6rem; }
-.pw-toggle { position: relative; display: inline-flex; width: 40px; height: 23px; flex: none; cursor: pointer; }
+/* Matches the design's flat .tog: a paper track that fills with accent when on, and
+   an ink-faint knob that turns accent — no white iOS pill. */
+.pw-toggle { position: relative; display: inline-flex; width: 36px; height: 20px; flex: none; cursor: pointer; }
 .pw-toggle input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; }
 .pw-toggle .track {
-  width: 40px; height: 23px; border-radius: 999px;
-  background: color-mix(in srgb, var(--fg) 20%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent);
-  transition: background 0.2s ease;
+  width: 36px; height: 20px; border-radius: 999px;
+  background: var(--paper); border: 1px solid var(--rule);
+  transition: background 0.18s ease, border-color 0.18s ease;
 }
 .pw-toggle .knob {
-  position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 38%, transparent), 0 0 0 0.5px color-mix(in srgb, var(--fg) 10%, transparent);
-  transition: transform 0.2s cubic-bezier(0.34, 0.1, 0.24, 1); pointer-events: none;
+  position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--ink-faint);
+  transition: transform 0.18s ease, background 0.18s ease; pointer-events: none;
 }
-.pw-toggle input:checked ~ .track { background: var(--pw-on); }
-.pw-toggle input:checked ~ .track .knob { transform: translateX(17px); }
-.pw-toggle input:focus-visible ~ .track { box-shadow: 0 0 0 3px var(--admin-accent-ring); }
+.pw-toggle input:checked ~ .track { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); }
+.pw-toggle input:checked ~ .track .knob { transform: translateX(16px); background: var(--accent); }
+.pw-toggle input:focus-visible ~ .track { outline: 2px solid var(--accent); outline-offset: 1px; }
 .pw-price { display: inline-flex; align-items: center; gap: 0.15rem; color: var(--muted); font-size: 0.9rem; }
 .pw-price input { width: 4.4rem; padding: 0.32rem 0.45rem; }
 
 /* ---- Badges / pills ----------------------------------------------------- */
 .badge {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  padding: 0.12rem 0.55rem; border-radius: 999px; font-size: 0.76rem; font-weight: 600; white-space: nowrap;
-  background: var(--neutral-bg); color: var(--fg);
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 9px; border-radius: var(--admin-radius-sm); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; font-weight: 500; white-space: nowrap;
+  border: 1px solid var(--rule); background: transparent; color: var(--ink-faint);
 }
-.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.85; }
-.badge.live { color: var(--ok); background: var(--ok-bg); }
-.badge.draft { color: var(--warn); background: var(--warn-bg); }
-.badge.paid { color: var(--accent); background: var(--info-bg); }
-.badge.pending { color: var(--warn); background: var(--warn-bg); }
-.badge.confirmed { color: var(--ok); background: var(--ok-bg); }
-.badge.unsub, .badge.off { color: var(--muted); background: var(--neutral-bg); }
-.badge.plain::before { display: none; }
+/* Design pills are text-only outlines; the "live"/accent state fills. */
+.badge.live { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.badge.paid { color: var(--accent); background: transparent; border-color: color-mix(in srgb, var(--accent) 45%, var(--rule)); }
+.badge.draft, .badge.pending { color: var(--warn); background: transparent; border-color: color-mix(in srgb, var(--warn) 42%, var(--rule)); }
+.badge.confirmed { color: var(--ok); background: transparent; border-color: color-mix(in srgb, var(--ok) 42%, var(--rule)); }
+.badge.unsub, .badge.off { color: var(--ink-faint); background: transparent; border-color: var(--rule); }
 
 /* ---- Empty / loading / error states ------------------------------------ */
 .empty { text-align: center; color: var(--muted); padding: 3rem 1.5rem; }
