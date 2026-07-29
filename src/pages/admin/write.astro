@@ -313,6 +313,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     background: var(--bg);
     color: var(--fg);
   }
+  /* Make the text cursor clearly visible in BOTH themes (Crepe left it unset, so it
+     was easy to lose against the paper). A slightly bolder accent caret reads well on
+     plum (light) and bronze (dark). */
+  #editor-wrap .milkdown .ProseMirror,
+  #editor-wrap .milkdown [contenteditable="true"] { caret-color: var(--accent); }
   /* The editor's inline code chip: match the reader's editorial inline code. */
   #editor-wrap .milkdown code:not(pre code) {
     background: var(--paper-2); border: 1px solid var(--rule); color: var(--accent);
@@ -963,7 +968,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (editing) {
         // Editing an existing post: preserve its identity — lock the slug, restore
         // title/description/tags/draft, and show a heading so it's clearly an edit.
-        if (!$('pm-post-title').value) $('pm-post-title').value = editing.title || firstHeading(crepe.getMarkdown());
+        // Always reflect the CURRENT editor title (its H1), so renaming the post in the
+        // editor is caught here; the locked slug keeps this an UPDATE of the same post
+        // (never a fork), so it replaces the original.
+        $('pm-post-title').value = firstHeading(crepe.getMarkdown()) || editing.title || '';
         if (!$('pm-post-desc').value) $('pm-post-desc').value = editing.description || '';
         $('pm-slug').textContent = editing.slug;
         // Lock the permalink for an existing post: editing it would fork the post into a
@@ -1205,6 +1213,14 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
             }
             // Let the author read the result before the live-jump navigates away.
             await new Promise((r) => setTimeout(r, 1600));
+          }
+          // A DRAFT is never public — its /blog/<slug> URL 404s forever (drafts are
+          // excluded from the build and not served by the KV overlay), so the live-poll
+          // below would hang on a permanent 404. Confirm the save and stop here.
+          if (draft) {
+            status.textContent = (j.updated ? 'Draft updated.' : 'Draft saved.') + ' It stays hidden until you publish.';
+            navigating = false; // nothing to navigate to; let the button re-enable
+            return;
           }
           // Publishing is a git commit that triggers a fresh site build (~1-2 min); the
           // post's page does not exist until that build finishes. Rather than leave the

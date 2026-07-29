@@ -1,0 +1,135 @@
+---
+/**
+ * /admin/drafts — a focused Drafts manager.
+ * Lists only hidden (draft) posts from the admin-gated GET /api/admin/posts, with
+ * per-row actions: edit, publish (make visible), email an early-access link, delete.
+ * Mutations reuse the shared /api/admin/post endpoint (draft flag / delete). This is
+ * a lean, drafts-only view of what /admin/posts shows behind its "Drafts" filter.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Drafts — Studio" heading="Drafts" active="drafts">
+  <section>
+    <div class="page-head">
+      <div>
+        <h1>Drafts</h1>
+        <p class="sub" id="drafts-sub">Work in progress — hidden until you publish.</p>
+      </div>
+      <div class="head-actions">
+        <a class="btn btn-primary" href="/admin/write"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> New post</a>
+      </div>
+    </div>
+
+    <div id="drafts-host">
+      <div class="table-wrap"><div class="card-pad muted">Loading drafts…</div></div>
+    </div>
+  </section>
+</AdminLayout>
+
+<script>
+  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { fmtDate, esc } from '../../lib/admin-format';
+
+  let all: any[] = [];
+  let armedDelete: string | null = null;
+  let armTimer: number | undefined;
+  const host = document.getElementById('drafts-host')!;
+
+  function render() {
+    const drafts = all.filter((p) => p.draft);
+    document.getElementById('drafts-sub')!.textContent = drafts.length
+      ? `${drafts.length} draft${drafts.length === 1 ? '' : 's'} — hidden until you publish.`
+      : 'Work in progress — hidden until you publish.';
+    if (!drafts.length) {
+      host.innerHTML = '<div class="card"><div class="empty">'
+        + '<svg class="empty-icon" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>'
+        + '<h3>No drafts</h3><p>Everything you’ve written is published. Start something new when you’re ready.</p>'
+        + '<a class="btn btn-primary" href="/admin/write">Write a post</a></div></div>';
+      return;
+    }
+    // Newest first (list-posts already sorts, but be explicit).
+    drafts.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+    host.innerHTML = '<div class="table-wrap"><table class="table"><tbody>'
+      + drafts.map((p) => {
+        const tags = (p.tags || []).length ? `<span class="t-sub">${(p.tags || []).map((t: string) => '#' + esc(t)).join(' ')}</span>` : '';
+        const series = p.series ? `<span style="color:var(--accent);font-weight:600">◆ ${esc(p.seriesTitle || p.series)}${p.seriesOrder ? ' · Part ' + p.seriesOrder : ''}</span>` : '';
+        const armed = armedDelete === p.slug;
+        return `<tr data-slug="${esc(p.slug)}">
+            <td>
+              <div class="t-title"><a href="/admin/write?slug=${encodeURIComponent(p.slug)}">${esc(p.title)}</a></div>
+              <div class="t-sub">${esc(fmtDate(p.pubDate))}${tags ? ' · ' : ''}${tags}${series ? ' · ' + series : ''}</div>
+            </td>
+            <td class="num"><div class="row-actions">
+              <a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a>
+              <button class="btn btn-sm" data-act="early" data-slug="${esc(p.slug)}" title="Email confirmed subscribers a private link to read this draft early">◔ Early access</button>
+              <button class="btn btn-sm btn-primary" data-act="publish" data-slug="${esc(p.slug)}">Publish</button>
+              <button class="btn btn-sm ${armed ? 'btn-danger' : 'btn-ghost'}" data-act="delete" data-slug="${esc(p.slug)}">${armed ? 'Confirm delete' : 'Delete'}</button>
+            </div></td>
+          </tr>`;
+      }).join('')
+      + '</tbody></table></div>';
+  }
+
+  async function load() {
+    try {
+      const r = await adminFetch('/api/admin/posts');
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed to load');
+      all = d.posts || [];
+      render();
+    } catch (e: any) {
+      host.innerHTML = `<div class="card card-pad notice err">Couldn't load drafts: ${esc(e.message || e)}</div>`;
+    }
+  }
+
+  function disarm() { armedDelete = null; if (armTimer) clearTimeout(armTimer); }
+
+  async function publish(slug: string) {
+    const r = await adminFetch('/api/admin/post', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug, draft: false }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(d.error || 'Publish failed'); return; }
+    await load(); // it leaves the drafts list once it's visible
+  }
+
+  async function del(slug: string) {
+    const r = await adminFetch(`/api/admin/post?slug=${encodeURIComponent(slug)}`, { method: 'DELETE' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) alert(d.error || 'Delete failed');
+    disarm();
+    await load();
+  }
+
+  async function sendEarly(slug: string) {
+    const p = all.find((x) => x.slug === slug);
+    if (!p) return;
+    if (!confirm(`Email confirmed subscribers a private early-access link to “${p.title}”?\n\nThe post stays hidden from the public until you publish it.`)) return;
+    try {
+      const r = await adminFetch('/api/admin/early', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug, title: p.title, description: p.description || '' }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) alert(d.sent > 0 ? `Early-access link emailed to ${d.sent} subscriber(s).` : (d.message || 'Link created.') + (d.url ? '\n\n' + d.url : ''));
+      else alert(d.error || 'Failed to send early access');
+    } catch (e: any) { alert(e.message || 'Failed to send early access'); }
+  }
+
+  host.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
+    if (!btn) return;
+    const act = btn.dataset.act!;
+    const slug = btn.dataset.slug!;
+    if (act === 'publish') publish(slug);
+    else if (act === 'early') sendEarly(slug);
+    else if (act === 'delete') {
+      if (armedDelete === slug) del(slug);
+      else { disarm(); armedDelete = slug; render(); armTimer = window.setTimeout(() => { armedDelete = null; render(); }, 3500); }
+    }
+  });
+
+  whenAdmin.then(load);
+</script>
