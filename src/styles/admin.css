@@ -119,16 +119,19 @@
   padding: 1rem 0.75rem;
   overflow-y: auto;
 }
+/* The Studio brand echoes the public wordmark exactly — serif, with the plum "are" —
+   then names the room ("Studio") in a quiet caption, so the dashboard reads as the
+   same masthead, not a separate product. */
 .admin-brand {
-  display: flex; align-items: center; gap: 0.55rem;
-  padding: 0.35rem 0.6rem 0.85rem; margin-bottom: 0.35rem;
-  font-family: var(--serif-display); font-weight: 600; font-size: 1.12rem;
-  color: var(--fg); letter-spacing: -0.01em;
+  display: flex; flex-direction: column; gap: 0.16rem;
+  padding: 0.45rem 0.65rem 0.95rem; margin-bottom: 0.4rem;
   text-decoration: none; /* it's a link back to the site */
 }
-.admin-brand:hover { text-decoration: none; opacity: 0.8; }
-.admin-brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; }
-.admin-brand small { display: block; font-weight: 500; font-size: 0.7rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.admin-brand:hover { text-decoration: none; }
+.admin-brand .wm { font-family: var(--serif-display); font-weight: 600; font-size: 1.2rem; letter-spacing: -0.01em; color: var(--fg); line-height: 1; }
+.admin-brand .wm .are { color: var(--accent); }
+.admin-brand:hover .wm { opacity: 0.82; }
+.admin-brand-tag { font-family: var(--font-sans); font-size: 0.62rem; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
 
 .admin-nav { display: flex; flex-direction: column; gap: 2px; }
 .admin-nav a {
@@ -138,7 +141,9 @@
   text-decoration: none; transition: background 0.12s ease, color 0.12s ease;
 }
 .admin-nav a:hover { background: var(--admin-hover); color: var(--fg); text-decoration: none; }
-.admin-nav a.is-active { background: var(--admin-accent-soft); color: var(--accent); }
+/* Active section: an accent rail + tint (the vertical-nav analogue of the public
+   site's active underline), not a heavy filled pill. */
+.admin-nav a.is-active { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent); box-shadow: inset 2.5px 0 0 var(--accent); }
 .admin-nav a svg { width: 18px; height: 18px; flex: none; opacity: 0.9; }
 .admin-nav .nav-label-sm { margin: 0.9rem 0.65rem 0.3rem; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.8; }
 .admin-nav-spacer { flex: 1 1 auto; }
@@ -249,12 +254,15 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
 .pw-toggle input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; }
 .pw-toggle .track {
   width: 40px; height: 23px; border-radius: 999px;
-  background: color-mix(in srgb, var(--fg) 22%, transparent); transition: background 0.15s ease;
+  background: color-mix(in srgb, var(--fg) 20%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent);
+  transition: background 0.2s ease;
 }
 .pw-toggle .knob {
-  position: absolute; top: 2.5px; left: 2.5px; width: 18px; height: 18px; border-radius: 50%;
-  background: #fff; box-shadow: 0 1px 3px color-mix(in srgb, var(--fg) 45%, transparent);
-  transition: transform 0.15s ease; pointer-events: none;
+  position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 38%, transparent), 0 0 0 0.5px color-mix(in srgb, var(--fg) 10%, transparent);
+  transition: transform 0.2s cubic-bezier(0.34, 0.1, 0.24, 1); pointer-events: none;
 }
 .pw-toggle input:checked ~ .track { background: var(--pw-on); }
 .pw-toggle input:checked ~ .track .knob { transform: translateX(17px); }
@@ -317,7 +325,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
     gap: 0.15rem; border-right: 0; border-bottom: 1px solid var(--border); padding: 0.6rem 0.75rem;
   }
   .admin-brand { padding: 0.35rem 0.5rem; margin: 0 0.5rem 0 0; }
-  .admin-brand small { display: none; }
+  .admin-brand-tag { display: none; }
   .admin-nav { flex-direction: row; flex-wrap: wrap; }
   .admin-nav a { padding: 0.45rem 0.6rem; font-size: 0.9rem; }
   .admin-nav a span.lbl { display: none; }

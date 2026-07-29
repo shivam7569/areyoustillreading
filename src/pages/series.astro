@@ -27,21 +27,49 @@ for (const p of all) {
   if (!bySeries.has(s)) bySeries.set(s, []);
   bySeries.get(s)!.push(p);
 }
-// Decorative line-chart motif per card, VARIED by series so every collection gets a
-// distinct-but-consistent chart (six curated curves + matching markers + gridlines).
-// Picked deterministically from the series slug so a card's chart is stable.
-const LINE_VARIANTS = [
-  { path: 'M0 160 C60 160 60 110 120 110 S200 70 250 62 300 40 300 40', dots: [[120, 110], [250, 62]], grid: [48, 95, 142] },
-  { path: 'M0 120 C50 150 95 150 130 118 S215 58 300 52', dots: [[130, 118], [232, 74]], grid: [55, 105, 150] },
-  { path: 'M0 168 C80 160 120 150 165 108 S245 48 300 30', dots: [[165, 108], [262, 45]], grid: [50, 100, 150] },
-  { path: 'M0 128 C50 90 92 90 132 122 S212 152 252 112 300 72', dots: [[132, 122], [252, 112]], grid: [45, 95, 150] },
-  { path: 'M0 150 C40 112 82 112 112 132 S168 82 210 102 262 60 300 82', dots: [[112, 132], [262, 60]], grid: [52, 100, 148] },
-  { path: 'M0 156 C90 150 120 118 172 104 S262 70 300 58', dots: [[172, 104], [262, 70]], grid: [50, 98, 146] },
+// The card artwork is a "through-line": one flowing line that threads the series'
+// parts together (the single argument split across essays). Each NODE on the line is
+// a published part — so the mark encodes the collection's real shape. The line up to
+// the latest part is drawn solid (the argument so far); the rest continues faint (more
+// to come). The route SHAPE is varied per series, deterministically from its slug, so
+// every collection reads distinct but consistent.
+type Pt = [number, number];
+const ROUTES: Pt[][] = [
+  [[26, 150], [98, 126], [150, 106], [212, 80], [276, 52]],
+  [[26, 118], [92, 150], [152, 128], [214, 90], [276, 56]],
+  [[26, 150], [98, 140], [156, 128], [214, 92], [276, 44]],
+  [[26, 132], [92, 92], [152, 116], [214, 144], [276, 100]],
+  [[26, 150], [92, 114], [152, 124], [214, 84], [276, 96]],
+  [[26, 142], [98, 110], [156, 96], [216, 84], [276, 60]],
 ];
-const lineChart = (slug: string) => {
+const GRIDS: number[][] = [[52, 100, 148], [56, 104, 150], [50, 98, 146], [48, 96, 150], [52, 102, 148], [50, 98, 146]];
+// Catmull-Rom → cubic-bezier: a smooth curve passing through every point.
+const smoothPath = (pts: Pt[]): string => {
+  if (pts.length < 2) return '';
+  const d = [`M ${pts[0][0]} ${pts[0][1]}`];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d.push(`C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2[0]} ${p2[1]}`);
+  }
+  return d.join(' ');
+};
+// Place `k` nodes evenly across the route's points: a single part sits centred, more
+// parts span the line end to end — so the mark stays balanced at any count.
+const sampleNodes = (route: Pt[], k: number): Pt[] => {
+  const n = route.length;
+  if (k >= n) return route;
+  if (k <= 1) return [route[Math.floor((n - 1) / 2)]];
+  return Array.from({ length: k }, (_, i) => route[Math.round((i * (n - 1)) / (k - 1))]);
+};
+const seriesArt = (slug: string, parts: number) => {
   let h = 0;
   for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
-  return LINE_VARIANTS[h % LINE_VARIANTS.length];
+  const v = h % ROUTES.length;
+  const route = ROUTES[v];
+  const k = Math.max(1, Math.min(parts, route.length)); // one node per published part
+  return { path: smoothPath(route), nodes: sampleNodes(route, k), grid: GRIDS[v] };
 };
 
 const seriesList = [...bySeries.entries()]
@@ -50,7 +78,7 @@ const seriesList = [...bySeries.entries()]
     members.sort(bySeriesOrder);
     const title = members.map((p) => p.data.seriesTitle).find((t) => t && t.trim())?.trim() || prettify(slug);
     const parts = members.map((p) => ({ slug: p.id, title: p.data.title, date: p.data.pubDate, mins: readMins(p.body) }));
-    return { slug, title, parts, description: members[0].data.description, latest: parts[parts.length - 1].date, first: parts[0].date, chart: lineChart(slug) };
+    return { slug, title, parts, description: members[0].data.description, latest: parts[parts.length - 1].date, first: parts[0].date, chart: seriesArt(slug, parts.length) };
   })
   .sort((a, b) => b.latest.valueOf() - a.latest.valueOf());
 
@@ -73,19 +101,25 @@ const gid = (slug: string) => 'sg-' + slug.replace(/[^a-z0-9]+/gi, '');
             <span class="badge">{s.parts.length} {s.parts.length === 1 ? 'part' : 'parts'}</span>
             <svg viewBox="0 0 300 190" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
               <defs>
-                <linearGradient id={gid(s.slug)} x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="var(--accent)" stop-opacity="0.26"/>
+                <linearGradient id={gid(s.slug)} x1="0" y1="0.1" x2="0.35" y2="1">
+                  <stop offset="0" stop-color="var(--accent)" stop-opacity="0.20"/>
                   <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
                 </linearGradient>
               </defs>
               <rect width="300" height="190" fill={`url(#${gid(s.slug)})`}/>
-              <g stroke="var(--rule)" stroke-width="1" opacity="0.6">
+              {/* Faint ledger lines for texture. */}
+              <g stroke="var(--rule)" stroke-width="1" opacity="0.5">
                 {s.chart.grid.map((y) => (<line x1="0" y1={y} x2="300" y2={y}/>))}
               </g>
-              <path d={s.chart.path} fill="none" stroke="var(--accent)" stroke-width="1.6"/>
-              <g fill="var(--accent)">
-                {s.chart.dots.map((d) => (<circle cx={d[0]} cy={d[1]} r="3.5"/>))}
-              </g>
+              {/* The through-line — one argument threading the collection together. */}
+              <path d={s.chart.path} fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/>
+              {/* One node per published part, spaced along the line. */}
+              {s.chart.nodes.map((p) => (
+                <g>
+                  <circle cx={p[0]} cy={p[1]} r="5.5" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/>
+                  <circle cx={p[0]} cy={p[1]} r="2.4" fill="var(--accent)"/>
+                </g>
+              ))}
             </svg>
           </a>
           <div>
