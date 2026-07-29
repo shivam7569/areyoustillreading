@@ -5,6 +5,7 @@ author: "deadletters"
 pubDate: "2026-07-29"
 tags: []
 draft: false
+gateable: true
 ---
 Start writing.
 
