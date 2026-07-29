@@ -1,14 +1,16 @@
 ---
 /*
  * =============================================================================
- * src/pages/series.astro  ·  ROUTE: "/series"  (multi-part collections)
+ * src/pages/series.astro  ·  ROUTE: "/series"
  * =============================================================================
- * The editorial series index (Phase 5), from the Claude Design "series" template.
- * A series is just the published posts sharing a `series` slug (2+ parts). Our
- * model declares no "total/planned" parts, so — unlike the template's fictional
- * progress bars — each card shows the REAL published parts + a count. Static SSG.
+ * Ported from the Claude Design "series" plate (editorial/series.html): each card
+ * is a data-drawn "silk plate" — a field of faint accent comb-curves (≈3 per part)
+ * that pinch to a waist, with a bold SPINE threading the parts, each part sitting at
+ * a height set by its reading time. Nothing is uploaded; the SVG is generated here.
  *
- * If no multi-part series exist yet, an empty state is shown. GUARD: `!data.draft`.
+ * DATA-MODEL NOTE: the design mocks a richer model (known total "3 of 5", a status,
+ * planned/upcoming parts). Our model has only the PUBLISHED parts of a series, so we
+ * draw every node solid and label by real counts/dates — no invented totals/status.
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
@@ -19,7 +21,7 @@ const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).f
 const prettify = (slug: string) => { const w = slug.replace(/[-_]+/g, ' ').trim(); return w.charAt(0).toUpperCase() + w.slice(1); };
 const fmtMonth = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
 
-// Group published posts by series slug; keep only real (2+ part) series.
+// Group published posts by series slug; order by seriesOrder.
 const all = await getCollection('blog', ({ data }) => !data.draft && !!data.series);
 const bySeries = new Map<string, typeof all>();
 for (const p of all) {
@@ -27,66 +29,79 @@ for (const p of all) {
   if (!bySeries.has(s)) bySeries.set(s, []);
   bySeries.get(s)!.push(p);
 }
-// The card artwork is a "through-line": one flowing line that threads the series'
-// parts together (the single argument split across essays). Each NODE on the line is
-// a published part — so the mark encodes the collection's real shape. The line up to
-// the latest part is drawn solid (the argument so far); the rest continues faint (more
-// to come). The route SHAPE is varied per series, deterministically from its slug, so
-// every collection reads distinct but consistent.
+
+// ---- Silk-plate generator (matches the Claude Design plate) -----------------
 type Pt = [number, number];
-const ROUTES: Pt[][] = [
-  [[26, 150], [98, 126], [150, 106], [212, 80], [276, 52]],
-  [[26, 118], [92, 150], [152, 128], [214, 90], [276, 56]],
-  [[26, 150], [98, 140], [156, 128], [214, 92], [276, 44]],
-  [[26, 132], [92, 92], [152, 116], [214, 144], [276, 100]],
-  [[26, 150], [92, 114], [152, 124], [214, 84], [276, 96]],
-  [[26, 142], [98, 110], [156, 96], [216, 84], [276, 60]],
-];
-const GRIDS: number[][] = [[52, 100, 148], [56, 104, 150], [50, 98, 146], [48, 96, 150], [52, 102, 148], [50, 98, 146]];
-// Catmull-Rom → cubic-bezier: a smooth curve passing through every point.
-const smoothPath = (pts: Pt[]): string => {
+// Catmull-Rom → cubic bezier: a smooth curve through the given points.
+const smooth = (pts: Pt[]): string => {
   if (pts.length < 2) return '';
-  const d = [`M ${pts[0][0]} ${pts[0][1]}`];
+  const d = [`M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`];
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
     const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
     const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
-    d.push(`C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2[0]} ${p2[1]}`);
+    d.push(`C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`);
   }
   return d.join(' ');
 };
-// Place `k` nodes evenly across the route's points: a single part sits centred, more
-// parts span the line end to end — so the mark stays balanced at any count.
-const sampleNodes = (route: Pt[], k: number): Pt[] => {
-  const n = route.length;
-  if (k >= n) return route;
-  if (k <= 1) return [route[Math.floor((n - 1) / 2)]];
-  return Array.from({ length: k }, (_, i) => route[Math.round((i * (n - 1)) / (k - 1))]);
-};
-const seriesArt = (slug: string, parts: number) => {
-  let h = 0;
-  for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
-  const v = h % ROUTES.length;
-  const route = ROUTES[v];
-  const k = Math.max(1, Math.min(parts, route.length)); // one node per published part
-  return { path: smoothPath(route), nodes: sampleNodes(route, k), grid: GRIDS[v] };
-};
+
+// The comb: `lines` faint curves that pinch to a waist (top curves bow down, bottom
+// bow up), fading in weight + opacity toward the bottom. ≈3 lines per part.
+function combLines(parts: number) {
+  const lines = Math.max(9, Math.min(3 * parts, 18));
+  const out: { d: string; w: number; o: number }[] = [];
+  for (let i = 0; i < lines; i++) {
+    const t = i / (lines - 1);                 // 0 top … 1 bottom
+    const baseY = 26 + t * 168;                // spread down the field
+    const amp = (0.5 - t) * 42;                // + at top (bows down), − at bottom (bows up) → waist
+    const pts: Pt[] = [];
+    for (let x = -10; x <= 310; x += 40) {
+      const hx = (x + 10) / 320;               // 0…1 across
+      const bow = Math.sin(hx * Math.PI);      // 0…1…0, peak at the waist
+      const drift = (hx - 0.5) * 10 * (0.5 - t); // gentle wind so lines aren't mirror-symmetric
+      pts.push([x, baseY + amp * bow + drift]);
+    }
+    out.push({ d: smooth(pts), w: +(1.7 - t * 0.7).toFixed(2), o: +(0.4 - t * 0.22).toFixed(2) });
+  }
+  return out;
+}
+
+// The spine: a node per published part, x spread evenly, y set by reading time
+// (longer read → sits higher). A bold curve threads them; every node is solid.
+function spine(mins: number[]) {
+  const n = mins.length;
+  const xs = n === 1 ? [150] : mins.map((_, i) => 30 + (i * 240) / (n - 1));
+  const lo = Math.min(...mins), hi = Math.max(...mins);
+  const ys = mins.map((m) => (hi === lo ? 105 : 140 - ((m - lo) / (hi - lo)) * 74)); // 140 (short) … 66 (long)
+  const nodes: Pt[] = xs.map((x, i) => [x, ys[i]]);
+  return { path: smooth(nodes), nodes };
+}
+
+const WASH = [
+  { x: '16%', y: '10%', o: '13%' }, { x: '82%', y: '16%', o: '11%' },
+  { x: '28%', y: '86%', o: '10%' }, { x: '70%', y: '78%', o: '12%' },
+  { x: '20%', y: '50%', o: '11%' }, { x: '86%', y: '52%', o: '10%' },
+];
 
 const seriesList = [...bySeries.entries()]
-  .filter(([, m]) => m.length >= 1)
   .map(([slug, members]) => {
     members.sort(bySeriesOrder);
     const title = members.map((p) => p.data.seriesTitle).find((t) => t && t.trim())?.trim() || prettify(slug);
-    const parts = members.map((p) => ({ slug: p.id, title: p.data.title, date: p.data.pubDate, mins: readMins(p.body) }));
-    return { slug, title, parts, description: members[0].data.description, latest: parts[parts.length - 1].date, first: parts[0].date, chart: seriesArt(slug, parts.length) };
+    const parts = members.map((p) => ({ id: p.id, title: p.data.title, date: p.data.pubDate, mins: readMins(p.body) }));
+    let h = 0; for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
+    return {
+      slug, title, parts,
+      description: members[0].data.description,
+      latest: parts[parts.length - 1].date, first: parts[0].date,
+      comb: combLines(parts.length),
+      spine: spine(parts.map((p) => p.mins)),
+      wash: WASH[h % WASH.length],
+    };
   })
   .sort((a, b) => b.latest.valueOf() - a.latest.valueOf());
-
-// A decorative themed chart per card (unique gradient id per series slug).
-const gid = (slug: string) => 'sg-' + slug.replace(/[^a-z0-9]+/gi, '');
 ---
 
-<BaseLayout title="Series — areyoustillreading" description="Multi-part essay collections, each a single argument split across essays that build on each other." wide>
+<BaseLayout title="Series — areyoustillreading" description="Multi-part collections — each a single argument split across essays that build on each other." wide>
   <div class="wrap">
     <header class="page-head">
       <div class="kicker"><span class="line"></span><span class="eyebrow">Series</span></div>
@@ -94,94 +109,81 @@ const gid = (slug: string) => 'sg-' + slug.replace(/[^a-z0-9]+/gi, '');
       <p class="lede">Running collections — each one a single argument split across essays that build on each other. Start at part one, or don't; every part stands up alone.</p>
     </header>
 
-    {seriesList.length > 0 ? (
-      seriesList.map((s) => (
-        <article class="series">
-          <a class="art" href={`/blog/${s.parts[0].slug}`} aria-label={`Start ${s.title}`}>
+    {seriesList.length > 0 ? seriesList.map((s) => (
+      <article class="series">
+        <a class="art" href={`/blog/${s.parts[0].id}`} aria-label={`Start ${s.title}`} style={`--wx:${s.wash.x};--wy:${s.wash.y};--wo:${s.wash.o}`}>
+          <svg viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            {s.comb.map((c) => (<path d={c.d} fill="none" stroke="var(--accent)" stroke-width={c.w} opacity={c.o} />))}
+            {s.spine.path && <path d={s.spine.path} fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" />}
+            {s.spine.nodes.map((p) => (<circle cx={p[0]} cy={p[1]} r="4.8" fill="var(--accent)" />))}
+          </svg>
+        </a>
+        <div>
+          <h2><a href={`/blog/${s.parts[0].id}`}>{s.title}</a></h2>
+          {s.description && <p class="sum">{s.description}</p>}
+          <div class="prog">
             <span class="badge">{s.parts.length} {s.parts.length === 1 ? 'part' : 'parts'}</span>
-            <svg viewBox="0 0 300 190" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-              <defs>
-                <linearGradient id={gid(s.slug)} x1="0" y1="0.1" x2="0.35" y2="1">
-                  <stop offset="0" stop-color="var(--accent)" stop-opacity="0.20"/>
-                  <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
-                </linearGradient>
-              </defs>
-              <rect width="300" height="190" fill={`url(#${gid(s.slug)})`}/>
-              {/* Faint ledger lines for texture. */}
-              <g stroke="var(--rule)" stroke-width="1" opacity="0.5">
-                {s.chart.grid.map((y) => (<line x1="0" y1={y} x2="300" y2={y}/>))}
-              </g>
-              {/* The through-line — one argument threading the collection together. */}
-              <path d={s.chart.path} fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/>
-              {/* One node per published part, spaced along the line. */}
-              {s.chart.nodes.map((p) => (
-                <g>
-                  <circle cx={p[0]} cy={p[1]} r="5.5" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/>
-                  <circle cx={p[0]} cy={p[1]} r="2.4" fill="var(--accent)"/>
-                </g>
-              ))}
-            </svg>
-          </a>
-          <div>
-            <h2><a href={`/blog/${s.parts[0].slug}`}>{s.title}</a></h2>
-            {s.description && <p>{s.description}</p>}
-            <div class="prog">
-              <span>{s.parts.length} {s.parts.length === 1 ? 'part' : 'parts'} published</span>
-              <span class="dot-sep">·</span>
-              <span>{fmtMonth(s.first)}{s.first.valueOf() !== s.latest.valueOf() ? ` – ${fmtMonth(s.latest)}` : ''}</span>
-            </div>
-            <ul class="parts">
-              {s.parts.map((part, i) => (
-                <li>
-                  <a href={`/blog/${part.slug}`}>
-                    <span class="p">Part {i + 1}</span>
-                    <span class="t">{part.title}</span>
-                    <span class="m">{fmtMonth(part.date)} · {part.mins} min</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
+            <span class="segs">{s.parts.map(() => (<i class="on"></i>))}</span>
+            <span><em>{s.parts.length}</em> published · {fmtMonth(s.first)}{s.first.valueOf() !== s.latest.valueOf() ? ` – ${fmtMonth(s.latest)}` : ''}</span>
           </div>
-        </article>
-      ))
-    ) : (
-      <p class="empty">No multi-part series yet. When two essays share a series, they'll gather here. <a class="link" href="/blog">Browse the archive &rarr;</a></p>
+          <ol class="parts">
+            {s.parts.map((part, i) => (
+              <li><a href={`/blog/${part.id}`}>
+                <span class="n">{i + 1}</span>
+                <span class="t">{part.title}</span>
+                <span class="lead"></span>
+                <span class="m">{fmtMonth(part.date)} · {part.mins} min</span>
+              </a></li>
+            ))}
+          </ol>
+        </div>
+      </article>
+    )) : (
+      <p class="empty">No multi-part series yet. When essays share a series, they gather here. <a class="link" href="/blog">Browse all posts &rarr;</a></p>
     )}
 
-    <div class="series-foot" data-hide-admin>
+    <div class="series-foot">
       <div class="sub-inner">
-        <SubscribeForm
-          heading="Get the next part when it lands"
-          blurb="Series instalments go out by email as they publish. No noise — unsubscribe from any email in one click."
-        />
+        <SubscribeForm heading="Get the next part when it lands" blurb="Series instalments go out by email as they publish. No noise — unsubscribe from any email in one click." />
       </div>
     </div>
   </div>
 </BaseLayout>
 
 <style>
-  .series { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: clamp(24px, 4vw, 52px); padding: clamp(32px, 4vw, 48px) 0; border-top: 1px solid var(--rule); }
-  @media (max-width: 900px) { .series { grid-template-columns: 1fr; gap: 24px; } }
-  .series .art { position: relative; display: block; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: var(--paper-2); min-height: 190px; transition: border-color 0.2s; }
-  .series .art:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--rule)); }
-  .series .art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .badge { position: absolute; top: 16px; left: 16px; z-index: 2; font-family: var(--sans); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; background: var(--accent); color: var(--on-accent); padding: 6px 11px; border-radius: 2px; }
-  .series h2 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(26px, 3.2vw, 34px); line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 12px; }
-  .series h2 a { color: var(--ink); background-image: linear-gradient(var(--accent), var(--accent)); background-size: 0 1.5px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size 0.3s; }
+  /* Ported from editorial/series.html, on our tokens. */
+  .series { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: clamp(24px, 3.6vw, 48px); padding: clamp(34px, 4.4vw, 56px) 0; border-top: 1px solid var(--rule); }
+  @media (max-width: 820px) { .series { grid-template-columns: 1fr; gap: 20px; } }
+  /* The silk plate floats (no card): a soft edge mask + a per-series accent wash. */
+  .art { position: relative; align-self: start; aspect-ratio: 3 / 2; margin: -4px 0 0 -22px; display: block;
+    -webkit-mask-image: radial-gradient(104% 92% at 30% 50%, #000 14%, rgba(0,0,0,.58) 50%, transparent 78%), linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+    -webkit-mask-composite: source-in;
+    mask-image: radial-gradient(104% 92% at 30% 50%, #000 14%, rgba(0,0,0,.58) 50%, transparent 78%), linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+    mask-composite: intersect; }
+  @media (max-width: 820px) { .art { max-width: 420px; margin-left: -14px; } }
+  .art::after { content: ""; position: absolute; inset: -14%; background: radial-gradient(80% 70% at var(--wx, 18%) var(--wy, 8%), color-mix(in srgb, var(--accent) var(--wo, 20%), transparent), transparent 70%); pointer-events: none; }
+  .art svg { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; display: block; overflow: visible; }
+  .series h2 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(27px, 3.3vw, 37px); line-height: 1.1; letter-spacing: -.015em; margin: 0 0 12px; }
+  .series h2 a { color: var(--ink); background-image: linear-gradient(var(--accent), var(--accent)); background-size: 0 1.5px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size .3s; }
   .series:hover h2 a { background-size: 100% 1.5px; }
-  .series > div > p { color: var(--ink-soft); margin: 0 0 20px; max-width: 60ch; font-size: 17.5px; }
-  .prog { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; font-family: var(--sans); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); flex-wrap: wrap; }
-  .prog .dot-sep { opacity: 0.5; }
+  .sum { color: var(--ink-soft); margin: 0 0 22px; max-width: 62ch; font-size: 17.5px; }
+  .prog { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 26px; font-family: var(--sans); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
+  .prog em { font-style: normal; color: var(--ink-soft); }
+  .badge { display: inline-flex; font-family: var(--sans); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; background: var(--accent); color: var(--on-accent); padding: 5px 10px; border-radius: 2px; }
+  .segs { display: flex; gap: 3px; width: 128px; flex: none; }
+  .segs i { flex: 1; height: 5px; border-radius: 1px; background: color-mix(in srgb, var(--ink) 32%, transparent); }
+  .segs i.on { background: var(--accent); }
   .parts { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
   .parts li { border-bottom: 1px solid var(--rule); }
-  .parts a { display: grid; grid-template-columns: 56px minmax(0, 1fr) 150px; gap: 20px; align-items: baseline; padding: 14px 6px; transition: background 0.22s; }
-  @media (max-width: 640px) { .parts a { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; } }
-  .parts a:hover { background: var(--paper-2); }
-  .parts .p { font-family: var(--sans); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
-  .parts .t { font-family: var(--serif-display); font-size: 20px; line-height: 1.3; color: var(--ink); }
+  .parts a { display: flex; align-items: baseline; gap: 12px; padding: 11px 2px; transition: padding-left .22s; }
+  .parts a:hover { padding-left: 8px; }
+  .parts .n { flex: none; width: 20px; font-family: var(--sans); font-size: 11px; letter-spacing: .1em; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .parts .t { flex: 0 1 auto; min-width: 0; font-family: var(--serif-display); font-size: 17.5px; line-height: 1.35; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .parts a:hover .t { color: var(--accent); }
-  .parts .m { font-family: var(--sans); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); text-align: right; }
-  @media (max-width: 640px) { .parts .m { display: none; } }
+  .parts .lead { flex: 1 1 14px; min-width: 14px; border-bottom: 1px dotted var(--rule); transform: translateY(-5px); }
+  .parts .m { flex: none; font-family: var(--sans); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  @media (max-width: 1120px) { .parts .t { white-space: normal; } .parts .lead { display: none; } .parts .m { flex: none; margin-left: auto; padding-left: 16px; } }
+  @media (max-width: 560px) { .parts .m { display: none; } }
   .empty { border-top: 1px solid var(--rule); padding: clamp(40px, 6vw, 70px) 6px; color: var(--ink-faint); font-family: var(--sans); font-size: 16px; }
   .series-foot { padding: clamp(44px, 6vw, 72px) 0 clamp(56px, 8vw, 96px); }
   .sub-inner { max-width: 720px; }
