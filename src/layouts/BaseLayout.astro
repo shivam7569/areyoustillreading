@@ -162,6 +162,10 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
           t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
         root.setAttribute('data-theme', t);
+        // Pre-paint admin flag (N4): a KNOWN admin (cached flag) gets html[data-admin]
+        // set BEFORE first paint, so global.css hides the subscribe blocks with no flash.
+        // The deferred module below revalidates + un-hides if the account isn't admin.
+        try { if (localStorage.getItem('aysr:admin-ok') === '1') root.setAttribute('data-admin', '1'); } catch (e) {}
         function bind() {
           var btn = document.getElementById('tt');
           if (!btn) return;
@@ -256,36 +260,31 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
     <script>
       // Hide newsletter/subscribe blocks for signed-in ADMINS only (N4). Admins are
       // subscribed by default, so a subscribe CTA is noise for them. Every subscribe
-      // SECTION opts in with data-hide-admin; anonymous/regular readers keep it. This
-      // MIRRORS the Studio-reveal script above in reverse: optimistic hide from the
-      // cached admin flag, then revalidate — and a purely-anonymous visitor (no cache
-      // flag AND no local Supabase session) NEVER imports the gate, so Supabase isn't
-      // loaded just to evaluate this. checkAdmin() is memoized → shares the same
-      // is_admin() round-trip as the Studio script (no extra network cost).
+      // SECTION opts in with data-hide-admin, hidden by CSS under html[data-admin="1"].
+      // The pre-paint <head> script above already sets that attribute for a KNOWN admin
+      // (cached flag) so blocks never paint for them — no flash. Here we only REVALIDATE:
+      // import the gate ONLY when there's a hint of an account (cache flag OR a local
+      // Supabase session); a purely-anonymous visitor skips the import, so Supabase is
+      // never loaded to evaluate this. checkAdmin() is memoized → shares the same
+      // is_admin() round-trip as the Studio-link script (no extra network cost).
       {
-        const marks = Array.from(document.querySelectorAll('[data-hide-admin]'));
-        if (marks.length) {
-          // Toggle inline display (NOT the [hidden] attribute): some wrappers set their
-          // own display in scoped CSS and a class/[hidden] rule could be overridden (the
-          // known [hidden] footgun). Inline style is bulletproof and reverts cleanly.
-          const setHidden = (on) => marks.forEach((el) => { el.style.display = on ? 'none' : ''; });
-          let cached = false, hasSession = false;
-          try {
-            cached = localStorage.getItem('aysr:admin-ok') === '1';
-            if (cached) setHidden(true); // known admin: hide instantly, no flash
-            for (let i = 0; i < localStorage.length; i++) {
-              const k = localStorage.key(i);
-              if (k && k.startsWith('sb-') && k.includes('auth-token')) { hasSession = true; break; }
-            }
-          } catch {}
-          if (cached || hasSession) {
-            import('../lib/admin-gate').then(async ({ checkAdmin }) => {
-              const r = await checkAdmin();
-              setHidden(r.state === 'admin'); // un-hide if revalidation says not-admin
-            }).catch(() => {});
+        const root = document.documentElement;
+        let cached = false, hasSession = false;
+        try {
+          cached = localStorage.getItem('aysr:admin-ok') === '1';
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('sb-') && k.includes('auth-token')) { hasSession = true; break; }
           }
-          // Pure anonymous (no cache, no session): import skipped; blocks stay visible.
+        } catch {}
+        if (cached || hasSession) {
+          import('../lib/admin-gate').then(async ({ checkAdmin }) => {
+            const r = await checkAdmin();
+            if (r.state === 'admin') root.setAttribute('data-admin', '1');
+            else root.removeAttribute('data-admin'); // not admin → show the blocks
+          }).catch(() => {});
         }
+        // Pure anonymous (no cache, no session): no data-admin; blocks stay visible.
       }
     </script>
     <script>

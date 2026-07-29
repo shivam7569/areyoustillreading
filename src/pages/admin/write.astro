@@ -164,7 +164,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     transition: background 0.16s, border-color 0.16s, transform 0.16s;
   }
   .editor-bar button:hover { background: var(--admin-hover); border-color: var(--border-strong); transform: translateY(-1px); }
-  .editor-bar #publish-btn { background: var(--btn-fill); border-color: var(--btn-fill); color: #fff; box-shadow: 0 8px 20px -12px var(--btn-fill); }
+  .editor-bar #publish-btn { background: var(--btn-fill); border-color: var(--btn-fill); color: var(--on-accent); box-shadow: 0 8px 20px -12px var(--btn-fill); }
   .editor-bar #publish-btn:hover { background: var(--btn-fill-hover); border-color: var(--btn-fill-hover); }
   #milkdown {
     border: 1px solid var(--border); border-radius: 12px; min-height: 60vh;
@@ -265,7 +265,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
      to a transparent background, making this one invisible (white text on white). */
   .plotly-controls button {
     padding: 0.3rem 0.85rem !important; border: 0 !important; border-radius: 6px !important;
-    background: var(--accent) !important; color: #fff !important; opacity: 1 !important;
+    background: var(--accent) !important; color: var(--on-accent) !important; opacity: 1 !important;
     font-weight: 600 !important; font-size: 0.85em !important; cursor: pointer !important;
   }
   .plotly-controls button:disabled { opacity: 0.55 !important; cursor: default !important; }
