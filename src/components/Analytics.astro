@@ -83,7 +83,15 @@
     }
 
     // --- Pageview ------------------------------------------------------------
-    send({ t: 'view', p: path, r: ref, s: sid });
+    // With clientPrerender on, a hovered link may be prerendered OFFSCREEN; this script
+    // runs there too. Defer the view until the prerendered doc is actually activated
+    // (navigated to), so a hover that's never clicked doesn't log a phantom pageview.
+    function sendView() { send({ t: 'view', p: path, r: ref, s: sid }); }
+    if (document.prerendering) {
+      document.addEventListener('prerenderingchange', sendView, { once: true });
+    } else {
+      sendView();
+    }
 
     // --- Read depth + FOREGROUND dwell --------------------------------------
     // maxPct only grows. dwell counts only time the page is actually VISIBLE, so a

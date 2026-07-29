@@ -83,6 +83,15 @@ export default defineConfig({
   // image URLs). Must be the exact deployed origin, protocol included, no path.
   site: 'https://areyoustillreading.dev',
 
+  // Near-instant navigation: warm each internal link on hover (prefetchAll adds a
+  // <link rel=prefetch> for every in-viewport/hovered <a>). Astro auto-downgrades to
+  // 'tap' on Save-Data / slow connections, so this never hurts constrained clients.
+  prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
+  // Chromium speculation-rules prerender of hovered links → the next page paints from
+  // an already-rendered document (~0ms). Other engines fall back to plain prefetch.
+  // Analytics.astro is guarded against firing a view during the offscreen prerender.
+  experimental: { clientPrerender: true },
+
   // The admin editor moved from /admin/editor into the dashboard at /admin/write.
   // Keep the old path working (bookmarks) via a static redirect.
   redirects: { '/admin/editor': '/admin/write' },

@@ -104,6 +104,10 @@ const ogImage = new URL(image ?? '/favicon.svg', Astro.site);
     page origin and it is always this exact asset. */}
 <link rel="canonical" href={canonical.toString()} />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+{/* Preload the editorial serifs used for the LCP heading + first body text, so the
+    font fetch runs in parallel with CSS instead of after it (cuts the swap window). */}
+<link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/SourceSerif4-Variable.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/CharisSIL-Regular.woff2" />
 
 {/* OpenGraph tags: consumed by Facebook/LinkedIn/Slack/Discord/iMessage etc.
     og:url mirrors the canonical URL; og:image MUST be absolute (see frontmatter

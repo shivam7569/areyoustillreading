@@ -159,7 +159,12 @@ export async function onRequestPost({ request, env }) {
       try {
         // `draft` lets the /blog overlay skip serving a draft publicly (early-access
         // drafts are reachable only via a tokenized /early link — see functions/early.js).
-        await env.POSTS_HTML.put(slug, JSON.stringify({ html, publishedAt, draft: !!draft }));
+        // TTL the instant copy: the git rebuild (~1-2 min) bakes the post in and the
+        // staleness gate stops serving KV once builtAt passes publishedAt — so the entry
+        // only needs to outlive the rebuild. Expiring it means later views KV-MISS and go
+        // straight to the static page WITHOUT the overlay's build-meta.json subrequest
+        // (perf). 1 hour is a wide margin over a normal build (guards a slow CF queue).
+        await env.POSTS_HTML.put(slug, JSON.stringify({ html, publishedAt, draft: !!draft }), { expirationTtl: 3600 });
         instant = true;
         // Maintain a small recent-posts index so the /blog listing overlay can show
         // this post immediately too (the static listing only refreshes on rebuild).

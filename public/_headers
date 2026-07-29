@@ -16,3 +16,12 @@
 # pypi.org + files.pythonhosted.org because the editor's Python plot cells install plotly
 # via micropip at runtime (Pyodide fetches package metadata/wheels from PyPI). If the
 # editor ever fails to load a CDN, add that host here; devtools shows "Refused to…" errors.
+
+# Immutable, year-long caching for content-hashed build assets and the self-hosted
+# fonts, so a warm/multi-page visit revalidates NONE of them (Cloudflare Pages' default
+# is max-age=0, must-revalidate). /_astro/* filenames are content-hashed by Astro; the
+# /fonts/* names are stable, so treat a font change as a rename if it ever ships.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
