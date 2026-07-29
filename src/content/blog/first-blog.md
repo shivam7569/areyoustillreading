@@ -3,7 +3,7 @@ title: "First Blog"
 description: "Testing live"
 pubDate: "2026-07-27"
 tags: []
-draft: true
+draft: false
 gateable: false
 ---
 This is an example blog to test live website.
