@@ -2,7 +2,8 @@
  * /api/admin/post — single-post admin operations (all admin-gated).
  * ----------------------------------------------------------------------------
  *   GET    ?slug=<slug>            → load a post's Markdown + sha for editing
- *   POST   { slug, draft:boolean } → flip the draft flag (publish / unpublish)
+ *   POST   { slug, draft?:boolean, gateable?:boolean, series?:null|{title,order} }
+ *                                  → flip draft / gateable, or set/clear series membership
  *   DELETE ?slug=<slug>            → delete the post entirely
  *
  * Every mutation commits to the same GitHub content collection /api/publish uses
@@ -53,6 +54,35 @@ function setBoolFlag(raw, key, value) {
   return m[1] + fm + m[3] + raw.slice(m[0].length);
 }
 
+// Set (or insert) a scalar frontmatter field to a pre-serialized value (already
+// quoted/number). Same targeted, byte-preserving edit as setBoolFlag.
+function setScalarField(raw, key, serialized) {
+  const m = /^(---\r?\n)([\s\S]*?)(\r?\n---)/.exec(raw);
+  if (!m) return `---\n${key}: ${serialized}\n---\n\n${raw}`;
+  let fm = m[2];
+  const re = new RegExp(`^${key}:\\s*.*$`, 'm');
+  if (re.test(fm)) fm = fm.replace(re, `${key}: ${serialized}`);
+  else fm = `${fm}\n${key}: ${serialized}`;
+  return m[1] + fm + m[3] + raw.slice(m[0].length);
+}
+
+// Remove one or more frontmatter keys entirely (their whole line). Used to take a
+// post out of a series (drop series / seriesTitle / seriesOrder).
+function removeFields(raw, keys) {
+  const m = /^(---\r?\n)([\s\S]*?)(\r?\n---)/.exec(raw);
+  if (!m) return raw;
+  let fm = m[2];
+  for (const key of keys) {
+    fm = fm.replace(new RegExp(`^${key}:\\s*.*$\\r?\\n?`, 'm'), '');
+  }
+  return m[1] + fm.replace(/\r?\n$/, '') + m[3] + raw.slice(m[0].length);
+}
+
+// Slugify a series display name the same way the editor does (grouping key).
+function slugify(s) {
+  return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
 // Remove a post from the instant overlay: drop its rendered HTML + index entry.
 async function kvUnpublish(env, slug) {
   if (!env.POSTS_HTML) return;
@@ -99,11 +129,16 @@ export async function onRequestPost({ request, env }) {
   const slug = body && body.slug;
   if (typeof slug !== 'string' || !SLUG_RE.test(slug)) return json({ error: 'Invalid slug' }, 400);
   // Flip whichever frontmatter booleans were provided: `draft` (publish/unpublish) and
-  // `gateable` (add/remove the post from the paywall — build-time body split). At least
-  // one must be present.
+  // `gateable` (add/remove the post from the paywall — build-time body split), or update
+  // `series` membership. `series` is null (remove) or { title, order } (add/update). At
+  // least one must be present.
   const hasDraft = typeof body.draft === 'boolean';
   const hasGateable = typeof body.gateable === 'boolean';
-  if (!hasDraft && !hasGateable) return json({ error: 'Nothing to change' }, 400);
+  const hasSeries = Object.prototype.hasOwnProperty.call(body, 'series');
+  if (!hasDraft && !hasGateable && !hasSeries) return json({ error: 'Nothing to change' }, 400);
+  if (hasSeries && body.series !== null && (typeof body.series !== 'object' || !String(body.series.title || '').trim())) {
+    return json({ error: 'A series needs a name' }, 400);
+  }
 
   let file;
   try {
@@ -123,6 +158,20 @@ export async function onRequestPost({ request, env }) {
   if (hasGateable) {
     updated = setBoolFlag(updated, 'gateable', body.gateable);
     actions.push(body.gateable ? 'paywall' : 'unpaywall');
+  }
+  if (hasSeries) {
+    if (body.series === null) {
+      updated = removeFields(updated, ['series', 'seriesTitle', 'seriesOrder']);
+      actions.push('series-clear');
+    } else {
+      const title = String(body.series.title).trim();
+      const order = Number(body.series.order);
+      updated = setScalarField(updated, 'series', JSON.stringify(slugify(title)));
+      updated = setScalarField(updated, 'seriesTitle', JSON.stringify(title));
+      if (Number.isFinite(order) && order > 0) updated = setScalarField(updated, 'seriesOrder', String(Math.round(order)));
+      else updated = removeFields(updated, ['seriesOrder']);
+      actions.push('series-set');
+    }
   }
 
   let put;
@@ -145,8 +194,14 @@ export async function onRequestPost({ request, env }) {
   // Drop the instant KV copy whenever visibility OR gating changes: the stored copy is
   // the pre-change render, so serving it during the ~1-2 min rebuild would show stale
   // (and for a newly-paywalled post, unsafe) content. Falling back to static is correct.
+  // Series-only changes are build-time (the /series page + in-post nav rebuild); they
+  // don't make the instant KV copy stale/unsafe, so we must NOT drop it (that would
+  // 404 a just-published post until the rebuild). Only visibility/gating drops KV.
   if ((hasDraft && body.draft) || hasGateable) await kvUnpublish(env, slug);
-  return json({ ok: true, slug, ...(hasDraft ? { draft: body.draft } : {}), ...(hasGateable ? { gateable: body.gateable } : {}) });
+  return json({ ok: true, slug,
+    ...(hasDraft ? { draft: body.draft } : {}),
+    ...(hasGateable ? { gateable: body.gateable } : {}),
+    ...(hasSeries ? { series: body.series } : {}) });
 }
 
 export async function onRequestDelete({ request, env }) {

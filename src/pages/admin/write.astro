@@ -496,7 +496,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     }
     const run = async () => {
       const d2 = await loadD2();
-      const res = await d2.compile(code, { pad: 20, noXMLTag: true, themeID: 0, darkThemeID: 200 });
+      const res = await d2.compile(code, { pad: 20, noXMLTag: true, themeID: 1, darkThemeID: 1 });
       const svg = await d2.render(res.diagram, res.renderOptions);
       d2Cache.set(code, svg);
       if (d2Cache.size > D2_CACHE_MAX) d2Cache.delete(d2Cache.keys().next().value);
@@ -1061,6 +1061,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       const token = data.session && data.session.access_token;
       if (!token) { status.textContent = 'Please sign in again.'; refreshAuthView(); return; }
 
+      // Byline: the pen name set on the signed-in account (Account → edit name →
+      // user_metadata.name). Publishing requires a signed-in account, so there is
+      // always a publisher; if they haven't set a pen name yet, fall back to the
+      // site author. Baked into frontmatter + the instant HTML so both agree.
+      const penName = (data.session.user && data.session.user.user_metadata && data.session.user.user_metadata.name || '').trim();
+      const authorName = penName || 'Shivam Chaudhary';
+
       // Title lives in frontmatter (rendered as the page <h1>), so drop a leading
       // "# Title" from the body to avoid a duplicate heading.
       const body = injectCellOutputs(crepe.getMarkdown().replace(/^#\s+.+\n+/, ''));
@@ -1078,6 +1085,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         '---',
         `title: ${yaml(title)}`,
         `description: ${yaml(description)}`,
+        `author: ${yaml(authorName)}`,
         `pubDate: ${yaml(pubDate)}`,
         `tags: [${pubTags.map(yaml).join(', ')}]`,
       ];
@@ -1106,7 +1114,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         const bodyHtml = await renderPostBodyBrowser(body);
         const shellHtml = await (await fetch('/post-shell', { cache: 'no-store' })).text();
         assembledHtml = assemblePostHtml(shellHtml, {
-          slug, title, description, pubDate, tags: pubTags, bodyMarkdown: body, bodyHtml,
+          slug, title, description, author: authorName, pubDate, tags: pubTags, bodyMarkdown: body, bodyHtml,
         });
       } catch (e) {
         console.error('[publish] instant-assembly failed; committing rebuild-only', e);

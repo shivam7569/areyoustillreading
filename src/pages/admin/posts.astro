@@ -16,7 +16,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         <p class="sub" id="posts-sub">Everything you've written.</p>
       </div>
       <div class="head-actions">
-        <a class="btn btn-primary" href="/admin/write">✍ New post</a>
+        <a class="btn btn-primary" href="/admin/write"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> New post</a>
       </div>
     </div>
 
@@ -42,6 +42,26 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     </div>
   </section>
 
+  {/* Series membership editor (R5): set a post's series name + part, or remove it.
+      Writes series/seriesTitle/seriesOrder frontmatter via /api/admin/post. */}
+  <div id="series-modal" class="em-overlay" hidden>
+    <div class="em-card" role="dialog" aria-modal="true" aria-label="Series membership">
+      <h2 class="em-title">Series</h2>
+      <p class="em-body" id="sr-body"></p>
+      <div class="sr-fields">
+        <label class="sr-field"><span>Series name</span><input class="input" id="sr-name" type="text" placeholder="e.g. LLMs from scratch" autocomplete="off" /></label>
+        <label class="sr-field sr-part"><span>Part</span><input class="input" id="sr-order" type="number" min="1" step="1" placeholder="1" /></label>
+      </div>
+      <div class="em-actions">
+        <button class="btn btn-ghost" id="sr-remove" type="button">Remove from series</button>
+        <span class="grow"></span>
+        <button class="btn btn-ghost" id="sr-cancel" type="button">Cancel</button>
+        <button class="btn btn-primary" id="sr-save" type="button">Save</button>
+      </div>
+      <p class="em-status" id="sr-status"></p>
+    </div>
+  </div>
+
   {/* Confirmation layer for emailing a post to subscribers. Emailing the whole
       list is high-stakes and irreversible, so it's gated behind this explicit
       confirm (with the recipient count) rather than a one-click action. */}
@@ -65,8 +85,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .em-title { margin: 0 0 0.5rem; font-size: 1.15rem; letter-spacing: -0.01em; }
   .em-body { margin: 0 0 1.4rem; color: var(--muted); line-height: 1.6; }
   .em-body strong { color: var(--fg); }
-  .em-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+  .em-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
+  .em-actions .grow { flex: 1; }
   .em-status { margin: 0.85rem 0 0; font-size: 0.85rem; color: var(--muted); min-height: 1.1em; }
+  .sr-fields { display: flex; gap: 0.75rem; margin: 0 0 1.3rem; }
+  .sr-field { display: flex; flex-direction: column; gap: 0.35rem; flex: 1; font-size: 0.8rem; color: var(--muted); }
+  .sr-field.sr-part { flex: 0 0 84px; }
+  .sr-field .input { width: 100%; }
 </style>
 
 <script>
@@ -88,6 +113,16 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   const emBody = document.getElementById('em-body')!;
   const emStatus = document.getElementById('em-status')!;
   const emSend = document.getElementById('em-send') as HTMLButtonElement;
+
+  // Series membership editor (R5).
+  const srModal = document.getElementById('series-modal')!;
+  const srBody = document.getElementById('sr-body')!;
+  const srName = document.getElementById('sr-name') as HTMLInputElement;
+  const srOrder = document.getElementById('sr-order') as HTMLInputElement;
+  const srStatus = document.getElementById('sr-status')!;
+  const srSave = document.getElementById('sr-save') as HTMLButtonElement;
+  const srRemove = document.getElementById('sr-remove') as HTMLButtonElement;
+  let seriesTarget: any = null;
 
   function view() {
     const q = qEl.value.trim().toLowerCase();
@@ -141,7 +176,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     document.getElementById('posts-sub')!.textContent =
       `${all.length} post${all.length === 1 ? '' : 's'}${rows.length !== all.length ? ` · ${rows.length} shown` : ''}`;
     if (!all.length) {
-      host.innerHTML = '<div class="card"><div class="empty"><span class="emoji">✍️</span><h3>No posts yet</h3><p>Start writing — your first post publishes in seconds.</p><a class="btn btn-primary" href="/admin/write">Write your first post</a></div></div>';
+      host.innerHTML = '<div class="card"><div class="empty"><svg class="empty-icon" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><h3>No posts yet</h3><p>Start writing — your first post publishes in seconds.</p><a class="btn btn-primary" href="/admin/write">Write your first post</a></div></div>';
       return;
     }
     if (!rows.length) {
@@ -174,6 +209,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         const earlyBtn = p.draft
           ? `<button class="btn btn-sm" data-act="early" data-slug="${esc(p.slug)}" title="Email confirmed subscribers a private early-access link to this draft">◔ Early access</button>`
           : '';
+        // Series membership editor (R5): add/update/remove this post's series.
+        const seriesBtn = `<button class="btn btn-sm btn-ghost" data-act="series" data-slug="${esc(p.slug)}" title="${p.series ? 'Edit or remove this post’s series' : 'Add this post to a series'}">${p.series ? '◆ Series' : '+ Series'}</button>`;
         const del = `<button class="btn btn-sm ${armed ? 'btn-danger' : 'btn-ghost'}" data-act="delete" data-slug="${esc(p.slug)}">${armed ? 'Confirm delete' : 'Delete'}</button>`;
         return `<tr data-slug="${esc(p.slug)}">
             <td>
@@ -184,7 +221,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
             <td>${pwCell(p)}</td>
             <td class="num"><div class="row-actions">
               <a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a>
-              ${viewBtn}${emailBtn}${del}
+              ${viewBtn}${seriesBtn}${emailBtn}${del}
             </div></td>
           </tr>`;
       }).join('')
@@ -233,6 +270,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     const act = btn.dataset.act!;
     const slug = btn.dataset.slug!;
     if (act === 'email') openEmail(slug);
+    else if (act === 'series') openSeries(slug);
     else if (act === 'retry-email') retryEmail(slug);
     else if (act === 'early') sendEarly(slug);
     else if (act === 'delete') {
@@ -439,6 +477,62 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   emSend.addEventListener('click', sendEmail);
   emModal.addEventListener('click', (e) => { if (e.target === emModal) closeEmail(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !emModal.hidden) closeEmail(); });
+
+  // --- Series membership (add / edit / remove) -----------------------------
+  function openSeries(slug: string) {
+    const p = all.find((x) => x.slug === slug);
+    if (!p) return;
+    seriesTarget = p;
+    srBody.innerHTML = `Group <strong>${esc(p.title)}</strong> into a series. Posts that share a series appear together on the Series page, ordered by part.`;
+    srName.value = p.seriesTitle || p.series || '';
+    srOrder.value = p.seriesOrder ? String(p.seriesOrder) : '';
+    srStatus.textContent = '';
+    srSave.disabled = false;
+    srRemove.disabled = false;
+    srRemove.hidden = !p.series; // only offer "remove" when it's in one
+    srModal.hidden = false;
+    srName.focus();
+  }
+  function closeSeries() {
+    srModal.hidden = true;
+    seriesTarget = null;
+  }
+  async function saveSeries(remove: boolean) {
+    if (!seriesTarget) return;
+    const slug = seriesTarget.slug;
+    let payload: any;
+    if (remove) {
+      payload = { slug, series: null };
+    } else {
+      const title = srName.value.trim();
+      if (!title) { srStatus.textContent = 'Enter a series name, or remove it.'; return; }
+      const order = parseInt(srOrder.value, 10);
+      payload = { slug, series: { title, order: Number.isFinite(order) && order > 0 ? order : null } };
+    }
+    srSave.disabled = true;
+    srRemove.disabled = true;
+    srStatus.textContent = 'Saving…';
+    try {
+      const r = await adminFetch('/api/admin/post', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Save failed');
+      closeSeries();
+      await load(); // reload so the row subline + button reflect the change
+    } catch (e: any) {
+      srStatus.textContent = e.message || 'Save failed';
+      srSave.disabled = false;
+      srRemove.disabled = false;
+    }
+  }
+  document.getElementById('sr-cancel')!.addEventListener('click', closeSeries);
+  srSave.addEventListener('click', () => saveSeries(false));
+  srRemove.addEventListener('click', () => saveSeries(true));
+  srModal.addEventListener('click', (e) => { if (e.target === srModal) closeSeries(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !srModal.hidden) closeSeries(); });
 
   qEl.addEventListener('input', view);
   filterEl.addEventListener('change', view);
