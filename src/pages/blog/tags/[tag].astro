@@ -105,6 +105,9 @@ export async function getStaticPaths() {
 // tag string; `posts` is its already-filtered, already-sorted post list. No
 // further processing is needed — everything was resolved in getStaticPaths().
 const { tag, posts } = Astro.props;
+
+const fmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).filter(Boolean).length ?? 0) / 200));
 ---
 
 {/*
@@ -113,30 +116,39 @@ const { tag, posts } = Astro.props;
   interpolated into both; JSX auto-escaping neutralises any special characters,
   though tags are author-controlled build inputs anyway.
 */}
-<BaseLayout title={`Posts tagged “${tag}” — areyoustillreading`} description={`Posts tagged ${tag}.`}>
-  {/* Back-link to the tag index. Hard-coded route — the counterpart to the
-      inbound links other pages use to reach this archive. */}
-  <p><a href="/blog/tags">&larr; All tags</a></p>
-  <h1>Tagged: {tag}</h1>
-  <ul class="post-list">
-    {/* `posts` is guaranteed non-empty here: getStaticPaths only emits a page
-        for a tag that has at least one published post, so no empty-state UI is
-        needed. Iterate the precomputed newest-first list. */}
-    {posts.map((post) => (
-      <li>
-        {/* Link to the post by its collection id (the slug). NOTE: this points
-            at the post itself; gating/paywalling of the body happens on that
-            page, not here — see the paywall-leakage gotcha in the header. */}
-        <h2><a href={`/blog/${post.id}`}>{post.data.title}</a></h2>
-        {/* Machine-readable datetime uses full ISO 8601 for correctness... */}
-        <time datetime={post.data.pubDate.toISOString()}>
-          {/* ...while the visible text is a human-friendly US-locale date.
-              toLocaleDateString runs at BUILD time (Node), so the formatting is
-              fixed at deploy and does not vary by visitor locale/timezone. */}
-          {post.data.pubDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-        </time>
-        <p>{post.data.description}</p>
-      </li>
-    ))}
-  </ul>
+<BaseLayout title={`Posts tagged “${tag}” — areyoustillreading`} description={`Posts tagged ${tag}.`} wide>
+  <div class="wrap">
+    <header class="page-head">
+      <a class="backlink" href="/blog/tags"><span aria-hidden="true">&larr;</span> All topics</a>
+      <div class="kicker"><span class="line"></span><span class="eyebrow">Topic</span></div>
+      <h1>Tagged <em>{tag}</em></h1>
+      <p class="lede">{posts.length} {posts.length === 1 ? 'essay' : 'essays'} on {tag}.</p>
+    </header>
+    {/* Editorial post rows (getStaticPaths guarantees a non-empty list). */}
+    <div class="post-list">
+      {posts.map((post, i) => (
+        <article class="post">
+          <div class="idx">{String(i + 1).padStart(2, '0')}</div>
+          <div>
+            <h3><a href={`/blog/${post.id}`}>{post.data.title}</a></h3>
+            <p>{post.data.description}</p>
+            {post.data.tags && post.data.tags.length > 0 && (
+              <div class="tags">{post.data.tags.slice(0, 3).map((t) => (<span class="tag">{t}</span>))}</div>
+            )}
+          </div>
+          <div class="aside">
+            <time class="date" datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
+            <span class="rt">{readMins(post.body)} min</span>
+          </div>
+        </article>
+      ))}
+    </div>
+  </div>
 </BaseLayout>
+
+<style>
+  .backlink { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); display: inline-flex; align-items: center; gap: 8px; margin-bottom: 30px; transition: color 0.2s; }
+  .backlink:hover { color: var(--accent); }
+  .page-head h1 em { font-style: italic; color: var(--accent); }
+  .post-list { border-top: 1px solid var(--rule); }
+</style>

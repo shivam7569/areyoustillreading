@@ -81,16 +81,32 @@ const tags = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeComp
 ---
 
 {/* BaseLayout supplies <head>/nav/footer; title+description feed the SEO/OG tags. */}
-<BaseLayout title="Tags — areyoustillreading" description="Browse posts by tag.">
-  {/* Escape hatch back to the unfiltered post index. */}
-  <p><a href="/blog">&larr; All posts</a></p>
-  <h1>Tags</h1>
-  <ul class="post-list">
-    {/* One <li> per tag, already sorted (popularity desc, then name asc).
-        Link target is the per-tag archive route /blog/tags/[tag]. The `#`
-        is a cosmetic prefix; `(count)` shows how many published posts match. */}
-    {tags.map(([tag, count]) => (
-      <li><a href={`/blog/tags/${tag}`}>#{tag}</a> <span class="count">({count})</span></li>
-    ))}
-  </ul>
+<BaseLayout title="Topics — areyoustillreading" description="Browse essays by topic." wide>
+  <div class="wrap">
+    <header class="page-head">
+      <a class="backlink" href="/blog"><span aria-hidden="true">&larr;</span> All essays</a>
+      <div class="kicker"><span class="line"></span><span class="eyebrow">Topics</span></div>
+      <h1>Browse by <em>subject.</em></h1>
+      <p class="lede">Every subject across the archive, most-written first.</p>
+    </header>
+    <div class="topics">
+      {tags.map(([tag, count]) => (
+        <a class="topic" href={`/blog/tags/${tag}`}>
+          <span class="topic-name">{tag}</span>
+          <span class="topic-count">{count}</span>
+        </a>
+      ))}
+    </div>
+  </div>
 </BaseLayout>
+
+<style>
+  .backlink { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); display: inline-flex; align-items: center; gap: 8px; margin-bottom: 30px; transition: color 0.2s; }
+  .backlink:hover { color: var(--accent); }
+  .page-head h1 em { font-style: italic; color: var(--accent); }
+  .topics { display: flex; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--rule); padding-top: 32px; }
+  .topic { display: inline-flex; align-items: center; gap: 10px; padding: 11px 12px 11px 18px; border: 1px solid var(--rule); border-radius: 999px; font-family: var(--sans); transition: border-color 0.2s, background 0.2s, transform 0.2s; }
+  .topic:hover { border-color: var(--accent); background: var(--paper-2); transform: translateY(-2px); }
+  .topic-name { font-size: 15px; color: var(--ink); }
+  .topic-count { font-size: 12px; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 999px; padding: 3px 10px; }
+</style>
