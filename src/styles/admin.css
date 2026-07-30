@@ -534,6 +534,33 @@ table.t th.num { text-align: right; }
 .seeds .d { flex: none; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .seeds .w { margin-left: auto; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
 
+/* Publish "press check" sheet (Write modal, #pm-form). Global because the checklist
+   is injected via innerHTML. The publish engine/IDs are unchanged — this is layout. */
+.ps-head { margin-bottom: 18px; }
+.ps-eyebrow { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.ps-title { font-family: var(--serif-display); font-size: 24px; font-weight: 600; letter-spacing: -0.015em; margin: 5px 0 6px; }
+.ps-sub { font-size: 12.5px; color: var(--ink-faint); }
+.ps-body { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+@media (max-width: 720px) { .ps-body { grid-template-columns: 1fr; gap: 20px; } }
+.ps-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.ps-group { }
+.ps-dl { font-size: 10.5px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 10px; font-weight: 600; }
+.ps-opt { font-weight: 400; color: var(--ink-faint); text-transform: none; letter-spacing: 0; }
+.ps-chk { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.ps-chk li { display: grid; grid-template-columns: 18px 1fr auto; gap: 9px; align-items: start; font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
+.ps-chk li svg { width: 16px; height: 16px; margin-top: 1px; color: var(--ok); }
+.ps-chk li.warn svg { color: var(--warn); }
+.ps-chk li b { color: var(--ink); font-weight: 600; }
+.ps-chk li a { color: var(--accent); font-size: 12px; white-space: nowrap; text-decoration: none; }
+.ps-chk li a:hover { text-decoration: underline; }
+.ps-mail { display: flex !important; align-items: center; gap: 10px; margin: 0 !important; }
+.ps-fr { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--ink-faint); padding: 5px 0; }
+.ps-fr .v { color: var(--ink-soft); text-align: right; }
+.ps-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.ps-note { font-size: 12.5px; color: var(--ink-faint); }
+.ps-note b { color: var(--ink); font-weight: 600; }
+.ps-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
 /* Engagement — reader interaction (comments / highlights / notes) moderation rows.
    Global (not scoped) because the rows are injected via innerHTML. */
 .eng-item { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 13px; align-items: start; padding: 15px 17px; border-bottom: 1px solid var(--rule-soft); }

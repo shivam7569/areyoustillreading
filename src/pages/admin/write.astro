@@ -123,36 +123,79 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         </div>
 
         <div id="pm-form" hidden>
-          <h2 class="pm-title" id="pm-form-title">Ready to publish</h2>
-          <label class="pm-field"><span class="pm-label">Title</span>
-            <input id="pm-post-title" type="text" placeholder="Your title" /></label>
-          <label class="pm-field"><span class="pm-label">Description</span>
-            <textarea id="pm-post-desc" rows="2" placeholder="One sentence that makes people want to read."></textarea></label>
-          <div class="pm-field"><span class="pm-label">Tags</span>
-            <div class="pm-tags" id="pm-tags"><input id="pm-tag-input" type="text" placeholder="Add a tag…" /></div></div>
-          <div class="pm-field"><span class="pm-label">Series <span style="font-weight:400;color:var(--muted)">— optional</span></span>
-            <div style="display:flex; gap:0.5rem;">
-              <input id="pm-series" type="text" placeholder="Series name — e.g. Rust Basics" style="flex:1 1 auto" />
-              <input id="pm-series-order" type="number" min="1" step="1" placeholder="Part #" style="flex:0 0 92px" aria-label="Part number" />
+          {/* Press-check publish sheet. The engine is unchanged: every input ID below
+              is exactly the one the publish handler reads; #pm-draft is now a hidden flag
+              the footer buttons set. Access + timing are honest (paywall is managed on
+              Posts; publishing is instant — no scheduler). */}
+          <header class="ps-head">
+            <span class="ps-eyebrow">Press check</span>
+            <h2 class="ps-title" id="pm-form-title">Ready to publish</h2>
+            <div class="ps-sub" id="ps-sub"></div>
+          </header>
+
+          <div class="ps-body">
+            <div class="ps-col">
+              <div class="ps-group">
+                <div class="ps-dl">What readers will see</div>
+                <label class="pm-field"><span class="pm-label">Title</span>
+                  <input id="pm-post-title" type="text" placeholder="Your title" /></label>
+                <label class="pm-field"><span class="pm-label">Standfirst</span>
+                  <textarea id="pm-post-desc" rows="2" placeholder="One sentence that makes people want to read."></textarea></label>
+                <div class="pm-field"><span class="pm-label">Tags</span>
+                  <div class="pm-tags" id="pm-tags"><input id="pm-tag-input" type="text" placeholder="Add a tag…" /></div></div>
+                <p class="pm-permalink">areyoustillreading.dev/blog/<span id="pm-slug" class="pm-slug" contenteditable="true" spellcheck="false"></span></p>
+              </div>
+
+              <div class="ps-group">
+                <div class="ps-dl">Series <span class="ps-opt">— optional</span></div>
+                <div style="display:flex; gap:0.5rem;">
+                  <input id="pm-series" type="text" placeholder="Series name — e.g. Rust Basics" style="flex:1 1 auto" />
+                  <input id="pm-series-order" type="number" min="1" step="1" placeholder="Part #" style="flex:0 0 92px" aria-label="Part number" />
+                </div>
+                <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                  <input id="pm-series-total" type="number" min="1" step="1" placeholder="Planned total" style="flex:0 0 130px" aria-label="Planned total parts" title="How many parts the series will have (drives the “3 of 5” plate)" />
+                  <select id="pm-series-status" class="pm-select" style="flex:1 1 auto" aria-label="Series status" title="Shown as the badge on the series page">
+                    <option value="">Status — auto</option>
+                    <option value="in-progress">In progress</option>
+                    <option value="complete">Complete</option>
+                    <option value="paused">Paused</option>
+                  </select>
+                </div>
+                <textarea id="pm-series-planned" rows="2" placeholder="Planned part titles — one per line (upcoming parts, shown greyed on the series page)" style="margin-top:0.5rem; width:100%; resize:vertical;"></textarea>
+              </div>
             </div>
-            <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
-              <input id="pm-series-total" type="number" min="1" step="1" placeholder="Planned total" style="flex:0 0 130px" aria-label="Planned total parts" title="How many parts the series will have (drives the “3 of 5” plate)" />
-              <select id="pm-series-status" class="pm-select" style="flex:1 1 auto" aria-label="Series status" title="Shown as the badge on the series page">
-                <option value="">Status — auto</option>
-                <option value="in-progress">In progress</option>
-                <option value="complete">Complete</option>
-                <option value="paused">Paused</option>
-              </select>
+
+            <div class="ps-col">
+              <div class="ps-group">
+                <div class="ps-dl">Before it goes</div>
+                <ul class="ps-chk" id="ps-checklist"><li>Checking…</li></ul>
+              </div>
+              <div class="ps-group">
+                <div class="ps-dl">Who gets told</div>
+                <label class="pm-toggle ps-mail"><input id="pm-email-subs" type="checkbox" /> <span id="pm-email-subs-label">Email subscribers about this post</span></label>
+              </div>
+              <div class="ps-group">
+                <div class="ps-dl">Access &amp; timing</div>
+                <div class="ps-fr"><span>Who can read it</span><span class="v" id="ps-access">Free</span></div>
+                <div class="ps-fr"><span>When</span><span class="v">Live in a few seconds</span></div>
+              </div>
             </div>
-            <textarea id="pm-series-planned" rows="2" placeholder="Planned part titles — one per line (upcoming parts, shown greyed on the series page)" style="margin-top:0.5rem; width:100%; resize:vertical;"></textarea></div>
-          <p class="pm-permalink">areyoustillreading.dev/blog/<span id="pm-slug" class="pm-slug" contenteditable="true" spellcheck="false"></span></p>
-          <label class="pm-toggle"><input id="pm-draft" type="checkbox" /> <span>Save as a draft — only you can see it</span></label>
-          <label class="pm-toggle"><input id="pm-email-subs" type="checkbox" /> <span id="pm-email-subs-label">Email subscribers about this post</span></label>
-          <div class="pm-actions">
-            <button class="pm-btn pm-btn-primary" id="pm-publish" type="button">Publish</button>
-            <span class="pm-progress" aria-hidden="true"></span>
-            <span class="pm-status" id="pm-form-status" role="status" aria-live="polite"></span>
           </div>
+
+          <footer class="ps-foot">
+            <span class="ps-note" id="ps-note"></span>
+            <span class="pm-actions ps-acts">
+              <button class="pm-btn" id="pm-cancel" type="button">Cancel</button>
+              <button class="pm-btn" id="pm-save-draft" type="button">Save draft</button>
+              <button class="pm-btn pm-btn-primary" id="pm-publish" type="button">Publish now</button>
+              <span class="pm-progress" aria-hidden="true"></span>
+              <span class="pm-status" id="pm-form-status" role="status" aria-live="polite"></span>
+            </span>
+          </footer>
+
+          {/* Draft flag — set by the footer buttons (Save draft = on, Publish now = off
+              via pointerdown), read unchanged by the publish handler. */}
+          <input id="pm-draft" type="checkbox" hidden />
         </div>
       </div>
     </div>
@@ -227,10 +270,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   @keyframes pm-fade { from { opacity: 0; } to { opacity: 1; } }
   @keyframes pm-pop { from { transform: translateY(10px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
   .pm-card {
-    position: relative; width: 100%; max-width: 30rem; background: var(--bg); color: inherit;
-    border: 1px solid var(--border); border-radius: 16px; padding: 2rem 2rem 1.75rem;
+    position: relative; width: 100%; max-width: 46rem; background: var(--bg); color: inherit;
+    border: 1px solid var(--border); border-radius: 16px; padding: 1.75rem 1.9rem 1.4rem;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35); animation: pm-pop 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+    max-height: 92vh; overflow-y: auto;
   }
+  #pm-signin { max-width: 26rem; margin: 0 auto; }
   .pm-close {
     position: absolute; top: 0.85rem; right: 1rem; border: 0; background: transparent;
     color: var(--muted); font-size: 1.7rem; line-height: 1; cursor: pointer; padding: 0;
@@ -1149,6 +1194,51 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
 
+    // --- Press-check footer + pre-flight checklist ----------------------------
+    // The publish ENGINE (#pm-publish's handler) is unchanged. #pm-draft is a hidden
+    // flag: Save-draft sets it on then runs the same handler; Publish-now clears it on
+    // pointer-down (which fires before the handler's click reads it) so the post goes
+    // live. Everything the checklist shows is real editor/post state — no mock numbers.
+    $('pm-cancel').addEventListener('click', closeModal);
+    $('pm-publish').addEventListener('pointerdown', () => { $('pm-draft').checked = false; });
+    $('pm-save-draft').addEventListener('click', () => { $('pm-draft').checked = true; $('pm-publish').click(); });
+
+    const CK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>';
+    const WK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v11"/><path d="M12 19.5v.5"/></svg>';
+    function refreshSheet() {
+      let words = 0; try { words = countWords(crepe.getMarkdown()); } catch {}
+      const read = Math.max(1, Math.round(words / 200));
+      const seriesName = $('pm-series').value.trim();
+      const order = $('pm-series-order').value.trim();
+      const bits = [];
+      if (seriesName) bits.push(escHtml(seriesName) + (order ? ' · part ' + escHtml(order) : ''));
+      bits.push(words.toLocaleString() + ' words'); bits.push(read + ' min read');
+      $('ps-sub').innerHTML = bits.join(' · ');
+      const acc = $('ps-access');
+      if (acc) acc.textContent = (editing && editing.paid) ? 'Paid — manage on Posts' : 'Free — set a paywall on Posts';
+
+      const title = $('pm-post-title').value.trim();
+      const desc = $('pm-post-desc').value.trim();
+      const slug = ($('pm-slug').textContent || '').trim();
+      let target = 0; try { target = parseInt(localStorage.getItem('aysr:target:' + docKey) || '', 10) || 0; } catch {}
+      let notes = 0; try { notes = (JSON.parse(localStorage.getItem('aysr:notes:' + docKey) || '[]') || []).length; } catch {}
+      const items: any[] = [];
+      if (!title) items.push({ warn: true, html: '<b>No title yet</b> — the post needs one' });
+      if (target && words < target) items.push({ warn: true, html: `<b>${(target - words).toLocaleString()} words short</b> of the ${target.toLocaleString()} you set for this`, a: 'Keep writing' });
+      if (notes > 0) items.push({ warn: true, html: `<b>${notes} note${notes === 1 ? '' : 's'} to self</b> — private, never published`, a: 'Jump to it' });
+      items.push({ ok: !!desc, html: desc ? `Standfirst written · ${desc.length} characters` : 'No standfirst yet — add one on the left' });
+      items.push({ ok: pubTags.length > 0, html: pubTags.length ? `${pubTags.length} tag${pubTags.length === 1 ? '' : 's'}` : 'No tags yet' });
+      items.push({ ok: !!slug, html: slug ? `Address set · <span class="mono">/${escHtml(slug)}</span>` : 'No address yet' });
+      if (seriesName) items.push({ ok: !!order, html: order ? `In “${escHtml(seriesName)}” · part ${escHtml(order)}` : `In “${escHtml(seriesName)}” — set a part number` });
+      $('ps-checklist').innerHTML = items.map((it) => `<li class="${it.warn ? 'warn' : ''}">${it.warn ? WK : CK}<span>${it.html}</span>${it.a ? `<a href="#" data-jump>${it.a}</a>` : ''}</li>`).join('');
+      const warns = items.filter((it) => it.warn).length;
+      $('ps-note').innerHTML = warns ? `<b>${warns} thing${warns === 1 ? '' : 's'} worth a look.</b> Your call — nothing here stops you.` : 'Everything checks out.';
+    }
+    // The warning links just drop back to the editor.
+    $('ps-checklist').addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('[data-jump]')) { e.preventDefault(); closeModal(); } });
+    ['pm-post-title', 'pm-post-desc', 'pm-series', 'pm-series-order'].forEach((id) => { const el = $(id); if (el) el.addEventListener('input', refreshSheet); });
+    $('pm-slug').addEventListener('input', refreshSheet);
+
     // Decide which of the two modal views to show. INVARIANT: exactly one of
     // #pm-signin / #pm-form is visible at all times — the card must NEVER render
     // empty (both hidden). Every failure mode below falls back to the sign-in
@@ -1173,7 +1263,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       }
       $('pm-signin').hidden = signedIn;
       $('pm-form').hidden = !signedIn;
-      if (signedIn) { try { prefillForm(); updateEmailToggle(); } catch (err) { console.error('[publish] prefill failed', err); } }
+      if (signedIn) { try { prefillForm(); updateEmailToggle(); refreshSheet(); } catch (err) { console.error('[publish] prefill failed', err); } }
     }
     function prefillForm() {
       if (editing) {
@@ -1277,6 +1367,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         chip.appendChild(x);
         $('pm-tags').insertBefore(chip, tagInput);
       });
+      try { refreshSheet(); } catch {}
     }
     tagInput.addEventListener('keydown', (e) => {
       if ((e.key === 'Enter' || e.key === ',') && tagInput.value.trim()) {
