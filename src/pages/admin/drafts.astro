@@ -178,33 +178,44 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   // draft". Surface it here so in-progress writing shows up where you'd look for it.
   const STARTER = '# New post\n\nStart writing.\n';
   const firstHeading = (md: string) => { const m = String(md || '').match(/^#\s+(.+)$/m); return m ? m[1].trim() : ''; };
+  const draftWords = (c: string) => (String(c || '').replace(/```[\s\S]*?```/g, ' ').replace(/[#*_>`\[\]()!-]+/g, ' ').match(/\S+/g) || []).length;
   async function loadScratch() {
-    let content = '';
-    try { content = localStorage.getItem('aysr:editor-draft') || ''; } catch {}
+    const host = document.getElementById('scratch');
+    if (!host) return;
+    let rows: any[] = [];
     try {
       const { data: s } = await supabase.auth.getSession();
       const uid = s?.session?.user?.id;
       if (uid) {
-        const { data: row } = await supabase.from('drafts').select('content, updated_at').eq('user_id', uid).maybeSingle();
-        if (row && typeof (row as any).content === 'string' && (row as any).content.trim()) content = (row as any).content;
+        const { data } = await supabase.from('drafts').select('id, content, title, updated_at').eq('user_id', uid).order('updated_at', { ascending: false });
+        rows = (data || []).filter((r: any) => { const c = String(r.content || '').trim(); return c && c !== STARTER.trim(); });
       }
     } catch {}
-    const host = document.getElementById('scratch');
-    if (!host) return;
-    const trimmed = content.trim();
-    if (!trimmed || trimmed === STARTER.trim()) { host.innerHTML = ''; return; }
-    const title = firstHeading(content) || 'Untitled draft';
-    const words = (content.replace(/```[\s\S]*?```/g, ' ').replace(/[#*_>`\[\]()!-]+/g, ' ').match(/\S+/g) || []).length;
-    host.innerHTML = `<div style="margin-bottom:22px">
-      <div class="dhead"><span>In the editor</span><em>autosaved · not saved as a post yet</em></div>
-      <div class="dgrid"><article class="dcard">
+    if (!rows.length) { host.innerHTML = ''; return; }
+    const cards = rows.map((r: any) => {
+      const title = (r.title && r.title !== 'Untitled draft' ? r.title : firstHeading(r.content)) || 'Untitled draft';
+      const words = draftWords(r.content);
+      return `<article class="dcard" data-draft="${esc(r.id)}">
         <h3>${esc(title)}</h3>
-        <div class="ser">Continuously autosaved. Publish it — or Publish with “Save as a draft” — to keep it as a post.</div>
+        <div class="ser">Autosaved to your account · not yet saved as a post</div>
         <div class="dprog"><span>${words.toLocaleString()} words</span><span class="bar"><i style="width:${words ? 35 : 4}%"></i></span><span>in progress</span></div>
-        <div class="dfoot"><span>Open in the editor</span><a class="go" href="/admin/write">Continue →</a></div>
-      </article></div>
-    </div>`;
+        <div class="dfoot"><span>Edited ${esc(fmtDate(r.updated_at))}</span><a class="go" href="/admin/write?draft=${encodeURIComponent(r.id)}">Continue →</a></div>
+        <div class="row-actions" style="margin-top:2px"><button class="btn btn-sm btn-ghost" data-del-draft="${esc(r.id)}">Discard</button></div>
+      </article>`;
+    }).join('');
+    host.innerHTML = `<div style="margin-bottom:22px"><div class="dhead"><span>In the editor</span><em>${rows.length} unsaved — publish or “save as a draft” to keep as a post</em></div><div class="dgrid">${cards}</div></div>`;
   }
+  // Discard an in-editor draft (its own row). Two-click confirm on the button itself.
+  let armedScratch: string | null = null;
+  document.getElementById('scratch')!.addEventListener('click', async (e) => {
+    const b = (e.target as HTMLElement).closest('[data-del-draft]') as HTMLElement | null;
+    if (!b) return;
+    const id = b.dataset.delDraft!;
+    if (armedScratch !== id) { armedScratch = id; b.textContent = 'Discard for good?'; (b as HTMLButtonElement).classList.add('btn-danger'); setTimeout(() => { if (armedScratch === id) { armedScratch = null; b.textContent = 'Discard'; b.classList.remove('btn-danger'); } }, 3500); return; }
+    try { await supabase.from('drafts').delete().eq('id', id); } catch {}
+    try { localStorage.removeItem('aysr:editor-draft:' + id); } catch {}
+    armedScratch = null; loadScratch();
+  });
 
   onAdminReady(() => { load(); loadScratch(); });
   renderSeeds();

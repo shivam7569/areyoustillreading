@@ -840,8 +840,15 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
     // New post → restore the local autosaved draft. Editing an existing post
     // (/admin/write?slug=<slug>) → load its Markdown from the content collection.
-    const editSlug = new URLSearchParams(location.search).get('slug');
-    const DRAFT_KEY = 'aysr:editor-draft';
+    const params = new URLSearchParams(location.search);
+    const editSlug = params.get('slug');
+    const DRAFT_KEY = 'aysr:editor-draft';                          // legacy single-slot key (fallback)
+    const draftKeyFor = (id: string) => 'aysr:editor-draft:' + id; // per-draft local cache
+    const wantNew = params.has('new');
+    // The draft slot this session works on: a specific ?draft=<id>, or (below) the
+    // most-recent draft, or a freshly-minted id for a brand-new post. Each new post is
+    // its own row keyed by this id, so starting a new one never overwrites the last.
+    let currentDraftId = params.get('draft') || '';
     // Durable drafts: the signed-in admin's id, used to read/write their single
     // draft row in Supabase (RLS-scoped) so a draft survives a browser clear or a
     // switch of device. Best-effort — null if the session isn't ready.
@@ -901,19 +908,29 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         editLoadFailed = true;
         statusEl.textContent = 'Couldn’t load that post — refresh to retry.';
       }
-    } else {
+    } else if (!wantNew) {
+      // Reopen a draft: the requested ?draft=<id>, else the most-recent one. Prefer the
+      // durable DB copy (this device may have been cleared, or it was written elsewhere);
+      // fall back to the per-device local cache. If none exists we fall through to a fresh
+      // blank doc (and a new id is minted below).
       let savedDraft = null;
-      try { savedDraft = localStorage.getItem(DRAFT_KEY); } catch {}
-      // Prefer the durable server draft when present (this device may have been
-      // cleared, or the draft was written on another device). Best-effort.
       try {
         if (draftUid) {
-          const { data: row } = await supabase.from('drafts').select('content').eq('user_id', draftUid).maybeSingle();
-          if (row && typeof row.content === 'string' && row.content.trim()) savedDraft = row.content;
+          let q = supabase.from('drafts').select('id, content').eq('user_id', draftUid);
+          q = currentDraftId
+            ? q.eq('id', currentDraftId).maybeSingle()
+            : q.order('updated_at', { ascending: false }).limit(1).maybeSingle();
+          const { data: row } = await q;
+          if (row && typeof (row as any).content === 'string') { savedDraft = (row as any).content; currentDraftId = (row as any).id; }
         }
       } catch {}
-      if (savedDraft != null) { startDoc = savedDraft; restoredMsg = 'Draft restored'; }
+      if (savedDraft == null) {
+        try { savedDraft = localStorage.getItem(currentDraftId ? draftKeyFor(currentDraftId) : DRAFT_KEY); } catch {}
+      }
+      if (savedDraft != null && savedDraft.trim()) { startDoc = savedDraft; restoredMsg = 'Draft restored'; }
     }
+    // A brand-new post (or one we couldn't match to an existing row) gets its own id.
+    if (!editSlug && !currentDraftId) { try { currentDraftId = crypto.randomUUID(); } catch { currentDraftId = 'd' + Date.now() + Math.random().toString(36).slice(2, 8); } }
 
     const crepe = new Crepe({
       root: document.getElementById('milkdown'),
@@ -970,10 +987,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         statusEl.textContent = 'Saving…';
         clearTimeout(saveTimer);
         saveTimer = setTimeout(async () => {
-          try { localStorage.setItem(DRAFT_KEY, md); } catch {}
-          // Durable copy — upsert the user's single draft row (RLS-scoped). Best-effort.
+          try { if (currentDraftId) localStorage.setItem(draftKeyFor(currentDraftId), md); } catch {}
+          // Durable copy — upsert THIS draft's own row (keyed by id, RLS-scoped) with a
+          // title for the Drafts list. Best-effort; a failure keeps the local copy.
           try {
-            if (draftUid) await supabase.from('drafts').upsert({ user_id: draftUid, content: md, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+            const dTitle = ((md.match(/^#\s+(.+)$/m) || [])[1] || '').trim().slice(0, 140) || 'Untitled draft';
+            if (draftUid && currentDraftId) await supabase.from('drafts').upsert({ id: currentDraftId, user_id: draftUid, content: md, title: dTitle, updated_at: new Date().toISOString() }, { onConflict: 'id' });
             statusEl.textContent = 'Saved';
           } catch { statusEl.textContent = 'Saved locally'; }
         }, 800);
@@ -1172,23 +1191,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     if (typeof requestIdleCallback === 'function') requestIdleCallback(warmUp, { timeout: 4000 });
     else setTimeout(warmUp, 1500);
 
-    // "New" clears the saved draft and starts a fresh post (two-click confirm so an
-    // accidental click can't nuke your work).
-    let armNew = false;
+    // "New" starts a fresh post in its OWN draft slot. It is non-destructive now:
+    // the current draft is already saved as its own row, so nothing is lost — ?new
+    // mints a brand-new id on load. No confirm needed (it can't nuke your work).
     const newBtn = document.getElementById('new-draft');
-    newBtn.addEventListener('click', () => {
-      if (!armNew) {
-        armNew = true;
-        newBtn.textContent = 'Confirm New?';
-        setTimeout(() => { armNew = false; newBtn.textContent = 'New'; }, 3000);
-        return;
-      }
-      try { localStorage.removeItem(DRAFT_KEY); } catch {}
-      try { if (draftUid) supabase.from('drafts').delete().eq('user_id', draftUid).then(() => {}, () => {}); } catch {}
-      // Start a genuinely fresh post: drop any ?slug= so we don't reload the edited post.
-      if (editing) location.href = '/admin/write';
-      else location.reload();
-    });
+    newBtn.addEventListener('click', () => { location.href = '/admin/write?new=1'; });
 
     // "Preview Markdown" shows the serialized Markdown (temporary debug view — this
     // is what Publish will commit to GitHub in the next increment).
@@ -1606,11 +1613,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
               supabase.from('post_paywall').upsert({ post_id: slug, is_paid: false, updated_at: new Date().toISOString() }, { onConflict: 'post_id' }).then(() => {}, () => {});
             }
           } catch {}
-          // Published — clear the new-post draft (local + durable) so it can't resurrect
-          // next time the editor opens. Only for a genuinely new post, not an edit.
+          // Published — remove THIS draft's row (it became a post) so it can't resurrect
+          // next time the editor opens. Only for a genuinely new post, not an edit; the
+          // author's OTHER drafts are untouched (each is its own row).
           if (!editing) {
-            try { localStorage.removeItem(DRAFT_KEY); } catch {}
-            try { if (draftUid) supabase.from('drafts').delete().eq('user_id', draftUid).then(() => {}, () => {}); } catch {}
+            try { if (currentDraftId) localStorage.removeItem(draftKeyFor(currentDraftId)); localStorage.removeItem(DRAFT_KEY); } catch {}
+            try { if (draftUid && currentDraftId) supabase.from('drafts').delete().eq('id', currentDraftId).then(() => {}, () => {}); } catch {}
           }
           // Optionally announce the post to confirmed subscribers — only for a real
           // publish (never a draft) and only if the author opted in. AWAITED (not
