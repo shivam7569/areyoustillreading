@@ -178,20 +178,32 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
                 <div class="rr"><span class="k">Title</span><span class="v"><input id="pm-post-title" class="recin" placeholder="Your title" /></span></div>
                 <div class="rr"><span class="k">Standfirst</span><span class="v"><textarea id="pm-post-desc" class="recin" rows="2" placeholder="One sentence that makes people want to read."></textarea></span></div>
                 <div class="rr"><span class="k">Tags</span><span class="v"><div class="pm-tags chips" id="pm-tags"><input id="pm-tag-input" class="recin" placeholder="Add a tag…" style="width:auto;flex:1;min-width:80px" /></div></span></div>
-                <div class="rr"><span class="k">Series</span><span class="v"><span style="display:flex;gap:8px;align-items:center"><input id="pm-series" class="recin" placeholder="No series" style="flex:1" /><input id="pm-series-order" class="recin" type="number" min="1" placeholder="Part" style="width:52px;text-align:right" aria-label="Part number" /><span class="ed" id="pm-series-more" role="button" tabindex="0">Specs</span></span></span></div>
+                <div class="rr"><span class="k">Series</span><span class="v">
+                  <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    <select id="pm-series-pick" class="sel" style="flex:1;min-width:130px" aria-label="Series">
+                      <option value="">No series</option>
+                      <option value="__new__">＋ New series…</option>
+                    </select>
+                    <input id="pm-series-order" class="recin" type="number" min="1" placeholder="Part" style="width:50px;text-align:right" aria-label="Part number" />
+                    <button type="button" class="specsbtn off" id="pm-series-more" aria-expanded="false" title="Series details for the plate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+                  </span>
+                  <input id="pm-series" class="recin" placeholder="Name your new series" style="display:none;margin-top:7px" />
+                </span></div>
                 <div class="rr"><span class="k">Address</span><span class="v slug"><i>areyoustillreading.dev/blog/</i><span id="pm-slug" class="pm-slug" contenteditable="true" spellcheck="false"></span></span></div>
               </div>
               <div class="sub-x off" id="seriesknobs">
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                  <input id="pm-series-total" class="pin" type="number" min="1" placeholder="of N" aria-label="Planned total parts" title="Total planned parts — drives “3 of 5” + the Complete badge" />
-                  <select id="pm-series-status" class="sel" aria-label="Series status" style="width:auto;flex:1;min-width:130px">
-                    <option value="">Status — auto</option>
-                    <option value="in-progress">In progress</option>
-                    <option value="complete">Complete</option>
-                    <option value="paused">Paused</option>
-                  </select>
+                <div class="knob-h">On the series plate</div>
+                <div class="fr"><span>Parts planned</span><span class="v"><input id="pm-series-total" class="pin" type="number" min="1" placeholder="—" aria-label="Planned total parts" title="Total planned parts — drives “3 of 5” + the Complete badge" /></span></div>
+                <div class="fr"><span>Status</span><span class="v"><select id="pm-series-status" class="sel" aria-label="Series status" style="width:auto;min-width:132px">
+                  <option value="">Auto</option>
+                  <option value="in-progress">In progress</option>
+                  <option value="complete">Complete</option>
+                  <option value="paused">Paused</option>
+                </select></span></div>
+                <div style="margin-top:11px">
+                  <div class="knob-l">Parts still to come</div>
+                  <textarea id="pm-series-planned" rows="2" placeholder="One title per line — shown greyed on the series page"></textarea>
                 </div>
-                <textarea id="pm-series-planned" rows="2" placeholder="Planned part titles — one per line" style="width:100%;margin-top:7px;background:var(--paper-2);border:1px solid var(--rule);border-radius:3px;color:var(--ink);font:inherit;font-size:12px;padding:6px 9px;resize:vertical"></textarea>
               </div>
             </div>
           </div>
@@ -1246,9 +1258,45 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       cb.checked = !cb.checked; syncMailTog();
     });
 
-    // Series specs (total / status / planned) live in a sub-panel — the "Specs"
-    // affordance toggles it (also auto-revealed when the post is in a series).
-    $('pm-series-more').addEventListener('click', () => $('seriesknobs').classList.toggle('off'));
+    // --- Series: a dropdown of the site's existing series (+ "New series…"), a chevron
+    // that expands the plate specs, and the name input revealed only when creating one.
+    // #pm-series stays the value the publish handler reads — the dropdown just drives it.
+    const seriesPick = $('pm-series-pick') as HTMLSelectElement;
+    const seriesInput = $('pm-series') as HTMLInputElement;
+    const specsBtn = $('pm-series-more');
+    function syncSeriesUI() {
+      const has = !!seriesInput.value.trim();
+      specsBtn.classList.toggle('off', !has);
+      if (!has) { $('seriesknobs').classList.add('off'); specsBtn.setAttribute('aria-expanded', 'false'); }
+    }
+    function loadSeriesOptions() {
+      supabase.auth.getSession().then(({ data }) => {
+        const token = data.session && data.session.access_token;
+        if (!token) return;
+        fetch('/api/admin/posts', { headers: { Authorization: 'Bearer ' + token } })
+          .then((r) => r.json()).then((d) => {
+            const names = [...new Set((d.posts || []).map((p: any) => String(p.seriesTitle || p.series || '').trim()).filter(Boolean))].sort() as string[];
+            const cur = seriesInput.value.trim();
+            if (cur && !names.includes(cur)) names.unshift(cur); // editing a not-yet-listed series
+            seriesPick.innerHTML = ['<option value="">No series</option>']
+              .concat(names.map((n) => `<option value="${escHtml(n)}"${n === cur ? ' selected' : ''}>${escHtml(n)}</option>`))
+              .concat(['<option value="__new__">＋ New series…</option>']).join('');
+            seriesInput.style.display = 'none';
+            syncSeriesUI();
+          }).catch(() => {});
+      }).catch(() => {});
+    }
+    seriesPick.addEventListener('change', () => {
+      const v = seriesPick.value;
+      if (v === '__new__') { seriesInput.value = ''; seriesInput.style.display = ''; seriesInput.focus(); }
+      else { seriesInput.value = v; seriesInput.style.display = 'none'; }
+      syncSeriesUI(); refreshSheet();
+    });
+    seriesInput.addEventListener('input', () => { syncSeriesUI(); refreshSheet(); });
+    specsBtn.addEventListener('click', () => {
+      const open = $('seriesknobs').classList.toggle('off') === false;
+      specsBtn.setAttribute('aria-expanded', String(open));
+    });
 
     const CK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>';
     const WK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v11"/><path d="M12 19.5v.5"/></svg>';
@@ -1261,7 +1309,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (seriesName) bits.push(escHtml(seriesName) + (order ? ' · part ' + escHtml(order) : ''));
       bits.push(words.toLocaleString() + ' words'); bits.push(read + ' min read');
       $('ps-sub').innerHTML = bits.join(' · ');
-      if (seriesName) $('seriesknobs').classList.remove('off');
+      try { syncSeriesUI(); } catch {}
 
       const title = $('pm-post-title').value.trim();
       const desc = $('pm-post-desc').value.trim();
@@ -1310,7 +1358,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       }
       $('pm-signin').hidden = signedIn;
       $('pm-form').hidden = !signedIn;
-      if (signedIn) { try { prefillForm(); updateEmailToggle(); refreshSheet(); } catch (err) { console.error('[publish] prefill failed', err); } }
+      if (signedIn) { try { prefillForm(); updateEmailToggle(); refreshSheet(); loadSeriesOptions(); } catch (err) { console.error('[publish] prefill failed', err); } }
     }
     function prefillForm() {
       if (editing) {

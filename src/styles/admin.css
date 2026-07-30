@@ -578,7 +578,7 @@ table.t th.num { text-align: right; }
 .chk a { margin-left: auto; color: var(--accent); font-size: 11.5px; white-space: nowrap; flex: none; cursor: pointer; }
 .chk a:hover { text-decoration: underline; }
 .rec { border-top: 1px solid var(--rule-soft); }
-.rr { display: flex; align-items: baseline; gap: 13px; padding: 10px 0; border-bottom: 1px solid var(--rule-soft); }
+.rr { display: flex; align-items: flex-start; gap: 13px; padding: 10px 0; border-bottom: 1px solid var(--rule-soft); }
 .rr .k { flex: none; width: 74px; font-size: 10px; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); padding-top: 4px; }
 .rr .v { flex: 1; min-width: 0; font-size: 13px; color: var(--ink); line-height: 1.5; }
 .rr .v em { font-style: italic; color: var(--ink-faint); }
@@ -595,6 +595,20 @@ table.t th.num { text-align: right; }
 .shnote { font-size: 12px; color: var(--ink-faint); line-height: 1.45; }
 .shnote b { color: var(--ink); font-weight: 600; }
 .shacts { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+/* Series details toggle (chevron) + its panel — aligned to the sheet's own style. */
+.specsbtn { flex: none; width: 26px; height: 26px; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); color: var(--ink-faint); display: grid; place-items: center; cursor: pointer; padding: 0; transition: color .15s, border-color .15s; }
+.specsbtn:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--rule)); }
+.specsbtn svg { width: 13px; height: 13px; transition: transform .18s ease; }
+.specsbtn[aria-expanded="true"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--rule)); }
+.specsbtn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.specsbtn.off { display: none; }
+#seriesknobs .knob-h { font-size: 10px; letter-spacing: .15em; text-transform: uppercase; color: var(--accent); margin-bottom: 9px; font-weight: 600; }
+#seriesknobs .knob-l { font-size: 11px; color: var(--ink-faint); margin-bottom: 6px; }
+#seriesknobs .fr { padding: 5px 0; }
+#seriesknobs .pin { width: 72px; background: var(--paper); border: 1px solid var(--rule); border-radius: 3px; color: var(--ink); font: inherit; font-size: 12.5px; padding: 5px 8px; text-align: right; }
+#seriesknobs .sel { background: var(--paper); }
+#seriesknobs textarea { width: 100%; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 3px; color: var(--ink); font: inherit; font-size: 12.5px; line-height: 1.5; padding: 7px 9px; resize: vertical; }
+#seriesknobs textarea:focus, #seriesknobs .pin:focus, #seriesknobs .sel:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
 @media (max-width: 860px) { .shbody { grid-template-columns: 1fr; } .shcol + .shcol { border-left: 0; border-top: 1px solid var(--rule); } }
 
 /* Engagement — reader interaction (comments / highlights / notes) moderation rows.
