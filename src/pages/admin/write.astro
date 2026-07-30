@@ -1310,7 +1310,20 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       try { here = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch {}
       if (!zones.length) zones = ['UTC', 'America/Los_Angeles', 'America/New_York', 'America/Sao_Paulo', 'Europe/London', 'Europe/Berlin', 'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney'];
       if (!zones.includes(here)) zones.unshift(here);
-      schedTz.innerHTML = zones.map((z) => `<option value="${z}"${z === here ? ' selected' : ''}>${z.replace(/_/g, ' ')}</option>`).join('');
+      // Show each zone's CURRENT UTC offset ("UTC+05:30") and order by it — most people
+      // recall the time difference, not the zone name.
+      const now = new Date();
+      const offMin = (tz: string) => {
+        try {
+          const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(now);
+          const m: any = {}; for (const x of p) m[x.type] = x.value;
+          const asUTC = Date.UTC(+m.year, +m.month - 1, +m.day, (+m.hour) % 24, +m.minute, +m.second);
+          return Math.round((asUTC - now.getTime()) / 60000);
+        } catch { return 0; }
+      };
+      const fmtOff = (min: number) => `UTC${min < 0 ? '−' : '+'}${String(Math.floor(Math.abs(min) / 60)).padStart(2, '0')}:${String(Math.abs(min) % 60).padStart(2, '0')}`;
+      const list = zones.map((z) => ({ z, off: offMin(z) })).sort((a, b) => a.off - b.off || a.z.localeCompare(b.z));
+      schedTz.innerHTML = list.map(({ z, off }) => `<option value="${z}"${z === here ? ' selected' : ''}>(${fmtOff(off)}) ${z.replace(/_/g, ' ')}</option>`).join('');
     })();
     const setPrimaryLabel = () => { $('pm-publish').textContent = whenChoice === 'later' ? 'Schedule' : (editing ? 'Update' : 'Publish now'); };
     whenpick.addEventListener('click', (e) => {

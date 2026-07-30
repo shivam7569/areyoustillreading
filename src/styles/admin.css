@@ -569,10 +569,13 @@ table.t th.num { text-align: right; }
 .mailrow .tog { margin-left: auto; }
 .subj { margin-top: 8px; }
 .subj input { width: 100%; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 3px; color: var(--ink); font-family: var(--serif-display); font-size: 14px; padding: 8px 11px; }
-/* Schedule picker (When → Schedule it): themed date/time inputs + a real time-zone select. */
-.sched { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
-.sched input, .sched select { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--admin-radius-sm); color: var(--ink); font: inherit; font-size: 13px; padding: 8px 10px; line-height: 1.2; }
-.sched select { max-width: 220px; cursor: pointer; }
+/* Schedule picker (When → Schedule it): clean, unified date / time / zone fields. */
+.sched { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.sched input, .sched select { background: var(--paper-2); border: 1px solid var(--rule); border-radius: var(--admin-radius); color: var(--ink); font: inherit; font-size: 13.5px; height: 40px; padding: 0 12px; box-sizing: border-box; transition: border-color .15s ease; }
+.sched input[type="date"] { min-width: 158px; }
+.sched input[type="time"] { min-width: 116px; }
+.sched select { min-width: 210px; max-width: 300px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.sched input:hover, .sched select:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--rule)); }
 .sched input:focus, .sched select:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
 /* Native date/time pickers draw their calendar/clock icon + popup via `color-scheme`,
    so match it to the Studio theme — otherwise the chrome is dark-on-dark (invisible). */
