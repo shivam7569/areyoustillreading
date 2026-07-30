@@ -8,9 +8,12 @@
  * that pinch to a waist, with a bold SPINE threading the parts, each part sitting at
  * a height set by its reading time. Nothing is uploaded; the SVG is generated here.
  *
- * DATA-MODEL NOTE: the design mocks a richer model (known total "3 of 5", a status,
- * planned/upcoming parts). Our model has only the PUBLISHED parts of a series, so we
- * draw every node solid and label by real counts/dates — no invented totals/status.
+ * DATA-MODEL NOTE: the richer model the design mocks (known total "3 of 5", a status,
+ * planned/upcoming parts) is now AUTHOR-DECLARED via optional frontmatter
+ * (seriesTotal / seriesStatus / seriesPlanned, set from the editor's publish modal).
+ * When those are absent we fall back to the published parts only: real counts/dates,
+ * solid nodes, and the soft default status 'in-progress' — we never invent a total or
+ * assert 'complete'. Declared future parts add the dashed tail + hollow "to-come" nodes.
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
@@ -105,7 +108,10 @@ const seriesList = [...bySeries.entries()]
     const planned = (firstOf<string[]>(members, 'seriesPlanned') || []).filter((t) => t && t.trim());
     const declaredTotal = firstOf<number>(members, 'seriesTotal');
     const total = Math.max(parts.length, declaredTotal || parts.length, parts.length + planned.length);
-    const status = firstOf<string>(members, 'seriesStatus') || (total > parts.length ? 'in-progress' : 'complete');
+    // Status is author-declared (editor field). When unset, default to the SOFT,
+    // safe claim 'in-progress' — never fabricate 'complete', which would assert a
+    // finality the author never stated (and is often wrong for a living series).
+    const status = firstOf<string>(members, 'seriesStatus') || 'in-progress';
     return {
       slug, title, parts, planned, total, status,
       description: members[0].data.description,
