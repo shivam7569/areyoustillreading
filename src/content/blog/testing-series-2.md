@@ -7,6 +7,7 @@ series: "new-series"
 seriesTitle: "New Series"
 seriesOrder: 1
 draft: false
+gateable: true
 ---
 Start writing. What?
 
