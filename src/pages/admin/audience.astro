@@ -1,59 +1,65 @@
 ---
 /**
- * /admin/audience — the email audience.
- * Status counts (confirmed / pending / unsubscribed) + a searchable, filterable
- * list. Read-only in v1. Data from the admin-gated GET /api/admin/subscribers,
- * which never exposes the confirm/unsubscribe tokens.
+ * /admin/audience — the email audience (Studio design).
+ * Real data only: status counts + a signups-by-month growth chart computed from
+ * the subscribers' own confirm timestamps, the digest sender (kept), and the
+ * searchable/filterable list. The design's "subscriber source" and "per-series
+ * subscriptions" panels are intentionally NOT shown — we don't track either
+ * (one newsletter, no per-subscriber source), and we never fabricate data.
+ * Data from the admin-gated GET /api/admin/subscribers (never exposes tokens).
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
 
 <AdminLayout title="Audience — Studio" heading="Audience" active="audience">
-  <section>
-    <div class="page-head">
-      <div>
-        <h1>Audience</h1>
-        <p class="sub">The people who asked to hear from you.</p>
-      </div>
+  <section class="stack">
+    <div class="tiles">
+      <div class="tile"><div class="l">Confirmed</div><div class="v loading" id="a-confirmed">—</div><div class="d">opted in &amp; verified</div></div>
+      <div class="tile"><div class="l">Pending</div><div class="v loading" id="a-pending">—</div><div class="d">awaiting confirmation</div></div>
+      <div class="tile"><div class="l">Unsubscribed</div><div class="v loading" id="a-unsub">—</div><div class="d">opted out</div></div>
+      <div class="tile"><div class="l">Total</div><div class="v loading" id="a-total">—</div><div class="d">all-time signups</div></div>
     </div>
 
-    <div class="kpi-grid">
-      <div class="kpi card"><p class="kpi-label">Confirmed</p><div class="kpi-value loading" id="a-confirmed">—</div><div class="kpi-foot">opted in &amp; verified</div></div>
-      <div class="kpi card"><p class="kpi-label">Pending</p><div class="kpi-value loading" id="a-pending">—</div><div class="kpi-foot">awaiting confirmation</div></div>
-      <div class="kpi card"><p class="kpi-label">Unsubscribed</p><div class="kpi-value loading" id="a-unsub">—</div><div class="kpi-foot">opted out</div></div>
-      <div class="kpi card"><p class="kpi-label">Total</p><div class="kpi-value loading" id="a-total">—</div><div class="kpi-foot">all-time signups</div></div>
+    <div class="panel">
+      <header><h2>Growth</h2><span class="hint">Confirmed signups by month</span></header>
+      <div class="pb"><div id="growth"><div class="muted">Loading…</div></div></div>
     </div>
 
-    <div class="card card-pad" style="margin-bottom:1.25rem">
-      <strong>Send a digest</strong>
-      <p class="muted" style="margin:0.25rem 0 0.8rem;font-size:0.92rem">Email a roundup of your recent posts to all confirmed subscribers. Each email includes a one-click unsubscribe.</p>
-      <div style="display:flex;flex-direction:column;gap:0.6rem;max-width:520px">
-        <textarea class="input" id="digest-intro" rows="2" placeholder="Optional intro line — e.g. “A few things I wrote this month…”"></textarea>
-        <div style="display:flex;gap:0.7rem;align-items:center;flex-wrap:wrap">
-          <label class="muted" style="font-size:0.9rem">Include latest
-            <select class="select" id="digest-count"><option>3</option><option selected>5</option><option>8</option></select>
-            posts
-          </label>
-          <button class="btn btn-primary btn-sm" id="digest-send" type="button">Send digest</button>
-          <span class="muted" id="digest-status" style="font-size:0.85rem"></span>
+    <div class="cols two">
+      <div class="panel">
+        <header><h2>The letter</h2><span class="hint">A roundup to every confirmed subscriber</span></header>
+        <div class="pb">
+          <textarea class="inp" id="digest-intro" rows="2" placeholder="Optional intro line — e.g. “A few things I wrote this month…”" style="resize:vertical"></textarea>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:11px">
+            <label style="font-size:12.5px;color:var(--ink-faint)">Include latest
+              <select class="sel" id="digest-count" style="width:auto;display:inline-block;margin:0 4px"><option>3</option><option selected>5</option><option>8</option></select>
+              posts
+            </label>
+            <button class="btn btn-primary btn-sm" id="digest-send" type="button">Send digest</button>
+            <span class="muted" id="digest-status" style="font-size:12px"></span>
+          </div>
+          <p style="font-size:12px;color:var(--ink-faint);margin:11px 0 0">Every email carries a one-click unsubscribe.</p>
         </div>
       </div>
+      <div class="panel">
+        <header><h2>Recent signups</h2><span class="hint">Newest first</span></header>
+        <div class="pb flush" id="recent-signups"><div class="card-pad muted">Loading…</div></div>
+      </div>
     </div>
 
-    <div class="toolbar">
-      <input class="input search" id="q" type="search" placeholder="Search email…" autocomplete="off" />
-      <select class="select" id="filter">
-        <option value="confirmed">Confirmed</option>
-        <option value="pending">Pending</option>
-        <option value="unsubscribed">Unsubscribed</option>
-        <option value="">Everyone</option>
-      </select>
-      <span class="grow"></span>
-      <button class="btn btn-sm btn-ghost" id="refresh" type="button">↻ Refresh</button>
-    </div>
-
-    <div id="subs-host">
-      <div class="table-wrap"><div class="card-pad muted">Loading…</div></div>
+    <div class="panel">
+      <header><h2>All subscribers</h2>
+        <span class="hint" style="display:flex;gap:8px;align-items:center">
+          <span class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Search email" aria-label="Search email" autocomplete="off" style="width:170px" /></span>
+          <select class="sel" id="filter" style="width:auto">
+            <option value="confirmed">Confirmed</option>
+            <option value="pending">Pending</option>
+            <option value="unsubscribed">Unsubscribed</option>
+            <option value="">Everyone</option>
+          </select>
+        </span>
+      </header>
+      <div class="pb flush" id="subs-host"><div class="card-pad muted">Loading…</div></div>
     </div>
   </section>
 </AdminLayout>
@@ -62,35 +68,72 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   import { whenAdmin, adminFetch } from '../../lib/admin-gate';
   import { fmtNum, fmtDate, esc } from '../../lib/admin-format';
 
-  const host = document.getElementById('subs-host')!;
-  const qEl = document.getElementById('q') as HTMLInputElement;
-  const filterEl = document.getElementById('filter') as HTMLSelectElement;
+  const $ = (id: string) => document.getElementById(id)!;
+  const host = $('subs-host');
+  const qEl = $('q') as HTMLInputElement;
+  const filterEl = $('filter') as HTMLSelectElement;
   let searchTimer: number | undefined;
 
   function setKpi(id: string, n: number) {
     const el = document.getElementById(id);
     if (el) { el.textContent = fmtNum(n); el.classList.remove('loading'); }
   }
-
-  const statusBadge = (s: string) =>
-    s === 'confirmed' ? '<span class="badge confirmed">Confirmed</span>'
-    : s === 'pending' ? '<span class="badge pending">Pending</span>'
-    : '<span class="badge unsub">Unsubscribed</span>';
+  const statusPill = (s: string) =>
+    s === 'confirmed' ? '<span class="pill live">Confirmed</span>'
+    : s === 'pending' ? '<span class="pill sched">Pending</span>'
+    : '<span class="pill">Unsubscribed</span>';
 
   function renderRows(rows: any[]) {
-    if (!rows.length) {
-      host.innerHTML = '<div class="card"><div class="empty"><span class="emoji">📭</span><h3>No subscribers here</h3><p>Nobody matches this view yet.</p></div></div>';
-      return;
+    host.innerHTML = rows.length
+      ? '<table class="t"><thead><tr><th>Email</th><th>Status</th><th class="num">Joined</th><th class="num">Confirmed</th></tr></thead><tbody>'
+        + rows.map((s) => `<tr>
+            <td class="mono">${esc(s.email)}</td>
+            <td>${statusPill(s.status)}</td>
+            <td class="num" style="color:var(--ink-faint)">${esc(fmtDate(s.created_at))}</td>
+            <td class="num" style="color:var(--ink-faint)">${s.confirmed_at ? esc(fmtDate(s.confirmed_at)) : '—'}</td>
+          </tr>`).join('')
+        + '</tbody></table>'
+      : '<div class="card-pad muted">Nobody matches this view yet.</div>';
+  }
+
+  // Signups-by-month bar chart, computed from confirmed subscribers' timestamps.
+  function renderGrowth(rows: any[]) {
+    const g = $('growth');
+    const confirmed = rows.filter((s) => s.confirmed_at || s.status === 'confirmed');
+    const buckets = new Map<string, number>();
+    for (const s of confirmed) {
+      const t = s.confirmed_at || s.created_at; if (!t) continue;
+      const key = String(t).slice(0, 7); // YYYY-MM
+      buckets.set(key, (buckets.get(key) || 0) + 1);
     }
-    host.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>'
-      + '<th>Email</th><th>Status</th><th>Joined</th><th>Confirmed</th></tr></thead><tbody>'
-      + rows.map((s) => `<tr>
-          <td class="t-title mono">${esc(s.email)}</td>
-          <td>${statusBadge(s.status)}</td>
-          <td class="nowrap">${esc(fmtDate(s.created_at))}</td>
-          <td class="nowrap muted">${s.confirmed_at ? esc(fmtDate(s.confirmed_at)) : '—'}</td>
-        </tr>`).join('')
-      + '</tbody></table></div>';
+    if (!buckets.size) { g.innerHTML = '<div class="muted">No confirmed signups yet.</div>'; return; }
+    // Fill a continuous run of the last 12 months up to the newest bucket.
+    const keys = [...buckets.keys()].sort();
+    const end = keys[keys.length - 1];
+    const [ey, em] = end.split('-').map(Number);
+    const months: string[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(Date.UTC(ey, em - 1 - i, 1));
+      months.push(d.toISOString().slice(0, 7));
+    }
+    const max = Math.max(1, ...months.map((m) => buckets.get(m) || 0));
+    // Flat bars row + labels row (a nested column with align-items:flex-end would
+    // collapse each bar's percentage height — the bar needs a definite-height parent).
+    const bars = months.map((m) => {
+      const n = buckets.get(m) || 0;
+      const h = Math.max(2, Math.round((n / max) * 100));
+      return `<div title="${m}: ${n} confirmed" style="flex:1 1 0;align-self:flex-end;height:${h}%;min-height:2px;border-radius:3px 3px 0 0;background:color-mix(in srgb, var(--accent) 62%, transparent)"></div>`;
+    }).join('');
+    const labels = months.map((m) => `<span style="flex:1 1 0;text-align:center;font-size:10.5px;color:var(--ink-faint)">${new Date(m + '-01T00:00:00Z').toLocaleDateString(undefined, { month: 'short' })}</span>`).join('');
+    g.innerHTML = `<div style="display:flex;align-items:flex-end;gap:6px;height:170px">${bars}</div><div style="display:flex;gap:6px;margin-top:8px">${labels}</div>`;
+  }
+
+  function renderRecent(rows: any[]) {
+    const h = $('recent-signups');
+    const recent = rows.slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))).slice(0, 6);
+    h.innerHTML = recent.length
+      ? '<table class="t"><tbody>' + recent.map((s) => `<tr><td class="mono">${esc(s.email)}</td><td class="num">${statusPill(s.status)}</td><td class="num" style="color:var(--ink-faint)">${esc(fmtDate(s.created_at))}</td></tr>`).join('') + '</tbody></table>'
+      : '<div class="card-pad muted">No signups yet.</div>';
   }
 
   async function loadCounts() {
@@ -107,8 +150,22 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     }
   }
 
+  // One fetch of confirmed subs powers both the growth chart and recent signups.
+  async function loadConfirmed() {
+    try {
+      const r = await adminFetch('/api/admin/subscribers?status=confirmed&limit=1000');
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed');
+      renderGrowth(d.rows || []);
+      renderRecent(d.rows || []);
+    } catch {
+      $('growth').innerHTML = '<div class="muted">Couldn’t load growth.</div>';
+      $('recent-signups').innerHTML = '<div class="card-pad muted">Couldn’t load signups.</div>';
+    }
+  }
+
   async function loadRows() {
-    host.innerHTML = '<div class="table-wrap"><div class="card-pad muted">Loading…</div></div>';
+    host.innerHTML = '<div class="card-pad muted">Loading…</div>';
     const params = new URLSearchParams();
     if (filterEl.value) params.set('status', filterEl.value);
     if (qEl.value.trim()) params.set('q', qEl.value.trim());
@@ -119,30 +176,24 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (!r.ok) throw new Error(d.error || 'Failed');
       renderRows(d.rows || []);
     } catch (e: any) {
-      host.innerHTML = `<div class="card card-pad notice err">Couldn't load subscribers: ${esc(e.message || e)}</div>`;
+      host.innerHTML = `<div class="card-pad notice err">Couldn't load subscribers: ${esc(e.message || e)}</div>`;
     }
   }
 
   filterEl.addEventListener('change', loadRows);
-  qEl.addEventListener('input', () => {
-    if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(loadRows, 300);
-  });
-  document.getElementById('refresh')!.addEventListener('click', () => { loadCounts(); loadRows(); });
+  qEl.addEventListener('input', () => { if (searchTimer) clearTimeout(searchTimer); searchTimer = window.setTimeout(loadRows, 300); });
 
   // --- Send a digest of recent posts to confirmed subscribers --------------
   async function sendDigest(force = false) {
-    const st = document.getElementById('digest-status')!;
-    const btn = document.getElementById('digest-send') as HTMLButtonElement;
-    const intro = (document.getElementById('digest-intro') as HTMLTextAreaElement).value.trim();
-    const count = parseInt((document.getElementById('digest-count') as HTMLSelectElement).value, 10) || 5;
+    const st = $('digest-status');
+    const btn = $('digest-send') as HTMLButtonElement;
+    const intro = ($('digest-intro') as HTMLTextAreaElement).value.trim();
+    const count = parseInt(($('digest-count') as HTMLSelectElement).value, 10) || 5;
     if (!force && !confirm(`Email a digest of your latest ${count} posts to all confirmed subscribers?`)) return;
-    btn.disabled = true;
-    st.textContent = 'Sending…';
+    btn.disabled = true; st.textContent = 'Sending…';
     try {
       const r = await adminFetch('/api/admin/digest', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ count, intro, force }),
       });
       const d = await r.json().catch(() => ({}));
@@ -151,16 +202,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       } else if (d.recentlySent) {
         if (confirm('A digest was already sent within the last hour. Send another anyway?')) { btn.disabled = false; return sendDigest(true); }
         st.textContent = 'Cancelled.';
-      } else {
-        st.textContent = d.error || ('Failed (HTTP ' + r.status + ')');
-      }
-    } catch (e: any) {
-      st.textContent = 'Error: ' + (e.message || e);
-    } finally {
-      btn.disabled = false;
-    }
+      } else { st.textContent = d.error || ('Failed (HTTP ' + r.status + ')'); }
+    } catch (e: any) { st.textContent = 'Error: ' + (e.message || e); }
+    finally { btn.disabled = false; }
   }
-  document.getElementById('digest-send')!.addEventListener('click', () => sendDigest(false));
+  $('digest-send').addEventListener('click', () => sendDigest(false));
 
-  whenAdmin.then(() => { loadCounts(); loadRows(); });
+  whenAdmin.then(() => { loadCounts(); loadConfirmed(); loadRows(); });
 </script>

@@ -1,35 +1,34 @@
 ---
 /**
- * /admin/revenue — sales overview.
- * KPIs (gross revenue · sales · paywalled posts) + a by-post sales table from the
- * admin-gated GET /api/admin/sales (reads the entitlements ledger server-side;
- * revenue is an ESTIMATE from post_paywall prices — the ledger doesn't store the
- * amount paid). Turning posts on/off the paywall lives on the Posts page.
+ * /admin/revenue — sales overview (Studio design).
+ * Our monetisation is PAY-WHAT-YOU-WANT one-time unlocks (Dodo, Merchant-of-Record),
+ * NOT recurring subscriptions — so the design's MRR / churn / per-reader-monthly /
+ * Stripe payouts do NOT apply and are deliberately omitted (never fabricated).
+ * Real data only: gross + sales + avg-per-sale + paywalled count, a revenue-by-post
+ * barrow, and the by-post sales table. From the admin-gated GET /api/admin/sales
+ * (reads the entitlements ledger; revenue is ESTIMATED from post_paywall prices —
+ * the ledger doesn't store the amount paid).
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
 
 <AdminLayout title="Revenue — Studio" heading="Revenue" active="revenue">
-  <section>
-    <div class="page-head">
-      <div>
-        <h1>Revenue</h1>
-        <p class="sub">What your paywalled writing has earned.</p>
-      </div>
-      <div class="head-actions">
-        <a class="btn btn-sm btn-ghost" href="/admin/posts">Manage paywall on Posts →</a>
-      </div>
+  <section class="stack">
+    <div class="tiles">
+      <div class="tile"><div class="l">Gross revenue</div><div class="v loading" id="r-gross">—</div><div class="d" id="r-gross-foot">to date</div></div>
+      <div class="tile"><div class="l">Sales</div><div class="v loading" id="r-sales">—</div><div class="d">unlocks purchased</div></div>
+      <div class="tile"><div class="l">Avg per sale</div><div class="v loading" id="r-avg">—</div><div class="d">pay-what-you-want</div></div>
+      <div class="tile"><div class="l">Paywalled posts</div><div class="v loading" id="r-paid">—</div><div class="d">currently earning</div></div>
     </div>
 
-    <div class="kpi-grid">
-      <div class="kpi card"><p class="kpi-label">Gross revenue</p><div class="kpi-value loading" id="r-gross">—</div><div class="kpi-foot" id="r-gross-foot"></div></div>
-      <div class="kpi card"><p class="kpi-label">Sales</p><div class="kpi-value loading" id="r-sales">—</div><div class="kpi-foot">unlocks purchased</div></div>
-      <div class="kpi card"><p class="kpi-label">Paywalled posts</p><div class="kpi-value loading" id="r-paid">—</div><div class="kpi-foot">currently earning</div></div>
+    <div class="panel">
+      <header><h2>Revenue by post</h2><span class="hint">Attributed to the post a reader unlocked</span></header>
+      <div class="pb" id="byrow"><div class="muted">Loading…</div></div>
     </div>
 
-    <div class="card">
-      <div class="card-head"><h2>Sales by post</h2></div>
-      <div id="bypost"><div class="card-pad muted">Loading…</div></div>
+    <div class="panel">
+      <header><h2>Sales by post</h2><a class="hint" href="/admin/posts" style="color:var(--accent);text-decoration:none">Manage paywall →</a></header>
+      <div class="pb flush" id="bypost"><div class="card-pad muted">Loading…</div></div>
     </div>
   </section>
 </AdminLayout>
@@ -38,11 +37,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   import { whenAdmin, adminFetch } from '../../lib/admin-gate';
   import { fmtNum, fmtMoney, esc } from '../../lib/admin-format';
 
-  function setKpi(id: string, text: string) {
-    const el = document.getElementById(id);
-    if (el) { el.textContent = text; el.classList.remove('loading'); }
-  }
-  const postLink = (slug: string) => `<a href="/blog/${encodeURIComponent(slug)}" target="_blank" rel="noopener">${esc(slug)}</a>`;
+  const $ = (id: string) => document.getElementById(id)!;
+  function setKpi(id: string, text: string) { const el = document.getElementById(id); if (el) { el.textContent = text; el.classList.remove('loading'); } }
+  let titles: Record<string, string> = {};
+  const title = (slug: string) => titles[slug] || slug;
 
   async function loadSales() {
     try {
@@ -50,33 +48,41 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Failed');
       setKpi('r-gross', fmtMoney(d.totalCents, 'usd'));
-      document.getElementById('r-gross-foot')!.textContent = d.estimated ? 'estimated from prices' : 'captured at sale';
+      $('r-gross-foot').textContent = d.estimated ? 'estimated from prices' : 'captured at sale';
       setKpi('r-sales', fmtNum(d.count));
-      const host = document.getElementById('bypost')!;
-      const byPost = d.byPost || [];
+      setKpi('r-avg', d.count > 0 ? fmtMoney(Math.round(d.totalCents / d.count), 'usd') : '—');
+
+      const byPost = (d.byPost || []).slice().sort((a: any, b: any) => b.cents - a.cents);
+      // Revenue-by-post barrow
+      const brow = $('byrow');
       if (!byPost.length) {
-        host.innerHTML = '<div class="empty"><span class="emoji">💸</span><h3>No sales yet</h3><p>When a reader unlocks a post, it shows up here.</p></div>';
+        brow.innerHTML = '<div class="muted">No sales yet — when a reader unlocks a post, it earns here.</div>';
       } else {
-        host.innerHTML = '<div class="table-wrap" style="border:0;box-shadow:none;border-radius:0"><table class="table"><thead><tr>'
-          + '<th>Post</th><th class="num">Sales</th><th class="num">Revenue</th></tr></thead><tbody>'
-          + byPost.map((b: any) => `<tr><td class="t-title">${postLink(b.post_id)}</td><td class="num">${fmtNum(b.count)}</td><td class="num">${fmtMoney(b.cents, 'usd')}</td></tr>`).join('')
-          + '</tbody></table></div>';
+        const max = Math.max(1, ...byPost.map((b: any) => b.cents));
+        brow.innerHTML = byPost.slice(0, 8).map((b: any) => `<div class="barrow"><div><div class="nm">${esc(title(b.post_id))}</div><div class="bar"><i style="width:${Math.max(2, Math.round((b.cents / max) * 100))}%"></i></div></div><div class="pc">${fmtMoney(b.cents, 'usd')}</div></div>`).join('');
       }
+      // Sales-by-post table
+      const host = $('bypost');
+      host.innerHTML = byPost.length
+        ? '<table class="t"><thead><tr><th>Post</th><th class="num">Sales</th><th class="num">Revenue</th></tr></thead><tbody>'
+          + byPost.map((b: any) => `<tr><td><a class="ti" href="/blog/${encodeURIComponent(b.post_id)}" target="_blank" rel="noopener" style="text-decoration:none">${esc(title(b.post_id))}</a></td><td class="num">${fmtNum(b.count)}</td><td class="num">${fmtMoney(b.cents, 'usd')}</td></tr>`).join('')
+          + '</tbody></table>'
+        : '<div class="card-pad muted">No sales yet. When a reader unlocks a post, it shows up here.</div>';
     } catch (e: any) {
-      document.getElementById('bypost')!.innerHTML = `<div class="card-pad notice err">Couldn't load sales: ${esc(e.message || e)}</div>`;
+      $('bypost').innerHTML = `<div class="card-pad notice err">Couldn't load sales: ${esc(e.message || e)}</div>`;
     }
   }
 
-  async function loadPaidCount() {
+  async function loadPosts() {
     try {
       const r = await adminFetch('/api/admin/posts');
       const d = await r.json();
       if (!r.ok) return;
-      setKpi('r-paid', fmtNum((d.posts || []).filter((p: any) => p.paid).length));
-    } catch {
-      setKpi('r-paid', '0');
-    }
+      const posts = d.posts || [];
+      titles = {}; for (const p of posts) titles[p.slug] = p.title;
+      setKpi('r-paid', fmtNum(posts.filter((p: any) => p.paid).length));
+    } catch { setKpi('r-paid', '0'); }
   }
 
-  whenAdmin.then(() => { loadSales(); loadPaidCount(); });
+  whenAdmin.then(async () => { await loadPosts(); loadSales(); });
 </script>

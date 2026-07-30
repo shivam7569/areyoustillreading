@@ -1,73 +1,107 @@
 ---
 /**
- * /admin/engagement — moderate reader interaction in one place.
- * Three streams behind a segmented control:
- *   • Comments   — via the admin-gated /api/admin/comments (comments have no admin
- *                  RLS, so listing-with-author + delete must go through the server).
- *   • Highlights — read/deleted directly with the anon client; the is_admin() RLS
- *                  already grants the owner read-all + delete on highlights.
- *   • Notes      — same model as highlights (private reader notes; admin can see all).
- * Reader↔you discussion threads live on each post (Highlights there supports reply).
+ * /admin/engagement — how deeply readers engage, and moderation in one place.
+ * TOP (Studio design): real read-completion + dwell from our first-party analytics
+ * (avgReadPct, avgDwellMs, per-post completion) — the design's per-paragraph
+ * drop-off and email open-rate are NOT shown (we don't have paragraph-level or
+ * Resend-open data; never fabricated).
+ * BELOW (our feature, kept): moderate the three reader-interaction streams —
+ *   • Comments   — via admin-gated /api/admin/comments (server-side delete).
+ *   • Highlights — anon client; is_admin() RLS grants owner read-all + delete.
+ *   • Notes      — same model (private reader notes; admin sees all).
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
 
 <AdminLayout title="Engagement — Studio" heading="Engagement" active="engagement">
-  <section>
-    <div class="page-head">
-      <div>
-        <h1>Engagement</h1>
-        <p class="sub">Comments, highlights, and notes from your readers.</p>
-      </div>
+  <section class="stack">
+    <div class="tiles">
+      <div class="tile"><div class="l">Completion</div><div class="v loading" id="e-compl">—</div><div class="d">how far readers get</div></div>
+      <div class="tile"><div class="l">Median dwell</div><div class="v loading" id="e-dwell">—</div><div class="d">time on the page</div></div>
+      <div class="tile"><div class="l">Comments</div><div class="v loading" id="e-comments">—</div><div class="d">from readers</div></div>
+      <div class="tile"><div class="l">Highlights</div><div class="v loading" id="e-highlights">—</div><div class="d">passages saved</div></div>
     </div>
 
-    <div class="toolbar" role="tablist">
-      <button class="btn seg is-on" data-tab="comments" type="button">Comments</button>
-      <button class="btn seg" data-tab="highlights" type="button">Highlights</button>
-      <button class="btn seg" data-tab="notes" type="button">Notes</button>
-      <span class="grow"></span>
-      <button class="btn btn-sm btn-ghost" id="refresh" type="button">↻ Refresh</button>
+    <div class="panel">
+      <header><h2>Where readers stop</h2><span class="hint">Completion by post</span></header>
+      <div class="pb" id="completion-by-post"><div class="muted">Loading…</div></div>
     </div>
 
-    <div id="eng-host">
-      <div class="table-wrap"><div class="card-pad muted">Loading…</div></div>
+    <div class="panel">
+      <header><h2>Reader interaction</h2>
+        <span class="hint" style="display:flex;gap:6px;align-items:center">
+          <span class="tabs" id="eng-tabs">
+            <button class="on" data-tab="comments" type="button">Comments</button>
+            <button data-tab="highlights" type="button">Highlights</button>
+            <button data-tab="notes" type="button">Notes</button>
+          </span>
+        </span>
+      </header>
+      <div class="pb flush" id="eng-host"><div class="card-pad muted">Loading…</div></div>
     </div>
   </section>
 </AdminLayout>
 
 <style>
-  .seg { background: transparent; }
-  .seg.is-on { background: var(--admin-accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); color: var(--accent); }
-  .eng-item { display: flex; gap: 1rem; justify-content: space-between; align-items: flex-start; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); }
+  .eng-item { display: flex; gap: 1rem; justify-content: space-between; align-items: flex-start; padding: 1rem 1.25rem; border-bottom: 1px solid var(--rule-soft); }
   .eng-item:last-child { border-bottom: 0; }
-  .eng-item .who { font-weight: 600; }
-  .eng-item .meta { color: var(--muted); font-size: 0.83rem; margin-top: 0.15rem; }
-  .eng-item .body { margin: 0.4rem 0 0; white-space: pre-wrap; }
-  .eng-item blockquote { margin: 0.4rem 0 0; padding-left: 0.8rem; border-left: 3px solid var(--admin-accent-soft); color: var(--fg); }
+  .eng-item .who { font-weight: 600; color: var(--ink); }
+  .eng-item .meta { color: var(--ink-faint); font-size: 0.83rem; margin-top: 0.15rem; }
+  .eng-item .body { margin: 0.4rem 0 0; white-space: pre-wrap; color: var(--ink-soft); }
+  .eng-item blockquote { margin: 0.4rem 0 0; padding-left: 0.8rem; border-left: 3px solid var(--admin-accent-soft); color: var(--ink-soft); }
 </style>
 
 <script>
   import { supabase } from '../../lib/supabase';
   import { whenAdmin, adminFetch } from '../../lib/admin-gate';
-  import { fmtDate, relTime, esc } from '../../lib/admin-format';
+  import { fmtNum, fmtDate, relTime, esc } from '../../lib/admin-format';
 
-  const host = document.getElementById('eng-host')!;
+  const $ = (id: string) => document.getElementById(id)!;
+  const host = $('eng-host');
   let tab = 'comments';
   let armed: string | null = null;
   let armTimer: number | undefined;
+  let titles: Record<string, string> = {};
 
-  const postLink = (slug: string) => `<a href="/blog/${encodeURIComponent(slug)}" target="_blank" rel="noopener">${esc(slug)}</a>`;
-  const delBtn = (id: string) =>
-    `<button class="btn btn-sm ${armed === id ? 'btn-danger' : 'btn-ghost'}" data-del="${esc(id)}">${armed === id ? 'Confirm' : 'Delete'}</button>`;
+  const setKpi = (id: string, v: string) => { const el = document.getElementById(id); if (el) { el.textContent = v; el.classList.remove('loading'); } };
+  const fmtDwell = (ms: number) => { if (!ms || ms < 1000) return '0s'; const s = Math.round(ms / 1000); if (s < 60) return s + 's'; return Math.floor(s / 60) + 'm ' + (s % 60) + 's'; };
 
-  function loading() { host.innerHTML = '<div class="table-wrap"><div class="card-pad muted">Loading…</div></div>'; }
-  function errBox(m: string) { host.innerHTML = `<div class="card card-pad notice err">${esc(m)}</div>`; }
-  function emptyBox(emoji: string, title: string, sub: string) {
-    host.innerHTML = `<div class="card"><div class="empty"><span class="emoji">${emoji}</span><h3>${esc(title)}</h3><p>${esc(sub)}</p></div></div>`;
-  }
+  const postLink = (slug: string) => `<a href="/blog/${encodeURIComponent(slug)}" target="_blank" rel="noopener">${esc(titles[slug] || slug)}</a>`;
+  const delBtn = (id: string) => `<button class="btn btn-sm ${armed === id ? 'btn-danger' : 'btn-ghost'}" data-del="${esc(id)}">${armed === id ? 'Confirm' : 'Delete'}</button>`;
+  function loading() { host.innerHTML = '<div class="card-pad muted">Loading…</div>'; }
+  function errBox(m: string) { host.innerHTML = `<div class="card-pad notice err">${esc(m)}</div>`; }
+  function emptyBox(title: string, sub: string) { host.innerHTML = `<div class="card-pad muted" style="text-align:center;padding:2.2rem 1rem"><strong style="display:block;color:var(--ink);margin-bottom:.3rem">${esc(title)}</strong>${esc(sub)}</div>`; }
+  function list(items: string[]) { host.innerHTML = items.join(''); }
 
-  function list(items: string[]) {
-    host.innerHTML = `<div class="card">${items.join('')}</div>`;
+  // --- Top: real read-depth analytics + interaction counts ------------------
+  async function loadStats() {
+    // Analytics (completion + dwell + per-post completion)
+    try {
+      const r = await adminFetch('/api/admin/analytics?range=all');
+      const d = await r.json();
+      if (r.ok && d.configured !== false) {
+        setKpi('e-compl', ((d.totals && d.totals.avgReadPct) || 0) + '%');
+        setKpi('e-dwell', fmtDwell((d.totals && d.totals.avgDwellMs) || 0));
+        const top = (d.topPosts || []).filter((p: any) => typeof p.avgReadPct === 'number').slice(0, 6);
+        const cbp = $('completion-by-post');
+        cbp.innerHTML = top.length
+          ? top.map((p: any) => `<div class="barrow"><div><div class="nm">${esc(titles[p.slug] || p.slug)}</div><div class="bar"><i style="width:${p.avgReadPct}%"></i></div></div><div class="pc">${p.avgReadPct}%</div></div>`).join('')
+          : '<div class="muted">No completion data yet.</div>';
+      } else {
+        setKpi('e-compl', '—'); setKpi('e-dwell', '—');
+        $('completion-by-post').innerHTML = '<div class="muted">Read-depth analytics isn’t set up yet.</div>';
+      }
+    } catch { setKpi('e-compl', '—'); setKpi('e-dwell', '—'); }
+    // Interaction counts
+    try {
+      const r = await adminFetch('/api/admin/comments');
+      const d = await r.json();
+      setKpi('e-comments', fmtNum((d.rows || []).length));
+    } catch { setKpi('e-comments', '—'); }
+    try {
+      const { count } = await supabase.from('highlights').select('id', { count: 'exact', head: true });
+      setKpi('e-highlights', fmtNum(count || 0));
+    } catch { setKpi('e-highlights', '—'); }
   }
 
   async function loadComments() {
@@ -77,68 +111,46 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Failed');
       const rows = d.rows || [];
-      if (!rows.length) return emptyBox('💬', 'No comments yet', 'Reader comments will show up here.');
+      if (!rows.length) return emptyBox('No comments yet', 'Reader comments will show up here.');
       list(rows.map((c: any) => `<div class="eng-item">
-          <div>
-            <div class="who">${esc(c.author_name || 'Reader')}</div>
+          <div><div class="who">${esc(c.author_name || 'Reader')}</div>
             <div class="meta">on ${postLink(c.post_id)} · ${esc(relTime(c.created_at))}</div>
-            <p class="body">${esc(c.body)}</p>
-          </div>
+            <p class="body">${esc(c.body)}</p></div>
           <div class="row-actions">${delBtn('comment:' + c.id)}</div>
         </div>`));
     } catch (e: any) { errBox("Couldn't load comments: " + (e.message || e)); }
   }
-
   async function loadHighlights() {
     loading();
     try {
-      const { data, error } = await supabase
-        .from('highlights')
-        .select('id,post_id,author_name,quote,created_at')
-        .order('created_at', { ascending: false })
-        .limit(200);
+      const { data, error } = await supabase.from('highlights').select('id,post_id,author_name,quote,created_at').order('created_at', { ascending: false }).limit(200);
       if (error) throw error;
       const rows = data || [];
-      if (!rows.length) return emptyBox('🖍️', 'No highlights yet', 'Passages readers highlight will appear here.');
+      if (!rows.length) return emptyBox('No highlights yet', 'Passages readers highlight will appear here.');
       list(rows.map((h: any) => `<div class="eng-item">
-          <div>
-            <div class="who">${esc(h.author_name || 'Reader')}</div>
+          <div><div class="who">${esc(h.author_name || 'Reader')}</div>
             <div class="meta">on ${postLink(h.post_id)} · ${esc(relTime(h.created_at))}</div>
-            <blockquote>${esc(h.quote)}</blockquote>
-          </div>
+            <blockquote>${esc(h.quote)}</blockquote></div>
           <div class="row-actions">${delBtn('highlight:' + h.id)}</div>
         </div>`));
     } catch (e: any) { errBox("Couldn't load highlights: " + (e.message || e)); }
   }
-
   async function loadNotes() {
     loading();
     try {
-      const { data, error } = await supabase
-        .from('notes')
-        .select('id,post_id,author_name,body,updated_at')
-        .order('updated_at', { ascending: false })
-        .limit(200);
+      const { data, error } = await supabase.from('notes').select('id,post_id,author_name,body,updated_at').order('updated_at', { ascending: false }).limit(200);
       if (error) throw error;
       const rows = data || [];
-      if (!rows.length) return emptyBox('📝', 'No notes yet', "Readers' private notes will appear here.");
+      if (!rows.length) return emptyBox('No notes yet', "Readers' private notes will appear here.");
       list(rows.map((n: any) => `<div class="eng-item">
-          <div>
-            <div class="who">${esc(n.author_name || 'Reader')}</div>
+          <div><div class="who">${esc(n.author_name || 'Reader')}</div>
             <div class="meta">on ${postLink(n.post_id)} · ${esc(fmtDate(n.updated_at))}</div>
-            <p class="body">${esc(n.body)}</p>
-          </div>
+            <p class="body">${esc(n.body)}</p></div>
           <div class="row-actions">${delBtn('note:' + n.id)}</div>
         </div>`));
     } catch (e: any) { errBox("Couldn't load notes: " + (e.message || e)); }
   }
-
-  function loadTab() {
-    armed = null;
-    if (tab === 'comments') return loadComments();
-    if (tab === 'highlights') return loadHighlights();
-    return loadNotes();
-  }
+  function loadTab() { armed = null; if (tab === 'comments') return loadComments(); if (tab === 'highlights') return loadHighlights(); return loadNotes(); }
 
   async function doDelete(token: string) {
     const [kind, id] = token.split(/:(.+)/);
@@ -151,36 +163,30 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         const { error } = await supabase.from(table).delete().eq('id', id);
         if (error) throw error;
       }
-    } catch (e: any) {
-      alert(e.message || 'Delete failed');
-    }
-    armed = null;
-    loadTab();
+    } catch (e: any) { alert(e.message || 'Delete failed'); }
+    armed = null; loadTab(); loadStats();
   }
 
   host.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('[data-del]') as HTMLElement | null;
     if (!btn) return;
     const token = btn.dataset.del!;
-    if (armed === token) {
-      doDelete(token);
-    } else {
-      armed = token;
-      loadTab(); // re-render to show "Confirm"
-      if (armTimer) clearTimeout(armTimer);
-      armTimer = window.setTimeout(() => { armed = null; loadTab(); }, 3500);
-    }
+    if (armed === token) { doDelete(token); }
+    else { armed = token; loadTab(); if (armTimer) clearTimeout(armTimer); armTimer = window.setTimeout(() => { armed = null; loadTab(); }, 3500); }
+  });
+  $('eng-tabs').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('button[data-tab]') as HTMLElement | null; if (!b) return;
+    $('eng-tabs').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    tab = b.dataset.tab!; loadTab();
   });
 
-  document.querySelectorAll('.seg').forEach((b) => {
-    b.addEventListener('click', () => {
-      document.querySelectorAll('.seg').forEach((x) => x.classList.remove('is-on'));
-      b.classList.add('is-on');
-      tab = (b as HTMLElement).dataset.tab!;
-      loadTab();
-    });
+  whenAdmin.then(async () => {
+    try {
+      const r = await adminFetch('/api/admin/posts');
+      const d = await r.json();
+      if (r.ok) for (const p of (d.posts || [])) titles[p.slug] = p.title;
+    } catch {}
+    loadStats();
+    loadTab();
   });
-  document.getElementById('refresh')!.addEventListener('click', loadTab);
-
-  whenAdmin.then(loadTab);
 </script>
