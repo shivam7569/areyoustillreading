@@ -1344,8 +1344,18 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       try { here = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch {}
       if (!zones.length) zones = ['UTC', 'America/Los_Angeles', 'America/New_York', 'America/Sao_Paulo', 'Europe/London', 'Europe/Berlin', 'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney'];
       if (!zones.includes(here)) zones.unshift(here);
-      // Order by current UTC offset — most people recall the time difference, not the name.
-      const TZ = zones.map((z) => ({ z, off: offMin(z) })).sort((a, b) => a.off - b.off || a.z.localeCompare(b.z)).map((o) => ({ ...o, label: `(${fmtOff(o.off)}) ${o.z.replace(/_/g, ' ')}` }));
+      // People think in "how far ahead/behind me", not zone names — so show ONE recognizable
+      // zone per DISTINCT current offset (no duplicates) on a clean 30-minute grid, ordered
+      // by offset. The author's own zone always represents its own offset.
+      const hereOff = offMin(here);
+      const byOff = new Map<number, string[]>();
+      for (const z of zones) { const o = offMin(z); const a = byOff.get(o); if (a) a.push(z); else byOff.set(o, [z]); }
+      const PREF = ['Pacific/Midway', 'Pacific/Honolulu', 'America/Anchorage', 'America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York', 'America/Halifax', 'America/Sao_Paulo', 'Atlantic/Azores', 'UTC', 'Europe/London', 'Europe/Paris', 'Europe/Athens', 'Europe/Moscow', 'Asia/Tehran', 'Asia/Dubai', 'Asia/Kabul', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Yangon', 'Asia/Dhaka', 'Asia/Bangkok', 'Asia/Shanghai', 'Asia/Tokyo', 'Australia/Adelaide', 'Australia/Sydney', 'Pacific/Noumea', 'Pacific/Auckland', 'Pacific/Kiritimati'];
+      const repFor = (off: number) => { if (off === hereOff) return here; const g = byOff.get(off) || []; for (const p of PREF) if (g.indexOf(p) >= 0) return p; return g[0]; };
+      const offsets = Array.from(byOff.keys()).filter((o) => o % 30 === 0);
+      if (offsets.indexOf(hereOff) < 0) offsets.push(hereOff);
+      offsets.sort((a, b) => a - b);
+      const TZ = offsets.map((off) => { const z = repFor(off); return { z, off, label: `(${fmtOff(off)}) ${z.replace(/_/g, ' ')}` }; });
       schedTz.value = here;
 
       const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as any)[c]);
