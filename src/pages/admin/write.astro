@@ -213,7 +213,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           <span class="shnote" id="ps-note"></span>
           <span class="shacts pm-actions">
             <button class="btn btn-ghost btn-sm" id="pm-cancel" type="button">Cancel</button>
-            <button class="btn btn-ghost btn-sm" id="pm-save-draft" type="button">Save draft</button>
+            <button class="btn btn-sm" id="pm-save-draft" type="button" title="Save as a hidden draft — only you can see it, not emailed">Save as draft</button>
             <button class="btn btn-primary btn-sm" id="pm-publish" type="button">Publish now</button>
             <span class="pm-progress" aria-hidden="true"></span>
             <span class="pm-status" id="pm-form-status" role="status" aria-live="polite"></span>
@@ -1069,9 +1069,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     function renderOutline(md) {
       const host = wc.outline; if (!host) return;
       const lines = String(md || '').split('\n');
-      const items = []; let cur = null;
+      const items = []; let cur = null; let inFence = false;
       const flush = () => { if (cur) { cur.words = countWords(cur.buf.join('\n')); items.push(cur); } };
       for (const ln of lines) {
+        // Track fenced code (``` / ~~~) so a code/D2 comment line ("# …") is NEVER
+        // mistaken for a Markdown heading — only real prose headings become outline items.
+        if (/^\s{0,3}(```|~~~)/.test(ln)) { inFence = !inFence; if (cur) cur.buf.push(ln); continue; }
+        if (inFence) { if (cur) cur.buf.push(ln); continue; }
         const h = ln.match(/^(#{1,6})\s+(.+)$/);
         if (h) { flush(); cur = { level: h[1].length, text: h[2].trim(), buf: [] }; }
         else if (cur) cur.buf.push(ln);
@@ -1197,12 +1201,37 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     const newBtn = document.getElementById('new-draft');
     newBtn.addEventListener('click', () => { location.href = '/admin/write?new=1'; });
 
-    // "Preview Markdown" shows the serialized Markdown (temporary debug view — this
-    // is what Publish will commit to GitHub in the next increment).
-    const out = document.getElementById('md-out');
-    document.getElementById('get-md').addEventListener('click', () => {
-      out.hidden = false;
-      out.textContent = crepe.getMarkdown();
+    // "Preview" renders the current draft through the REAL publish pipeline (Shiki,
+    // KaTeX, D2, live cell outputs) and opens the finished post in a new tab — exactly
+    // the HTML readers get. The window is opened synchronously (before any await) so the
+    // browser doesn't block it as a popup.
+    document.getElementById('get-md').addEventListener('click', async () => {
+      const btn = document.getElementById('get-md');
+      const w = window.open('', '_blank');
+      try { if (w) { w.document.write('<!doctype html><meta charset="utf-8"><title>Preview…</title><body style="margin:0;font:15px system-ui;color:#8a8a8a;display:grid;place-items:center;height:100vh">Rendering preview…</body>'); w.document.close(); } } catch {}
+      const label = btn.textContent; btn.disabled = true; btn.textContent = 'Rendering…';
+      try {
+        const md = crepe.getMarkdown();
+        const title = ((md.match(/^#\s+(.+)$/m) || [])[1] || 'Untitled').trim();
+        const body = injectCellOutputs(md.replace(/^#\s+.+\n+/, ''));
+        const description = (document.getElementById('pm-post-desc') as HTMLTextAreaElement | null)?.value?.trim() || '';
+        const [{ renderPostBodyBrowser }, { assemblePostHtml }] = await Promise.all([
+          import('../../lib/render-post-browser.mjs'),
+          import('../../lib/assemble-post.mjs'),
+        ]);
+        const bodyHtml = await renderPostBodyBrowser(body);
+        const shellHtml = await (await fetch('/post-shell', { cache: 'no-store' })).text();
+        const html = assemblePostHtml(shellHtml, {
+          slug: (editing && editing.slug) || 'preview', title, description,
+          author: 'Preview', pubDate: new Date().toISOString().slice(0, 10),
+          tags: pubTags, bodyMarkdown: body, bodyHtml,
+        });
+        if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+        else { window.open(URL.createObjectURL(new Blob([html], { type: 'text/html' })), '_blank'); }
+      } catch (e: any) {
+        const msg = 'Preview failed: ' + (e && e.message ? e.message : e);
+        if (w && w.document && w.document.body) w.document.body.textContent = msg; else alert(msg);
+      } finally { btn.disabled = false; btn.textContent = label; }
     });
 
     // --- Publish (premium modal) --------------------------------------------
@@ -1381,7 +1410,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         // NEW file (create-not-update) and orphan the original. Publish forces this slug too.
         $('pm-slug').contentEditable = 'false';
         $('pm-slug').style.color = 'var(--muted)';
-        $('pm-draft').checked = !!editing.draft;
+        // Draft is a hidden flag the FOOTER BUTTONS set (Save draft = on, Publish/Update
+        // = off via pointerdown) — not the post's stored state — so it defaults off here.
+        // That way the letter toggle reflects the publish path (a draft-save is blocked
+        // from emailing by the handler's `!draft` guard regardless).
+        $('pm-draft').checked = false;
         $('pm-series').value = editing.series || '';
         $('pm-series-order').value = editing.seriesOrder || '';
         $('pm-series-total').value = editing.seriesTotal || '';
@@ -1411,13 +1444,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     const emailChk = $('pm-email-subs');
     const emailLbl = $('pm-email-subs-label');
     async function updateEmailToggle() {
-      if ($('pm-draft').checked) {
-        emailChk.checked = false;
-        emailChk.disabled = true;
-        emailLbl.textContent = "Drafts aren't emailed";
-        try { syncMailTog(); } catch {}
-        return;
-      }
+      // NOTE: no longer gated on the draft flag — that's set by the footer button at
+      // click time (Save draft vs Publish). The toggle reflects the subscriber count;
+      // the publish handler blocks emailing a draft-save via its `!draft` guard. So a
+      // reader publishing a post THAT WAS a draft can still send the letter.
       emailChk.disabled = true; // until we know the count
       emailLbl.textContent = 'Send with the letter';
       try { syncMailTog(); } catch {}
