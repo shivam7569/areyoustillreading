@@ -385,3 +385,66 @@ ul.feed { margin: 0; padding: 0; display: flex; flex-direction: column; }
 .mono { font-family: var(--font-mono); font-size: 12.5px; }
 .chart { width: 100%; display: block; }
 .chart-x { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-faint); margin-top: 10px; }
+
+/* ---- Write chrome (design: .wtop / .wr / .rail / .railtabs / .wstatus) ----
+   Global (not scoped): the Milkdown/Crepe canvas (#milkdown) is untouched; only
+   the surrounding chrome is the Studio design. Outline/Notes lists are injected
+   via innerHTML, so these rules must live outside Astro's per-page scope. */
+.wtop {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 11px 15px; margin-bottom: 16px;
+  background: color-mix(in srgb, var(--paper) 80%, transparent);
+  border: 1px solid var(--rule); border-radius: var(--admin-radius);
+  position: sticky; top: 8px; z-index: 20;
+  -webkit-backdrop-filter: saturate(140%) blur(10px); backdrop-filter: saturate(140%) blur(10px);
+}
+.wtop .badge { flex: 0 0 auto; }
+.inp-mini.input { width: 82px; padding: 5px 8px; text-align: right; }
+.sess { display: flex; align-items: center; gap: 18px; flex: 1 1 auto; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-faint); min-width: 0; }
+.sess b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.sess #editor-status { color: var(--accent); }
+.goalwrap { display: inline-flex; align-items: center; gap: 8px; }
+.goal { width: 84px; height: 5px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 13%, transparent); overflow: hidden; }
+.goal i { display: block; height: 100%; background: var(--accent); transition: width .3s ease; }
+.acts { display: flex; gap: 8px; flex: 0 0 auto; }
+
+.wr { display: grid; grid-template-columns: minmax(0, 1fr) 264px; gap: 20px; align-items: start; }
+@media (max-width: 1000px) { .wr { grid-template-columns: 1fr; } }
+.wcanvas { min-width: 0; }
+
+.rail { position: sticky; top: 78px; border: 1px solid var(--rule); border-radius: var(--admin-radius); background: var(--card); overflow: hidden; align-self: start; }
+.railtabs { display: flex; border-bottom: 1px solid var(--rule); }
+.railtabs button { flex: 1 1 0; padding: 11px 8px; background: transparent; border: 0; border-bottom: 2px solid transparent; font-family: var(--sans); font-size: 12.5px; font-weight: 600; color: var(--ink-faint); cursor: pointer; }
+.railtabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+.rpane { display: none; }
+.rpane.on { display: block; }
+.grp { padding: 14px 15px; border-bottom: 1px solid var(--rule); }
+.grp:last-child { border-bottom: 0; }
+.gl { font-size: 10.5px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 9px; }
+.rnote { color: var(--ink-faint); font-size: 12px; line-height: 1.55; }
+.rnote a { color: var(--accent); }
+.rempty { color: var(--ink-faint); font-size: 12.5px; font-style: italic; list-style: none; }
+
+ul.olist, ul.nlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.olist li { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; color: var(--ink-soft); padding: 3px 0; cursor: pointer; }
+.olist li.rempty { cursor: default; }
+.olist li:not(.rempty):hover { color: var(--accent); }
+.olist li.sub { padding-left: 14px; color: var(--ink-faint); }
+.olist li > span:first-child { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olist li .w, .nlist li .w { flex: 0 0 auto; font-size: 10.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.nlist li { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; padding: 8px 0; border-top: 1px solid var(--rule-soft); }
+.nlist li:first-child { border-top: 0; }
+.nlist li.rempty { border-top: 0; }
+.nlist li .w { display: block; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 3px; }
+.inp-mini { width: 82px; padding: 5px 8px; text-align: right; }
+
+.wstatus { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding: 9px 4px; color: var(--ink-faint); border-top: 1px solid var(--rule-soft); flex-wrap: wrap; font-size: 12.5px; }
+.wstatus kbd, .esc kbd { font-family: var(--font-mono); font-size: 10.5px; background: color-mix(in srgb, var(--ink) 8%, transparent); border: 1px solid var(--rule); border-radius: 3px; padding: 1px 5px; color: var(--ink-soft); }
+.esc { display: none; }
+
+/* Focus mode — hide chrome, centre a narrow column, reveal the Esc hint. */
+#editor-wrap.focus .wtop .acts, #editor-wrap.focus .rail, #editor-wrap.focus .wstatus { display: none; }
+#editor-wrap.focus .wr { grid-template-columns: 1fr; }
+#editor-wrap.focus .wcanvas { max-width: 760px; margin: 0 auto; }
+#editor-wrap.focus .esc { display: block; position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 7px 14px; border-radius: 999px; z-index: 40; box-shadow: 0 8px 24px -10px rgba(0,0,0,.5); font-size: 12.5px; }
+#editor-wrap.focus .esc kbd { background: color-mix(in srgb, var(--paper) 22%, transparent); border: 0; color: var(--paper); }

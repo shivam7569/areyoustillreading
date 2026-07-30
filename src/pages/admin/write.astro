@@ -89,12 +89,22 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
 <AdminLayout title="Write — Studio" heading="Write" active="write">
   <div id="editor-wrap">
-    <div class="editor-bar">
-      <strong>Draft</strong>
-      <span id="editor-status" class="muted"></span>
-      <button id="new-draft" type="button">New</button>
-      <button id="get-md" type="button">Preview Markdown</button>
-      <button id="publish-btn" type="button">Publish…</button>
+    <div class="wtop">
+      <span class="badge" id="w-state">Draft</span>
+      <div class="sess">
+        <span><b id="w-words">0</b> words</span>
+        <span>est. <b id="w-read">0 min</b></span>
+        <span class="goalwrap" id="w-goalwrap" hidden><span class="goal"><i id="w-goalbar" style="width:0%"></i></span><span id="w-goaltext"></span></span>
+        <span id="w-today-wrap"><b id="w-today">0</b> today</span>
+        <span id="w-streak" hidden></span>
+        <span id="editor-status" class="muted"></span>
+      </div>
+      <div class="acts">
+        <button class="btn btn-ghost btn-sm" id="new-draft" type="button">New</button>
+        <button class="btn btn-ghost btn-sm" id="focusbtn" type="button">Focus</button>
+        <button class="btn btn-ghost btn-sm" id="get-md" type="button">Preview</button>
+        <button class="btn btn-primary btn-sm" id="publish-btn" type="button">Publish…</button>
+      </div>
     </div>
     <div id="publish-modal" class="pm-overlay" hidden>
       <div class="pm-card" role="dialog" aria-modal="true" aria-label="Publish">
@@ -146,37 +156,55 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         </div>
       </div>
     </div>
-    <div id="milkdown"></div>
-    <pre id="md-out" hidden></pre>
+    <div class="wr">
+      <div class="wcanvas">
+        <div id="milkdown"></div>
+        <pre id="md-out" hidden></pre>
+      </div>
+      <aside class="rail" id="wrail">
+        <div class="railtabs" id="rtabs">
+          <button class="on" data-p="outline" type="button">Outline</button>
+          <button data-p="notes" type="button">Notes</button>
+          <button data-p="post" type="button">Post</button>
+        </div>
+        <div class="rpane on" data-pane="outline">
+          <div class="grp"><ul class="olist" id="r-outline"><li class="rempty">Headings appear here as you write.</li></ul></div>
+          <div class="grp rnote">Each heading becomes a section on the published page. Reading time sets this post's height on the <a href="/series/" target="_blank" rel="noopener">series</a> plate.</div>
+        </div>
+        <div class="rpane" data-pane="notes">
+          <div class="grp"><ul class="nlist" id="r-notes"><li class="rempty">No notes yet. These stay private — never published.</li></ul></div>
+          <div class="grp"><input class="input" id="r-note-input" placeholder="Add a note — stays private" autocomplete="off" /></div>
+        </div>
+        <div class="rpane" data-pane="post">
+          <div class="grp">
+            <div class="gl">Length target</div>
+            <div class="fr"><span>Target</span><span class="v"><input id="r-target" class="input inp-mini" type="number" min="0" step="100" placeholder="—" aria-label="Word target" /></span></div>
+            <div class="fr"><span>Written</span><span class="v act" id="r-written">0</span></div>
+          </div>
+          <div class="grp">
+            <div class="gl">This post</div>
+            <div class="fr"><span>Series</span><span class="v" id="r-series">None</span></div>
+            <div class="fr"><span>State</span><span class="v" id="r-state2">Draft</span></div>
+            <div class="fr"><span>Saved</span><span class="v act" id="r-saved">—</span></div>
+          </div>
+          <div class="grp"><button class="btn btn-ghost btn-sm" id="r-openpub" type="button" style="width:100%">Publishing options…</button></div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="wstatus">
+      <span id="w-statusline">0 words · 0 min read</span>
+      <span class="r"><kbd>/</kbd> blocks &nbsp; <kbd>⌘\</kbd> focus &nbsp; <kbd>⌘⏎</kbd> publish</span>
+    </div>
+    <div class="esc" id="w-esc" hidden>Focus mode — <kbd>Esc</kbd> to come back</div>
   </div>
 </AdminLayout>
 
 <style>
   .muted { color: var(--muted); }
-  .editor-bar {
-    display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
-    padding: 0.55rem 0.7rem; margin-bottom: 0.9rem;
-    background: var(--admin-surface); border: 1px solid var(--border);
-    border-radius: 12px; box-shadow: var(--admin-shadow);
-    position: sticky; top: 0.5rem; z-index: 20;
-    -webkit-backdrop-filter: saturate(140%) blur(8px); backdrop-filter: saturate(140%) blur(8px);
-  }
-  .editor-bar > strong {
-    font-family: var(--font-sans); font-size: 0.68rem; font-weight: 700;
-    letter-spacing: 0.13em; text-transform: uppercase; color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-    padding: 0.32rem 0.7rem; border-radius: 999px;
-  }
-  .editor-bar #editor-status { flex: 1 1 auto; font-size: 0.8rem; }
-  .editor-bar button {
-    padding: 0.46rem 0.95rem; border: 1px solid var(--border); border-radius: 8px;
-    background: transparent; color: var(--fg); font-family: var(--font-sans);
-    font-weight: 600; font-size: 0.85rem; cursor: pointer;
-    transition: background 0.16s, border-color 0.16s, transform 0.16s;
-  }
-  .editor-bar button:hover { background: var(--admin-hover); border-color: var(--border-strong); transform: translateY(-1px); }
-  .editor-bar #publish-btn { background: var(--btn-fill); border-color: var(--btn-fill); color: var(--on-accent); box-shadow: 0 8px 20px -12px var(--btn-fill); }
-  .editor-bar #publish-btn:hover { background: var(--btn-fill-hover); border-color: var(--btn-fill-hover); }
+  /* Write chrome (.wtop / .wr / .rail / .railtabs / .rpane / .wstatus / focus)
+     lives in global admin.css — the Outline/Notes lists are injected via
+     innerHTML, which Astro's scoped styles can't reach. */
   #milkdown {
     border: 1px solid var(--border); border-radius: 12px; min-height: 60vh;
     background: var(--bg); overflow: hidden;
@@ -852,8 +880,15 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       },
     });
     let saveTimer = null;
+    // Gate the chrome hook: markdownUpdated can fire during crepe.create() — before
+    // the chrome block below has initialised its state — so only call updateChrome
+    // once that state exists (set true at the end of the chrome block).
+    let chromeInit = false;
     crepe.on((api) => {
       api.markdownUpdated((_ctx, md) => {
+        // Live chrome (word count, read time, outline, goal, session log) — runs for
+        // both new and editing; never touches the doc. updateChrome is hoisted below.
+        if (chromeInit) updateChrome(md);
         // Editing a published post doesn't autosave to the local draft slot (that's the
         // new-post scratchpad) — edits are committed on Publish. A failed edit-load must
         // also never write the draft slot. New posts autosave.
@@ -877,6 +912,159 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     crepe.editor.use(plotlyCells);
     await crepe.create();
     if (restoredMsg) statusEl.textContent = restoredMsg;
+
+    // ======================================================================
+    // WRITE CHROME — session stats, outline, notes, length target, focus mode.
+    // The Milkdown canvas above is the source of truth; everything here READS its
+    // Markdown and drives the top bar / rail / status bar. It never mutates the
+    // doc. Notes, target and the session log are private to this device
+    // (localStorage), keyed to the post being edited (or the new-post scratch).
+    // ======================================================================
+    const escHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const wc = {
+      words: document.getElementById('w-words'), read: document.getElementById('w-read'),
+      today: document.getElementById('w-today'), streak: document.getElementById('w-streak'),
+      goalWrap: document.getElementById('w-goalwrap'), goalBar: document.getElementById('w-goalbar'),
+      goalText: document.getElementById('w-goaltext'), line: document.getElementById('w-statusline'),
+      outline: document.getElementById('r-outline'), written: document.getElementById('r-written'),
+    };
+    const docKey = editing ? ('post:' + editing.slug) : 'draft';
+    const NOTES_KEY = 'aysr:notes:' + docKey;
+    const TARGET_KEY = 'aysr:target:' + docKey;
+    const SESS_KEY = 'aysr:write-sessions';
+    const dayStr = (d) => d.toISOString().slice(0, 10);
+    const today = dayStr(new Date());
+
+    const countWords = (md) => {
+      const prose = String(md || '')
+        .replace(/```[\s\S]*?```/g, ' ').replace(/`[^`]*`/g, ' ')
+        .replace(/^#{1,6}\s+/gm, '').replace(/[*_>#\[\]()!]+/g, ' ');
+      const m = prose.trim().match(/\S+/g); return m ? m.length : 0;
+    };
+    const readMin = (w) => Math.max(1, Math.round(w / 200));
+    let target = 0;
+    try { target = parseInt(localStorage.getItem(TARGET_KEY) || '', 10) || 0; } catch {}
+
+    function updateChrome(md) {
+      const w = countWords(md), r = readMin(w);
+      if (wc.words) wc.words.textContent = w.toLocaleString();
+      if (wc.read) wc.read.textContent = r + ' min';
+      if (wc.written) wc.written.textContent = w.toLocaleString();
+      if (wc.line) wc.line.textContent = w.toLocaleString() + ' word' + (w === 1 ? '' : 's') + ' · ' + r + ' min read';
+      if (wc.goalWrap) {
+        if (target > 0) {
+          wc.goalWrap.hidden = false;
+          wc.goalBar.style.width = Math.min(100, Math.round((w / target) * 100)) + '%';
+          wc.goalText.textContent = w.toLocaleString() + ' of ' + target.toLocaleString();
+        } else wc.goalWrap.hidden = true;
+      }
+      try {
+        const sess = JSON.parse(localStorage.getItem(SESS_KEY) || '{}');
+        if (!sess[today] || typeof sess[today].start !== 'number') sess[today] = { start: w, last: w };
+        sess[today].last = w;
+        localStorage.setItem(SESS_KEY, JSON.stringify(sess));
+        if (wc.today) wc.today.textContent = Math.max(0, sess[today].last - sess[today].start).toLocaleString();
+        let streak = 0; const d = new Date(today + 'T00:00:00');
+        while (sess[dayStr(d)]) { streak++; d.setDate(d.getDate() - 1); }
+        if (wc.streak) { wc.streak.hidden = streak < 2; wc.streak.textContent = streak + '-day streak'; }
+      } catch {}
+      renderOutline(md);
+    }
+
+    function renderOutline(md) {
+      const host = wc.outline; if (!host) return;
+      const lines = String(md || '').split('\n');
+      const items = []; let cur = null;
+      const flush = () => { if (cur) { cur.words = countWords(cur.buf.join('\n')); items.push(cur); } };
+      for (const ln of lines) {
+        const h = ln.match(/^(#{1,6})\s+(.+)$/);
+        if (h) { flush(); cur = { level: h[1].length, text: h[2].trim(), buf: [] }; }
+        else if (cur) cur.buf.push(ln);
+      }
+      flush();
+      if (!items.length) { host.innerHTML = '<li class="rempty">Headings appear here as you write.</li>'; return; }
+      host.innerHTML = items.map((it, i) => {
+        const isTitle = i === 0 && it.level === 1;
+        const cls = it.level >= 2 ? ' class="sub"' : '';
+        const tally = isTitle ? 'title' : (it.words ? it.words.toLocaleString() : '·');
+        return '<li' + cls + ' data-i="' + i + '"><span>' + escHtml(it.text) + '</span><span class="w">' + tally + '</span></li>';
+      }).join('');
+    }
+
+    // Rail tabs
+    const rtabs = document.getElementById('rtabs');
+    if (rtabs) rtabs.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-p]'); if (!b) return;
+      rtabs.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+      wrap.querySelectorAll('.rpane').forEach((p) => p.classList.toggle('on', p.dataset.pane === b.dataset.p));
+    });
+    // Outline → scroll to the matching heading in the live editor
+    if (wc.outline) wc.outline.addEventListener('click', (e) => {
+      const li = e.target.closest('li[data-i]'); if (!li) return;
+      const hs = document.querySelectorAll('#milkdown h1, #milkdown h2, #milkdown h3, #milkdown h4, #milkdown h5, #milkdown h6');
+      const el = hs[parseInt(li.dataset.i, 10)];
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    // Notes — private, per-post, this device
+    const notesHost = document.getElementById('r-notes');
+    const noteInput = document.getElementById('r-note-input');
+    const loadNotes = () => { try { return JSON.parse(localStorage.getItem(NOTES_KEY) || '[]'); } catch { return []; } };
+    function renderNotes() {
+      const list = loadNotes();
+      notesHost.innerHTML = list.length
+        ? list.slice().reverse().map((n) => '<li><span class="w">' + escHtml(n.when || '') + '</span>' + escHtml(n.text) + '</li>').join('')
+        : '<li class="rempty">No notes yet. These stay private — never published.</li>';
+    }
+    if (noteInput) noteInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return; e.preventDefault();
+      const t = noteInput.value.trim(); if (!t) return;
+      const list = loadNotes();
+      list.push({ text: t, when: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) });
+      try { localStorage.setItem(NOTES_KEY, JSON.stringify(list)); } catch {}
+      noteInput.value = ''; renderNotes();
+    });
+    renderNotes();
+    // Length target
+    const targetInput = document.getElementById('r-target');
+    if (targetInput) {
+      if (target > 0) targetInput.value = String(target);
+      targetInput.addEventListener('input', () => {
+        target = parseInt(targetInput.value, 10) || 0;
+        try { target > 0 ? localStorage.setItem(TARGET_KEY, String(target)) : localStorage.removeItem(TARGET_KEY); } catch {}
+        try { updateChrome(crepe.getMarkdown()); } catch {}
+      });
+    }
+    // Post-tab identity + top-bar state
+    const wState = document.getElementById('w-state');
+    const rSeries = document.getElementById('r-series');
+    const rState2 = document.getElementById('r-state2');
+    if (editing) {
+      if (rSeries) rSeries.textContent = editing.series || 'None';
+      const label = editing.draft ? 'Draft' : 'Published';
+      if (rState2) rState2.textContent = label;
+      if (wState) { wState.textContent = editing.draft ? 'Draft' : 'Editing'; if (!editing.draft) wState.classList.add('live'); }
+    }
+    // "Saved" mirrors the autosave status text
+    const rSaved = document.getElementById('r-saved');
+    if (rSaved) {
+      const sync = () => { rSaved.textContent = statusEl.textContent || '—'; };
+      try { new MutationObserver(sync).observe(statusEl, { childList: true, characterData: true, subtree: true }); } catch {}
+      sync();
+    }
+    // Focus mode + keyboard shortcuts
+    const focusBtn = document.getElementById('focusbtn');
+    const setFocus = (on) => wrap.classList.toggle('focus', on == null ? !wrap.classList.contains('focus') : on);
+    if (focusBtn) focusBtn.addEventListener('click', () => setFocus());
+    const openPub = document.getElementById('r-openpub');
+    if (openPub) openPub.addEventListener('click', () => document.getElementById('publish-btn').click());
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && wrap.classList.contains('focus')) { setFocus(false); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key === '\\') { e.preventDefault(); setFocus(); }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); document.getElementById('publish-btn').click(); }
+    });
+    // Chrome state is ready — allow the live hook to run, then paint once.
+    chromeInit = true;
+    try { updateChrome(crepe.getMarkdown()); } catch {}
     // A failed edit-load must not let the author publish (that would create a new post
     // and orphan the one they meant to edit). Block publishing until they refresh.
     if (editLoadFailed) {
