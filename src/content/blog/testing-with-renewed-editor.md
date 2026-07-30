@@ -4,6 +4,7 @@ description: "sdfsdgdga"
 pubDate: "2026-07-29"
 tags: []
 draft: false
+gateable: true
 ---
 ## This is another line
 
