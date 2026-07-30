@@ -156,10 +156,32 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
               </div>
               <div class="sub-x off" id="schedbox">
                 <div class="sched">
-                  <input type="date" id="pm-sched-date" aria-label="Publish date" />
-                  <input type="time" id="pm-sched-time" aria-label="Publish time" />
-                  <select id="pm-sched-tz" aria-label="Time zone"></select>
+                  <div class="spwrap" id="spw-date">
+                    <button type="button" class="spick" aria-haspopup="dialog" aria-expanded="false" aria-label="Publish date">
+                      <svg class="spick-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>
+                      <span class="spick-v" id="sp-date-v">Pick a date</span>
+                    </button>
+                    <div class="spop" role="dialog" hidden></div>
+                  </div>
+                  <div class="spwrap" id="spw-time">
+                    <button type="button" class="spick" aria-haspopup="dialog" aria-expanded="false" aria-label="Publish time">
+                      <svg class="spick-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>
+                      <span class="spick-v" id="sp-time-v">Set time</span>
+                    </button>
+                    <div class="spop" role="dialog" hidden></div>
+                  </div>
+                  <div class="spwrap spwrap-tz" id="spw-tz">
+                    <button type="button" class="spick" aria-haspopup="listbox" aria-expanded="false" aria-label="Time zone">
+                      <svg class="spick-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18"/></svg>
+                      <span class="spick-v" id="sp-tz-v">Time zone</span>
+                      <svg class="spick-c" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                    <div class="spop" role="listbox" hidden></div>
+                  </div>
                 </div>
+                <input type="hidden" id="pm-sched-date" />
+                <input type="hidden" id="pm-sched-time" />
+                <input type="hidden" id="pm-sched-tz" />
                 <div id="pm-sched-note" style="margin-top:8px;color:var(--ink-faint)">Saved hidden until then; a cron publishes it (within ~15 min of the time).</div>
               </div>
             </div>
@@ -1298,20 +1320,14 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // live at that time. The primary button relabels to "Schedule" while scheduling.
     let whenChoice = 'now';
     const whenpick = $('whenpick');
-    const schedDate = $('pm-sched-date') as HTMLInputElement;
-    const schedTime = $('pm-sched-time') as HTMLInputElement;
-    const schedTz = $('pm-sched-tz') as HTMLSelectElement;
-    // Fill the time-zone select once — every IANA zone where the browser supports it,
-    // defaulting to the author's own zone (so the picked time means what they expect).
-    (function fillTimezones() {
-      let zones: string[] = [];
-      try { const f = (Intl as any).supportedValuesOf; if (f) zones = f('timeZone'); } catch {}
-      let here = 'UTC';
-      try { here = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch {}
-      if (!zones.length) zones = ['UTC', 'America/Los_Angeles', 'America/New_York', 'America/Sao_Paulo', 'Europe/London', 'Europe/Berlin', 'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney'];
-      if (!zones.includes(here)) zones.unshift(here);
-      // Show each zone's CURRENT UTC offset ("UTC+05:30") and order by it — most people
-      // recall the time difference, not the zone name.
+    const schedDate = $('pm-sched-date') as HTMLInputElement; // hidden, value = YYYY-MM-DD
+    const schedTime = $('pm-sched-time') as HTMLInputElement; // hidden, value = HH:MM
+    const schedTz = $('pm-sched-tz') as HTMLInputElement;     // hidden, value = IANA zone
+
+    // Fully custom date / time / zone pickers. Native <input type=date/time> and <select>
+    // render OS popups that can't be themed to the Studio, so we roll our own on-brand
+    // popovers; each writes into the hidden input the scheduling code above reads.
+    const sched = (() => {
       const now = new Date();
       const offMin = (tz: string) => {
         try {
@@ -1322,19 +1338,108 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         } catch { return 0; }
       };
       const fmtOff = (min: number) => `UTC${min < 0 ? '−' : '+'}${String(Math.floor(Math.abs(min) / 60)).padStart(2, '0')}:${String(Math.abs(min) % 60).padStart(2, '0')}`;
-      const list = zones.map((z) => ({ z, off: offMin(z) })).sort((a, b) => a.off - b.off || a.z.localeCompare(b.z));
-      schedTz.innerHTML = list.map(({ z, off }) => `<option value="${z}"${z === here ? ' selected' : ''}>(${fmtOff(off)}) ${z.replace(/_/g, ' ')}</option>`).join('');
+      let zones: string[] = [];
+      try { const f = (Intl as any).supportedValuesOf; if (f) zones = f('timeZone'); } catch {}
+      let here = 'UTC';
+      try { here = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch {}
+      if (!zones.length) zones = ['UTC', 'America/Los_Angeles', 'America/New_York', 'America/Sao_Paulo', 'Europe/London', 'Europe/Berlin', 'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney'];
+      if (!zones.includes(here)) zones.unshift(here);
+      // Order by current UTC offset — most people recall the time difference, not the name.
+      const TZ = zones.map((z) => ({ z, off: offMin(z) })).sort((a, b) => a.off - b.off || a.z.localeCompare(b.z)).map((o) => ({ ...o, label: `(${fmtOff(o.off)}) ${o.z.replace(/_/g, ' ')}` }));
+      schedTz.value = here;
+
+      const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as any)[c]);
+      const centerIn = (c: HTMLElement | null, el: HTMLElement | null) => { if (!c || !el) return; const cr = c.getBoundingClientRect(), er = el.getBoundingClientRect(); c.scrollTop += (er.top - cr.top) - (c.clientHeight / 2 - er.height / 2); };
+
+      // one popover open at a time; outside-click / Esc closes.
+      let open: { wrap: HTMLElement; trigger: HTMLElement; panel: HTMLElement } | null = null;
+      const closeAll = () => { if (open) { open.panel.hidden = true; open.trigger.setAttribute('aria-expanded', 'false'); open = null; } };
+      document.addEventListener('click', (e) => { if (open && !open.wrap.contains(e.target as Node)) closeAll(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { closeAll(); } });
+      const wire = (id: string, build: (panel: HTMLElement) => void) => {
+        const wrap = $(id); const trigger = wrap.querySelector('.spick') as HTMLElement; const panel = wrap.querySelector('.spop') as HTMLElement;
+        trigger.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const wasOpen = !!open && open.panel === panel; closeAll();
+          if (!wasOpen) { build(panel); panel.hidden = false; trigger.setAttribute('aria-expanded', 'true'); open = { wrap, trigger, panel }; (panel.querySelector('[data-focus]') as HTMLElement | null)?.focus(); }
+        });
+      };
+
+      const dateLabel = $('sp-date-v'), timeLabel = $('sp-time-v'), tzLabel = $('sp-tz-v');
+      const niceDate = (v: string) => { if (!v) return 'Pick a date'; const [Y, M, D] = v.split('-').map(Number); return new Date(Date.UTC(Y, M - 1, D)).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }); };
+      const renderLabels = () => {
+        dateLabel.textContent = niceDate(schedDate.value);
+        timeLabel.textContent = schedTime.value || 'Set time';
+        const f = TZ.find((t) => t.z === schedTz.value); tzLabel.textContent = f ? f.label : (schedTz.value || 'Time zone');
+      };
+
+      // ---- calendar ----
+      let viewY: number, viewM: number;
+      const drawCal = (panel: HTMLElement) => {
+        const first = new Date(viewY, viewM, 1); const start = first.getDay(); const days = new Date(viewY, viewM + 1, 0).getDate();
+        const monthName = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        const cur = schedDate.value; const t = new Date(); const tY = t.getFullYear(), tM = t.getMonth(), tD = t.getDate();
+        let cells = '';
+        for (let i = 0; i < start; i++) cells += '<span class="cal-x"></span>';
+        for (let d = 1; d <= days; d++) {
+          const iso = `${viewY}-${String(viewM + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          cells += `<button type="button" class="cal-d${cur === iso ? ' sel' : ''}${viewY === tY && viewM === tM && d === tD ? ' today' : ''}" data-iso="${iso}">${d}</button>`;
+        }
+        panel.innerHTML = `<div class="cal-h"><button type="button" class="cal-nav" data-mv="-1" aria-label="Previous month">‹</button><b>${monthName}</b><button type="button" class="cal-nav" data-mv="1" aria-label="Next month">›</button></div><div class="cal-wd"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div><div class="cal-g">${cells}</div><div class="cal-f"><button type="button" data-cal="clear">Clear</button><button type="button" data-cal="today">Today</button></div>`;
+        panel.querySelectorAll('[data-mv]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); viewM += Number((b as HTMLElement).dataset.mv); if (viewM < 0) { viewM = 11; viewY--; } if (viewM > 11) { viewM = 0; viewY++; } drawCal(panel); }));
+        panel.querySelectorAll('.cal-d').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); schedDate.value = (b as HTMLElement).dataset.iso!; renderLabels(); closeAll(); }));
+        panel.querySelector('[data-cal="clear"]')!.addEventListener('click', (e) => { e.stopPropagation(); schedDate.value = ''; renderLabels(); closeAll(); });
+        panel.querySelector('[data-cal="today"]')!.addEventListener('click', (e) => { e.stopPropagation(); const n = new Date(); viewY = n.getFullYear(); viewM = n.getMonth(); schedDate.value = `${viewY}-${String(viewM + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; renderLabels(); closeAll(); });
+      };
+      const buildDate = (panel: HTMLElement) => {
+        const cur = schedDate.value ? schedDate.value.split('-').map(Number) : null;
+        const base = cur ? new Date(cur[0], cur[1] - 1, cur[2]) : new Date();
+        viewY = base.getFullYear(); viewM = base.getMonth();
+        drawCal(panel);
+      };
+
+      // ---- time (hour + minute columns) ----
+      const buildTime = (panel: HTMLElement) => {
+        const [ch, cm] = (schedTime.value || '').split(':');
+        const col = (n: number, sel: string, kind: string) => { let h = ''; for (let i = 0; i < n; i++) { const v = String(i).padStart(2, '0'); h += `<button type="button" class="tm-i${v === sel ? ' sel' : ''}" data-kind="${kind}" data-v="${v}">${v}</button>`; } return h; };
+        panel.innerHTML = `<div class="tm-cols"><div class="tm-col" data-col="h">${col(24, ch, 'h')}</div><div class="tm-col" data-col="m">${col(60, cm, 'm')}</div></div>`;
+        const setPart = (kind: string, v: string) => { let [hh, mm] = (schedTime.value || '09:00').split(':'); if (kind === 'h') hh = v; else mm = v; schedTime.value = `${hh}:${mm}`; renderLabels(); panel.querySelectorAll(`[data-kind="${kind}"]`).forEach((x) => x.classList.toggle('sel', (x as HTMLElement).dataset.v === v)); };
+        panel.querySelectorAll('.tm-i').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setPart((b as HTMLElement).dataset.kind!, (b as HTMLElement).dataset.v!); }));
+        requestAnimationFrame(() => { panel.querySelectorAll('.tm-col').forEach((c) => centerIn(c as HTMLElement, c.querySelector('.tm-i.sel'))); });
+      };
+
+      // ---- zone (search + list) ----
+      const buildTz = (panel: HTMLElement) => {
+        const rows = (q: string) => TZ.filter((t) => !q || t.label.toLowerCase().includes(q) || t.z.toLowerCase().includes(q)).map((t) => `<button type="button" class="tz-i${t.z === schedTz.value ? ' sel' : ''}" data-z="${esc(t.z)}"><b>${fmtOff(t.off)}</b><span>${esc(t.z.replace(/_/g, ' '))}</span></button>`).join('');
+        panel.innerHTML = `<div class="tz-s"><input type="text" placeholder="Search zone or offset…" data-focus /></div><div class="tz-l">${rows('')}</div>`;
+        const list = panel.querySelector('.tz-l') as HTMLElement; const inp = panel.querySelector('input') as HTMLInputElement;
+        const bind = () => list.querySelectorAll('.tz-i').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); schedTz.value = (b as HTMLElement).dataset.z!; renderLabels(); closeAll(); }));
+        inp.addEventListener('input', () => { list.innerHTML = rows(inp.value.trim().toLowerCase()); bind(); });
+        inp.addEventListener('click', (e) => e.stopPropagation());
+        inp.addEventListener('keydown', (e) => e.stopPropagation());
+        bind();
+        requestAnimationFrame(() => centerIn(list, list.querySelector('.tz-i.sel')));
+      };
+
+      wire('spw-date', buildDate);
+      wire('spw-time', buildTime);
+      wire('spw-tz', buildTz);
+      renderLabels();
+      return {
+        close: closeAll,
+        setDefault() {
+          if (!schedDate.value) { const d = new Date(Date.now() + 24 * 3600 * 1000); schedDate.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; schedTime.value = '09:00'; renderLabels(); }
+        },
+      };
     })();
+
     const setPrimaryLabel = () => { $('pm-publish').textContent = whenChoice === 'later' ? 'Schedule' : (editing ? 'Update' : 'Publish now'); };
     whenpick.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('button[data-w]') as HTMLElement | null; if (!b) return;
       whenChoice = b.dataset.w!;
       whenpick.querySelectorAll('.pk').forEach((x) => x.classList.toggle('on', x === b));
       $('schedbox').classList.toggle('off', whenChoice !== 'later');
-      if (whenChoice === 'later' && !schedDate.value) {
-        const d = new Date(Date.now() + 24 * 3600 * 1000); // default tomorrow 09:00
-        schedDate.value = d.toISOString().slice(0, 10); schedTime.value = '09:00';
-      }
+      if (whenChoice === 'later') sched.setDefault(); else sched.close();
       setPrimaryLabel();
     });
     // Interpret the picked wall-clock date+time IN THE SELECTED ZONE and return the UTC

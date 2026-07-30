@@ -569,18 +569,58 @@ table.t th.num { text-align: right; }
 .mailrow .tog { margin-left: auto; }
 .subj { margin-top: 8px; }
 .subj input { width: 100%; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 3px; color: var(--ink); font-family: var(--serif-display); font-size: 14px; padding: 8px 11px; }
-/* Schedule picker (When → Schedule it): clean, unified date / time / zone fields. */
-.sched { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.sched input, .sched select { background: var(--paper-2); border: 1px solid var(--rule); border-radius: var(--admin-radius); color: var(--ink); font: inherit; font-size: 13.5px; height: 40px; padding: 0 12px; box-sizing: border-box; transition: border-color .15s ease; }
-.sched input[type="date"] { min-width: 158px; }
-.sched input[type="time"] { min-width: 116px; }
-.sched select { min-width: 210px; max-width: 300px; cursor: pointer; font-variant-numeric: tabular-nums; }
-.sched input:hover, .sched select:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--rule)); }
-.sched input:focus, .sched select:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
-/* Native date/time pickers draw their calendar/clock icon + popup via `color-scheme`,
-   so match it to the Studio theme — otherwise the chrome is dark-on-dark (invisible). */
-:root[data-theme="dark"] .sched input, :root[data-theme="dark"] .sched select { color-scheme: dark; }
-:root[data-theme="light"] .sched input, :root[data-theme="light"] .sched select { color-scheme: light; }
+/* Schedule picker (When → Schedule it): fully custom, on-brand date / time / zone
+   popovers — native <input date/time> and <select> chrome can't be themed to match. */
+.sched { display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch; }
+.spwrap { position: relative; }
+.spick { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 14px; background: var(--paper-2); border: 1px solid var(--rule); border-radius: var(--admin-radius); color: var(--ink); font: inherit; font-size: 13.5px; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.spick:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--rule)); }
+.spick[aria-expanded="true"] { border-color: var(--accent); }
+.spick-v { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.spick-i { width: 15px; height: 15px; flex: none; opacity: .68; }
+.spick-c { width: 13px; height: 13px; flex: none; margin-left: 2px; opacity: .55; transition: transform .18s ease; }
+.spick[aria-expanded="true"] .spick-c { transform: rotate(180deg); }
+.spwrap-tz { flex: 1 1 240px; min-width: 210px; }
+.spwrap-tz .spick { width: 100%; justify-content: flex-start; }
+.spwrap-tz .spick-v { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+
+/* floating panel shared shell */
+.spop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--admin-radius); box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .5), 0 2px 8px rgba(0, 0, 0, .16); padding: 10px; }
+.spwrap-tz .spop { left: 0; right: 0; padding: 8px; }
+
+/* calendar */
+.cal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding: 0 2px; }
+.cal-h b { font-size: 13.5px; font-weight: 600; }
+.cal-nav { width: 28px; height: 28px; border: 1px solid var(--rule); background: var(--paper-2); border-radius: var(--admin-radius-sm); color: var(--ink); cursor: pointer; font-size: 15px; line-height: 1; }
+.cal-nav:hover { border-color: var(--accent); color: var(--accent); }
+.cal-wd { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 4px; }
+.cal-wd span { text-align: center; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); padding: 2px 0; }
+.cal-g { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-x { height: 32px; }
+.cal-d { height: 32px; border: 0; background: transparent; border-radius: var(--admin-radius-sm); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+.cal-d:hover { background: var(--paper-2); }
+.cal-d.today { color: var(--accent); font-weight: 600; }
+.cal-d.sel { background: var(--accent); color: #fff; font-weight: 600; }
+.cal-f { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--rule); }
+.cal-f button { background: none; border: 0; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; padding: 2px 4px; }
+.cal-f button:hover { text-decoration: underline; }
+
+/* time columns */
+.tm-cols { display: flex; gap: 8px; }
+.tm-col { width: 62px; max-height: 208px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; scroll-behavior: smooth; }
+.tm-i { flex: none; height: 32px; border: 0; background: transparent; border-radius: var(--admin-radius-sm); color: var(--ink); font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.tm-i:hover { background: var(--paper-2); }
+.tm-i.sel { background: var(--accent); color: #fff; font-weight: 600; }
+
+/* zone search + list */
+.tz-s { margin-bottom: 6px; }
+.tz-s input { width: 100%; box-sizing: border-box; height: 34px; padding: 0 10px; background: var(--paper-2); border: 1px solid var(--rule); border-radius: var(--admin-radius-sm); color: var(--ink); font: inherit; font-size: 13px; }
+.tz-s input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.tz-l { max-height: 244px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; scrollbar-width: thin; }
+.tz-i { display: flex; align-items: baseline; gap: 10px; text-align: left; padding: 7px 9px; border: 0; background: transparent; border-radius: var(--admin-radius-sm); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+.tz-i:hover { background: var(--paper-2); }
+.tz-i.sel { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.tz-i b { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12px; color: var(--accent); flex: none; width: 82px; }
 .chk { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule-soft); }
 .chk li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--rule-soft); font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
 .chk svg { flex: none; width: 13px; height: 13px; margin-top: 3px; color: color-mix(in srgb, var(--ink) 34%, transparent); }
