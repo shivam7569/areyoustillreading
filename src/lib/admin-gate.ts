@@ -97,6 +97,23 @@ export function markAdmin(c: AdminCheck): void {
 }
 
 /**
+ * Run `fn` as soon as the page is (optimistically) cleared to load its admin data.
+ * For a RETURNING admin (cachedAdmin) this fires IMMEDIATELY — so the Studio starts
+ * fetching without first paying the is_admin() RPC round-trip that whenAdmin waits
+ * on (that sequential RPC-then-fetch is the "pages lag before the numbers show"
+ * complaint). Otherwise it waits for the confirmed check. Guarded to run once even
+ * though both paths can fire. SAFE: every /api/admin/* fetch still carries the
+ * bearer token and is re-verified server-side, so an optimistic guess that turns
+ * out wrong simply gets 401s (and the gate shows the denied/sign-in screen).
+ */
+export function onAdminReady(fn: () => void): void {
+  let ran = false;
+  const go = () => { if (ran) return; ran = true; try { fn(); } catch (e) { console.error(e); } };
+  if (cachedAdmin()) go();
+  whenAdmin.then(go);
+}
+
+/**
  * Authorization header for calling admin endpoints. Every /admin fetch to an
  * /api/admin/* Function must include this so the server can re-verify admin.
  * Returns {} when there is no session (the call will then be correctly rejected).

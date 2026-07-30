@@ -72,7 +72,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 </style>
 
 <script>
-  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
   import { fmtNum, esc } from '../../lib/admin-format';
 
   let range = '30d';
@@ -225,5 +225,5 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   $('purge-synthetic').addEventListener('click', () => purge('purge-synthetic', 'Delete all load-test rows'));
   $('purge-old').addEventListener('click', () => purge('purge-old', 'Delete analytics older than 90 days'));
 
-  whenAdmin.then(async () => { await loadTitles(); load(); });
+  onAdminReady(async () => { await loadTitles(); load(); });
 </script>

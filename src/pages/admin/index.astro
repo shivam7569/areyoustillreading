@@ -60,7 +60,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 </AdminLayout>
 
 <script>
-  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
   import { fmtNum, fmtMoney, fmtDate, esc } from '../../lib/admin-format';
 
   const $ = (id: string) => document.getElementById(id);
@@ -137,9 +137,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     }
   }
 
-  whenAdmin.then(async () => {
-    await loadPosts();   // populates titles first (used by loadDepth)
+  onAdminReady(async () => {
+    // Overview fires in parallel (independent); posts must land before depth
+    // (depth needs the slug→title map), so those two stay sequential.
     loadOverview();
+    await loadPosts();
     loadDepth();
   });
 </script>

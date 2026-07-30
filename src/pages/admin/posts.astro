@@ -96,7 +96,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
 <script>
   import { supabase } from '../../lib/supabase';
-  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
   import { fmtDate, esc } from '../../lib/admin-format';
 
   let all: any[] = [];
@@ -559,5 +559,5 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   sortEl.addEventListener('change', view);
   document.getElementById('refresh')!.addEventListener('click', load);
 
-  whenAdmin.then(() => { load(); loadConfirmedCount(); });
+  onAdminReady(() => { load(); loadConfirmedCount(); });
 </script>

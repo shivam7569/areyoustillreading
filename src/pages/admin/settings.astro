@@ -35,7 +35,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       <header><h2>Reading &amp; analytics</h2></header>
       <div class="pb flush">
         <div class="setrow"><div class="k">Read-through analytics<small>First-party &amp; cookieless — traffic, read depth, referrers, conversion. No third-party script, no consent banner.</small></div><div class="f"><span class="pill live">On</span><a class="btn btn-ghost btn-sm" href="/admin/analytics">Open →</a></div></div>
-        <div class="setrow"><div class="k">Don't count your own visits<small>Append <code>?noanalytics=1</code> to any page once, from a browser, to opt that browser out.</small></div><div class="f"><span style="color:var(--ink-faint);font-size:12.5px">Per browser</span></div></div>
+        <div class="setrow"><div class="k">Don't count your own visits<small>Your own reading shouldn't inflate the numbers. Flag this browser once and it's excluded from analytics for good — until you switch it back. It's remembered per browser (there's no logged-out signal to detect you automatically).</small></div><div class="f"><span class="pill" id="na-pill" hidden>Excluded</span><button class="btn btn-ghost btn-sm" id="na-toggle" type="button">…</button></div></div>
         <div class="setrow"><div class="k">Reading time<small>Estimated from word count. Also sets a post's height on the series plate.</small></div><div class="f"><span class="pill live">Shown</span></div></div>
       </div>
     </div>
@@ -70,9 +70,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
 <script>
   import { supabase } from '../../lib/supabase';
-  import { whenAdmin } from '../../lib/admin-gate';
+  import { onAdminReady } from '../../lib/admin-gate';
 
-  whenAdmin.then(async () => {
+  onAdminReady(async () => {
     const { data } = await supabase.auth.getSession();
     const el = document.getElementById('acct');
     if (el) el.textContent = data.session?.user?.email ? data.session.user.email : 'Signed in';
@@ -81,4 +81,25 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     await supabase.auth.signOut();
     window.location.href = '/';
   });
+
+  // "Don't count your own visits" — a real, one-click, per-browser toggle. Sets the
+  // same localStorage flag the ?noanalytics=1 URL sets (Settings is same-origin), so
+  // the analytics beacon skips this browser from now on. No navigation, no URL trick.
+  const NA_KEY = 'aysr:no-analytics';
+  const naToggle = document.getElementById('na-toggle')!;
+  const naPill = document.getElementById('na-pill')!;
+  function paintNa() {
+    let on = false;
+    try { on = localStorage.getItem(NA_KEY) === '1'; } catch {}
+    naPill.hidden = !on;
+    naToggle.textContent = on ? 'Start counting again' : 'Exclude this browser';
+  }
+  naToggle.addEventListener('click', () => {
+    try {
+      if (localStorage.getItem(NA_KEY) === '1') localStorage.removeItem(NA_KEY);
+      else localStorage.setItem(NA_KEY, '1');
+    } catch {}
+    paintNa();
+  });
+  paintNa();
 </script>

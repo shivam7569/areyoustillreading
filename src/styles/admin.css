@@ -442,8 +442,16 @@ ul.olist, ul.nlist { list-style: none; margin: 0; padding: 0; display: flex; fle
 .wstatus kbd, .esc kbd { font-family: var(--font-mono); font-size: 10.5px; background: color-mix(in srgb, var(--ink) 8%, transparent); border: 1px solid var(--rule); border-radius: 3px; padding: 1px 5px; color: var(--ink-soft); }
 .esc { display: none; }
 
-/* Focus mode — hide chrome, centre a narrow column, reveal the Esc hint. */
-#editor-wrap.focus .wtop .acts, #editor-wrap.focus .rail, #editor-wrap.focus .wstatus { display: none; }
+/* Focus mode — hide the ENTIRE studio chrome and leave only the editor.
+   The shell-level hides key off a body class (set by the Write page) because the
+   sidebar + topbar live outside #editor-wrap; the editor-level hides stay scoped. */
+body.studio-focus .admin-sidebar,
+body.studio-focus .admin-topbar { display: none; }
+body.studio-focus .admin { grid-template-columns: 1fr; }
+body.studio-focus .admin-main { max-width: 820px; margin: 0 auto; padding: 40px 24px 80px; }
+#editor-wrap.focus .wtop,
+#editor-wrap.focus .rail,
+#editor-wrap.focus .wstatus { display: none; }
 #editor-wrap.focus .wr { grid-template-columns: 1fr; }
 #editor-wrap.focus .wcanvas { max-width: 760px; margin: 0 auto; }
 #editor-wrap.focus .esc { display: block; position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 7px 14px; border-radius: 999px; z-index: 40; box-shadow: 0 8px 24px -10px rgba(0,0,0,.5); font-size: 12.5px; }
@@ -526,12 +534,31 @@ table.t th.num { text-align: right; }
 .seeds .d { flex: none; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .seeds .w { margin-left: auto; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
 
+/* Engagement — reader interaction (comments / highlights / notes) moderation rows.
+   Global (not scoped) because the rows are injected via innerHTML. */
+.eng-item { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 13px; align-items: start; padding: 15px 17px; border-bottom: 1px solid var(--rule-soft); }
+.eng-item:last-child { border-bottom: 0; }
+.eng-item .av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--admin-accent-soft); color: var(--accent); font-family: var(--serif-display); font-size: 15px; font-weight: 600; }
+.eng-main { min-width: 0; }
+.eng-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
+.eng-item .who { font-weight: 600; color: var(--ink); font-size: 13.5px; }
+.eng-item .meta { color: var(--ink-faint); font-size: 12px; }
+.eng-item .meta a { color: var(--ink-soft); text-decoration: none; }
+.eng-item .meta a:hover { color: var(--accent); }
+.eng-item .body { margin: 0; color: var(--ink-soft); font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.eng-item blockquote { margin: 0; padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); color: var(--ink-soft); font-size: 13.5px; line-height: 1.55; font-style: italic; overflow-wrap: anywhere; }
+.eng-item .del { flex: none; align-self: center; background: transparent; border: 1px solid transparent; color: var(--ink-faint); font-family: var(--sans); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: var(--admin-radius-sm); cursor: pointer; opacity: 0; transition: opacity .15s ease, color .15s ease, border-color .15s ease; }
+.eng-item:hover .del, .eng-item:focus-within .del { opacity: 1; }
+.eng-item .del:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--rule)); }
+.eng-item .del.armed { opacity: 1; color: var(--on-accent); background: var(--danger); border-color: var(--danger); }
+@media (hover: none) { .eng-item .del { opacity: 1; } }
+
 /* Settings rows */
 .setrow { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 15px 17px; border-bottom: 1px solid var(--rule-soft); }
 .setrow:last-child { border-bottom: 0; }
 .setrow .k { font-size: 13.5px; color: var(--ink); font-weight: 500; display: flex; flex-direction: column; gap: 3px; }
 .setrow .k small { font-weight: 400; font-size: 12px; color: var(--ink-faint); line-height: 1.45; }
-.setrow .f { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; }
+.setrow .f { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; font-family: var(--sans); font-size: 13.5px; color: var(--ink-soft); text-align: right; }
 .setrow .f .inp, .setrow .f .sel { min-width: 200px; }
 .panel.danger { border-color: color-mix(in srgb, var(--danger) 35%, var(--rule)); }
 .panel.danger > header h2 { color: var(--danger); }

@@ -19,7 +19,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       <div>Words written<b id="d-words">—</b></div>
       <div>Longest untouched<b id="d-old">—</b></div>
     </div>
-    <div style="font-size:12.5px;color:var(--ink-faint);margin-top:-14px">Nothing here is visible to readers.</div>
+    <div style="font-size:12.5px;color:var(--ink-faint);margin-top:-14px">Nothing here is visible to readers. Drafts below are posts saved with “Save as a draft”; work still open in the editor shows up first.</div>
+
+    <div id="scratch"></div>
 
     <div id="drafts-host"><div class="muted">Loading drafts…</div></div>
 
@@ -32,7 +34,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 </AdminLayout>
 
 <script>
-  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { supabase } from '../../lib/supabase';
+  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
   import { fmtDate, esc } from '../../lib/admin-format';
 
   const $ = (id: string) => document.getElementById(id)!;
@@ -169,6 +172,40 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     ($('seed-input') as HTMLInputElement).value = ''; renderSeeds();
   });
 
-  whenAdmin.then(load);
+  // The Write editor autosaves a NEW post to ONE scratchpad slot (localStorage + a
+  // single Supabase drafts row). It has no title/slug/frontmatter yet, so it is NOT
+  // a draft *post* and won't appear in the list below until you Publish → "Save as a
+  // draft". Surface it here so in-progress writing shows up where you'd look for it.
+  const STARTER = '# New post\n\nStart writing.\n';
+  const firstHeading = (md: string) => { const m = String(md || '').match(/^#\s+(.+)$/m); return m ? m[1].trim() : ''; };
+  async function loadScratch() {
+    let content = '';
+    try { content = localStorage.getItem('aysr:editor-draft') || ''; } catch {}
+    try {
+      const { data: s } = await supabase.auth.getSession();
+      const uid = s?.session?.user?.id;
+      if (uid) {
+        const { data: row } = await supabase.from('drafts').select('content, updated_at').eq('user_id', uid).maybeSingle();
+        if (row && typeof (row as any).content === 'string' && (row as any).content.trim()) content = (row as any).content;
+      }
+    } catch {}
+    const host = document.getElementById('scratch');
+    if (!host) return;
+    const trimmed = content.trim();
+    if (!trimmed || trimmed === STARTER.trim()) { host.innerHTML = ''; return; }
+    const title = firstHeading(content) || 'Untitled draft';
+    const words = (content.replace(/```[\s\S]*?```/g, ' ').replace(/[#*_>`\[\]()!-]+/g, ' ').match(/\S+/g) || []).length;
+    host.innerHTML = `<div style="margin-bottom:22px">
+      <div class="dhead"><span>In the editor</span><em>autosaved · not saved as a post yet</em></div>
+      <div class="dgrid"><article class="dcard">
+        <h3>${esc(title)}</h3>
+        <div class="ser">Continuously autosaved. Publish it — or Publish with “Save as a draft” — to keep it as a post.</div>
+        <div class="dprog"><span>${words.toLocaleString()} words</span><span class="bar"><i style="width:${words ? 35 : 4}%"></i></span><span>in progress</span></div>
+        <div class="dfoot"><span>Open in the editor</span><a class="go" href="/admin/write">Continue →</a></div>
+      </article></div>
+    </div>`;
+  }
+
+  onAdminReady(() => { load(); loadScratch(); });
   renderSeeds();
 </script>

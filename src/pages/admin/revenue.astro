@@ -34,7 +34,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 </AdminLayout>
 
 <script>
-  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
   import { fmtNum, fmtMoney, esc } from '../../lib/admin-format';
 
   const $ = (id: string) => document.getElementById(id)!;
@@ -84,5 +84,5 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     } catch { setKpi('r-paid', '0'); }
   }
 
-  whenAdmin.then(async () => { await loadPosts(); loadSales(); });
+  onAdminReady(async () => { await loadPosts(); loadSales(); });
 </script>

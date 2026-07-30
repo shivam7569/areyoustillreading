@@ -42,18 +42,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   </section>
 </AdminLayout>
 
-<style>
-  .eng-item { display: flex; gap: 1rem; justify-content: space-between; align-items: flex-start; padding: 1rem 1.25rem; border-bottom: 1px solid var(--rule-soft); }
-  .eng-item:last-child { border-bottom: 0; }
-  .eng-item .who { font-weight: 600; color: var(--ink); }
-  .eng-item .meta { color: var(--ink-faint); font-size: 0.83rem; margin-top: 0.15rem; }
-  .eng-item .body { margin: 0.4rem 0 0; white-space: pre-wrap; color: var(--ink-soft); }
-  .eng-item blockquote { margin: 0.4rem 0 0; padding-left: 0.8rem; border-left: 3px solid var(--admin-accent-soft); color: var(--ink-soft); }
-</style>
-
 <script>
   import { supabase } from '../../lib/supabase';
-  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
   import { fmtNum, fmtDate, relTime, esc } from '../../lib/admin-format';
 
   const $ = (id: string) => document.getElementById(id)!;
@@ -67,10 +58,23 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   const fmtDwell = (ms: number) => { if (!ms || ms < 1000) return '0s'; const s = Math.round(ms / 1000); if (s < 60) return s + 's'; return Math.floor(s / 60) + 'm ' + (s % 60) + 's'; };
 
   const postLink = (slug: string) => `<a href="/blog/${encodeURIComponent(slug)}" target="_blank" rel="noopener">${esc(titles[slug] || slug)}</a>`;
-  const delBtn = (id: string) => `<button class="btn btn-sm ${armed === id ? 'btn-danger' : 'btn-ghost'}" data-del="${esc(id)}">${armed === id ? 'Confirm' : 'Delete'}</button>`;
+  const initial = (name: string) => ((name || 'R').trim().charAt(0) || 'R').toLowerCase();
+  // One clean item shape for all three streams: lowercase author avatar, a header
+  // line (who · where · when), the body/quote, and a delete that appears on hover.
+  function engItem(name: string, metaHtml: string, bodyHtml: string, delId: string) {
+    const isArmed = armed === delId;
+    return `<div class="eng-item">
+      <div class="av">${esc(initial(name))}</div>
+      <div class="eng-main">
+        <div class="eng-head"><span class="who">${esc(name || 'Reader')}</span><span class="meta">${metaHtml}</span></div>
+        ${bodyHtml}
+      </div>
+      <button class="del${isArmed ? ' armed' : ''}" data-del="${esc(delId)}">${isArmed ? 'Confirm' : 'Delete'}</button>
+    </div>`;
+  }
   function loading() { host.innerHTML = '<div class="card-pad muted">Loading…</div>'; }
   function errBox(m: string) { host.innerHTML = `<div class="card-pad notice err">${esc(m)}</div>`; }
-  function emptyBox(title: string, sub: string) { host.innerHTML = `<div class="card-pad muted" style="text-align:center;padding:2.2rem 1rem"><strong style="display:block;color:var(--ink);margin-bottom:.3rem">${esc(title)}</strong>${esc(sub)}</div>`; }
+  function emptyBox(title: string, sub: string) { host.innerHTML = `<div class="card-pad muted" style="text-align:center;padding:2.4rem 1rem"><strong style="display:block;color:var(--ink);margin-bottom:.3rem">${esc(title)}</strong>${esc(sub)}</div>`; }
   function list(items: string[]) { host.innerHTML = items.join(''); }
 
   // --- Top: real read-depth analytics + interaction counts ------------------
@@ -112,12 +116,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (!r.ok) throw new Error(d.error || 'Failed');
       const rows = d.rows || [];
       if (!rows.length) return emptyBox('No comments yet', 'Reader comments will show up here.');
-      list(rows.map((c: any) => `<div class="eng-item">
-          <div><div class="who">${esc(c.author_name || 'Reader')}</div>
-            <div class="meta">on ${postLink(c.post_id)} · ${esc(relTime(c.created_at))}</div>
-            <p class="body">${esc(c.body)}</p></div>
-          <div class="row-actions">${delBtn('comment:' + c.id)}</div>
-        </div>`));
+      list(rows.map((c: any) => engItem(c.author_name, `on ${postLink(c.post_id)} · ${esc(relTime(c.created_at))}`, `<p class="body">${esc(c.body)}</p>`, 'comment:' + c.id)));
     } catch (e: any) { errBox("Couldn't load comments: " + (e.message || e)); }
   }
   async function loadHighlights() {
@@ -127,12 +126,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (error) throw error;
       const rows = data || [];
       if (!rows.length) return emptyBox('No highlights yet', 'Passages readers highlight will appear here.');
-      list(rows.map((h: any) => `<div class="eng-item">
-          <div><div class="who">${esc(h.author_name || 'Reader')}</div>
-            <div class="meta">on ${postLink(h.post_id)} · ${esc(relTime(h.created_at))}</div>
-            <blockquote>${esc(h.quote)}</blockquote></div>
-          <div class="row-actions">${delBtn('highlight:' + h.id)}</div>
-        </div>`));
+      list(rows.map((h: any) => engItem(h.author_name, `on ${postLink(h.post_id)} · ${esc(relTime(h.created_at))}`, `<blockquote>${esc(h.quote)}</blockquote>`, 'highlight:' + h.id)));
     } catch (e: any) { errBox("Couldn't load highlights: " + (e.message || e)); }
   }
   async function loadNotes() {
@@ -142,12 +136,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (error) throw error;
       const rows = data || [];
       if (!rows.length) return emptyBox('No notes yet', "Readers' private notes will appear here.");
-      list(rows.map((n: any) => `<div class="eng-item">
-          <div><div class="who">${esc(n.author_name || 'Reader')}</div>
-            <div class="meta">on ${postLink(n.post_id)} · ${esc(fmtDate(n.updated_at))}</div>
-            <p class="body">${esc(n.body)}</p></div>
-          <div class="row-actions">${delBtn('note:' + n.id)}</div>
-        </div>`));
+      list(rows.map((n: any) => engItem(n.author_name, `on ${postLink(n.post_id)} · ${esc(fmtDate(n.updated_at))}`, `<p class="body">${esc(n.body)}</p>`, 'note:' + n.id)));
     } catch (e: any) { errBox("Couldn't load notes: " + (e.message || e)); }
   }
   function loadTab() { armed = null; if (tab === 'comments') return loadComments(); if (tab === 'highlights') return loadHighlights(); return loadNotes(); }
@@ -180,13 +169,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     tab = b.dataset.tab!; loadTab();
   });
 
-  whenAdmin.then(async () => {
+  onAdminReady(async () => {
+    loadTab(); // moderation streams don't need the title map — start them immediately
     try {
       const r = await adminFetch('/api/admin/posts');
       const d = await r.json();
       if (r.ok) for (const p of (d.posts || [])) titles[p.slug] = p.title;
     } catch {}
     loadStats();
-    loadTab();
   });
 </script>

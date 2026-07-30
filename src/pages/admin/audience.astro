@@ -65,7 +65,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 </AdminLayout>
 
 <script>
-  import { whenAdmin, adminFetch } from '../../lib/admin-gate';
+  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
   import { fmtNum, fmtDate, esc } from '../../lib/admin-format';
 
   const $ = (id: string) => document.getElementById(id)!;
@@ -208,5 +208,5 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   }
   $('digest-send').addEventListener('click', () => sendDigest(false));
 
-  whenAdmin.then(() => { loadCounts(); loadConfirmed(); loadRows(); });
+  onAdminReady(() => { loadCounts(); loadConfirmed(); loadRows(); });
 </script>

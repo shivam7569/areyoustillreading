@@ -1054,9 +1054,16 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       try { new MutationObserver(sync).observe(statusEl, { childList: true, characterData: true, subtree: true }); } catch {}
       sync();
     }
-    // Focus mode + keyboard shortcuts
+    // Focus mode: hide the ENTIRE studio chrome (sidebar + topbar too, via a
+    // body-level class the layout CSS keys off) leaving only the editor column.
+    // ⌘\ toggles, Esc exits; the button lives in .wtop which focus hides, so those
+    // shortcuts (and the on-screen hint) are the way back out.
     const focusBtn = document.getElementById('focusbtn');
-    const setFocus = (on) => wrap.classList.toggle('focus', on == null ? !wrap.classList.contains('focus') : on);
+    const setFocus = (on) => {
+      const state = on == null ? !wrap.classList.contains('focus') : on;
+      wrap.classList.toggle('focus', state);
+      document.body.classList.toggle('studio-focus', state);
+    };
     if (focusBtn) focusBtn.addEventListener('click', () => setFocus());
     const openPub = document.getElementById('r-openpub');
     if (openPub) openPub.addEventListener('click', () => document.getElementById('publish-btn').click());
