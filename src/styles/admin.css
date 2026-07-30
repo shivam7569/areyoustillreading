@@ -569,6 +569,15 @@ table.t th.num { text-align: right; }
 .mailrow .tog { margin-left: auto; }
 .subj { margin-top: 8px; }
 .subj input { width: 100%; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 3px; color: var(--ink); font-family: var(--serif-display); font-size: 14px; padding: 8px 11px; }
+/* Schedule picker (When → Schedule it): themed date/time inputs + a real time-zone select. */
+.sched { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+.sched input, .sched select { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--admin-radius-sm); color: var(--ink); font: inherit; font-size: 13px; padding: 8px 10px; line-height: 1.2; }
+.sched select { max-width: 220px; cursor: pointer; }
+.sched input:focus, .sched select:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+/* Native date/time pickers draw their calendar/clock icon + popup via `color-scheme`,
+   so match it to the Studio theme — otherwise the chrome is dark-on-dark (invisible). */
+:root[data-theme="dark"] .sched input, :root[data-theme="dark"] .sched select { color-scheme: dark; }
+:root[data-theme="light"] .sched input, :root[data-theme="light"] .sched select { color-scheme: light; }
 .chk { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule-soft); }
 .chk li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--rule-soft); font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
 .chk svg { flex: none; width: 13px; height: 13px; margin-top: 3px; color: color-mix(in srgb, var(--ink) 34%, transparent); }

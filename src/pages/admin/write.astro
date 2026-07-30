@@ -155,8 +155,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
                 <button class="pk" type="button" data-w="later"><span class="rd"></span><span><b>Schedule it</b><small>Goes live on its own at a time you pick.</small></span></button>
               </div>
               <div class="sub-x off" id="schedbox">
-                <div class="sched"><input type="date" id="pm-sched-date" aria-label="Publish date"><input type="time" id="pm-sched-time" aria-label="Publish time"><span id="pm-sched-tz" style="color:var(--ink-faint)"></span></div>
-                <div id="pm-sched-note" style="margin-top:6px;color:var(--ink-faint)">Saved hidden until then; a cron publishes it (within ~15 min of the time).</div>
+                <div class="sched">
+                  <input type="date" id="pm-sched-date" aria-label="Publish date" />
+                  <input type="time" id="pm-sched-time" aria-label="Publish time" />
+                  <select id="pm-sched-tz" aria-label="Time zone"></select>
+                </div>
+                <div id="pm-sched-note" style="margin-top:8px;color:var(--ink-faint)">Saved hidden until then; a cron publishes it (within ~15 min of the time).</div>
               </div>
             </div>
 
@@ -1296,6 +1300,18 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     const whenpick = $('whenpick');
     const schedDate = $('pm-sched-date') as HTMLInputElement;
     const schedTime = $('pm-sched-time') as HTMLInputElement;
+    const schedTz = $('pm-sched-tz') as HTMLSelectElement;
+    // Fill the time-zone select once — every IANA zone where the browser supports it,
+    // defaulting to the author's own zone (so the picked time means what they expect).
+    (function fillTimezones() {
+      let zones: string[] = [];
+      try { const f = (Intl as any).supportedValuesOf; if (f) zones = f('timeZone'); } catch {}
+      let here = 'UTC';
+      try { here = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch {}
+      if (!zones.length) zones = ['UTC', 'America/Los_Angeles', 'America/New_York', 'America/Sao_Paulo', 'Europe/London', 'Europe/Berlin', 'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney'];
+      if (!zones.includes(here)) zones.unshift(here);
+      schedTz.innerHTML = zones.map((z) => `<option value="${z}"${z === here ? ' selected' : ''}>${z.replace(/_/g, ' ')}</option>`).join('');
+    })();
     const setPrimaryLabel = () => { $('pm-publish').textContent = whenChoice === 'later' ? 'Schedule' : (editing ? 'Update' : 'Publish now'); };
     whenpick.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('button[data-w]') as HTMLElement | null; if (!b) return;
@@ -1303,19 +1319,27 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       whenpick.querySelectorAll('.pk').forEach((x) => x.classList.toggle('on', x === b));
       $('schedbox').classList.toggle('off', whenChoice !== 'later');
       if (whenChoice === 'later' && !schedDate.value) {
-        const d = new Date(Date.now() + 24 * 3600 * 1000); // default tomorrow 09:00 local
+        const d = new Date(Date.now() + 24 * 3600 * 1000); // default tomorrow 09:00
         schedDate.value = d.toISOString().slice(0, 10); schedTime.value = '09:00';
       }
-      try { $('pm-sched-tz').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch {}
       setPrimaryLabel();
     });
-    // The scheduled instant as an ISO string, or '' when not scheduling / incomplete.
+    // Interpret the picked wall-clock date+time IN THE SELECTED ZONE and return the UTC
+    // ISO instant. Standard offset-correction via Intl (handles DST). '' when incomplete.
     const scheduledIso = () => {
       if (whenChoice !== 'later') return '';
       const d = (schedDate.value || '').trim(), t = (schedTime.value || '').trim();
       if (!d || !t) return '';
-      const dt = new Date(d + 'T' + t); // interpreted in the author's local time
-      return isNaN(dt.getTime()) ? '' : dt.toISOString();
+      const [Y, Mo, Da] = d.split('-').map(Number), [h, mi] = t.split(':').map(Number);
+      if ([Y, Mo, Da, h, mi].some((n) => !Number.isFinite(n))) return '';
+      const tz = schedTz.value || 'UTC';
+      const asUTC = Date.UTC(Y, Mo - 1, Da, h, mi);
+      try {
+        const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(new Date(asUTC));
+        const m: any = {}; for (const p of parts) m[p.type] = p.value;
+        const tzAsUTC = Date.UTC(+m.year, +m.month - 1, +m.day, (+m.hour) % 24, +m.minute, +m.second);
+        return new Date(asUTC - (tzAsUTC - asUTC)).toISOString(); // wall time in tz → UTC
+      } catch { return new Date(asUTC).toISOString(); }
     };
 
     // The mail toggle drives the hidden #pm-email-subs checkbox the engine reads.
@@ -1734,8 +1758,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           // below would hang on a permanent 404. Confirm the save and stop here.
           if (draft) {
             if (scheduleAt) {
-              const nice = new Date(scheduleAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-              status.textContent = `Scheduled for ${nice}. It stays hidden until then, when it publishes on its own.`;
+              const tz = schedTz.value || undefined;
+              const nice = new Date(scheduleAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: tz });
+              status.textContent = `Scheduled for ${nice}${tz ? ' (' + tz.replace(/_/g, ' ') + ')' : ''}. It stays hidden until then, when it publishes on its own.`;
             } else {
               status.textContent = (j.updated ? 'Draft updated.' : 'Draft saved.') + ' It stays hidden until you publish.';
             }
