@@ -1,49 +1,68 @@
 ---
 /**
- * /admin/settings — account + studio settings.
- * Deliberately small and honest: real controls only (account/sign-out, quick
- * links), plus a setup note for read-through analytics (Plausible) which needs a
- * one-time script include rather than a fake in-app toggle.
+ * /admin/settings — account + studio settings (Studio design layout).
+ * HONEST BY DESIGN: the design mocks many editable fields (domain, prices, time
+ * zone, theme default…) that our app doesn't persist. Rather than show inputs that
+ * silently save nothing, each row states the real, current fact — with a pill and a
+ * note pointing at where that thing is actually managed (Cloudflare / Resend / Dodo)
+ * — plus the genuinely-real controls: account, sign-out, and the studio/analytics
+ * links. Persisted editable defaults (paywall position, theme, prices) are a
+ * separate net-new settings backend, not faked here.
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
 
 <AdminLayout title="Settings — Studio" heading="Settings" active="settings">
-  <section class="stack" style="max-width:760px">
-    <div class="page-head">
-      <div>
-        <h1>Settings</h1>
-        <p class="sub">Your account and studio preferences.</p>
+  <section class="stack" style="max-width:900px">
+    <div class="panel">
+      <header><h2>Account</h2></header>
+      <div class="pb flush">
+        <div class="setrow"><div class="k">Signed in as<small id="acct">…</small></div><div class="f"><button class="btn btn-sm" id="signout" type="button">Sign out</button></div></div>
+        <div class="setrow"><div class="k">Pen name<small>Your byline on published posts — edit it on your Account page.</small></div><div class="f"><a class="btn btn-ghost btn-sm" href="/account">Edit on Account →</a></div></div>
       </div>
     </div>
 
-    <div class="card card-pad">
-      <div class="spread">
-        <div>
-          <strong>Account</strong>
-          <p class="muted" id="acct" style="margin:0.25rem 0 0;font-size:0.92rem">…</p>
-        </div>
-        <button class="btn" id="signout" type="button">Sign out</button>
+    <div class="panel">
+      <header><h2>Site</h2></header>
+      <div class="pb flush">
+        <div class="setrow"><div class="k">Domain</div><div class="f"><span class="mono" style="color:var(--ink-soft)">areyoustillreading.dev</span><span class="pill live">Live</span></div></div>
+        <div class="setrow"><div class="k">Hosting<small>Deploys on every push to the main branch.</small></div><div class="f"><span style="color:var(--ink-soft)">Cloudflare Pages</span></div></div>
+        <div class="setrow"><div class="k">Feeds</div><div class="f"><a class="btn btn-ghost btn-sm" href="/rss.xml" target="_blank" rel="noopener">RSS ↗</a><a class="btn btn-ghost btn-sm" href="/sitemap-index.xml" target="_blank" rel="noopener">Sitemap ↗</a></div></div>
       </div>
     </div>
 
-    <div class="card card-pad">
-      <strong>Analytics</strong>
-      <p class="muted" style="margin:0.25rem 0 0.8rem;font-size:0.92rem">
-        First-party and cookieless — traffic, read-depth per post, referrers, and subscribe/unlock
-        conversion, all your own data (no third-party script, no consent banner). Tip: append
-        <code>?noanalytics=1</code> to any page once to stop counting your own visits from that browser.
-      </p>
-      <a class="btn btn-sm" href="/admin/analytics">Open Analytics →</a>
+    <div class="panel">
+      <header><h2>Reading &amp; analytics</h2></header>
+      <div class="pb flush">
+        <div class="setrow"><div class="k">Read-through analytics<small>First-party &amp; cookieless — traffic, read depth, referrers, conversion. No third-party script, no consent banner.</small></div><div class="f"><span class="pill live">On</span><a class="btn btn-ghost btn-sm" href="/admin/analytics">Open →</a></div></div>
+        <div class="setrow"><div class="k">Don't count your own visits<small>Append <code>?noanalytics=1</code> to any page once, from a browser, to opt that browser out.</small></div><div class="f"><span style="color:var(--ink-faint);font-size:12.5px">Per browser</span></div></div>
+        <div class="setrow"><div class="k">Reading time<small>Estimated from word count. Also sets a post's height on the series plate.</small></div><div class="f"><span class="pill live">Shown</span></div></div>
+      </div>
     </div>
 
-    <div class="card card-pad">
-      <strong>Studio</strong>
-      <div class="rowflex" style="margin-top:0.7rem">
-        <a class="btn btn-sm btn-ghost" href="/" target="_blank" rel="noopener">View site ↗</a>
-        <a class="btn btn-sm btn-ghost" href="/blog" target="_blank" rel="noopener">Blog ↗</a>
-        <a class="btn btn-sm btn-ghost" href="/rss.xml" target="_blank" rel="noopener">RSS feed ↗</a>
-        <a class="btn btn-sm btn-ghost" href="/admin/write">Write a post</a>
+    <div class="panel">
+      <header><h2>The letter</h2></header>
+      <div class="pb flush">
+        <div class="setrow"><div class="k">Delivery<small>Transactional email provider.</small></div><div class="f"><span style="color:var(--ink-soft)">Resend</span><span class="pill live">Connected</span></div></div>
+        <div class="setrow"><div class="k">Unsubscribe<small>Every email carries a one-click, no-login unsubscribe.</small></div><div class="f"><span class="pill live">One-click</span></div></div>
+        <div class="setrow"><div class="k">Send on publish<small>Chosen per post at publish time — opt-in, never automatic.</small></div><div class="f"><a class="btn btn-ghost btn-sm" href="/admin/audience">Manage list →</a></div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <header><h2>Payments</h2></header>
+      <div class="pb flush">
+        <div class="setrow"><div class="k">Processor<small>Merchant-of-Record — handles tax &amp; compliance for you.</small></div><div class="f"><span style="color:var(--ink-soft)">Dodo Payments</span><span class="pill live">Connected</span></div></div>
+        <div class="setrow"><div class="k">Model<small>Readers pay what they want to unlock a paywalled post — a one-time unlock, not a subscription.</small></div><div class="f"><span style="color:var(--ink-soft)">Pay-what-you-want</span></div></div>
+        <div class="setrow"><div class="k">Earnings</div><div class="f"><a class="btn btn-ghost btn-sm" href="/admin/revenue">Open Revenue →</a></div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <header><h2>Studio</h2></header>
+      <div class="pb flush">
+        <div class="setrow"><div class="k">Theme<small>Use the sun/moon toggle in the top bar — it follows your system until you choose.</small></div><div class="f"><span style="color:var(--ink-faint);font-size:12.5px">Top bar</span></div></div>
+        <div class="setrow"><div class="k">Jump back to the site</div><div class="f"><a class="btn btn-ghost btn-sm" href="/" target="_blank" rel="noopener">View site ↗</a><a class="btn btn-ghost btn-sm" href="/blog" target="_blank" rel="noopener">Blog ↗</a></div></div>
       </div>
     </div>
   </section>
@@ -56,11 +75,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   whenAdmin.then(async () => {
     const { data } = await supabase.auth.getSession();
     const el = document.getElementById('acct');
-    if (el) el.textContent = data.session?.user?.email
-      ? `Signed in as ${data.session.user.email}`
-      : 'Signed in.';
+    if (el) el.textContent = data.session?.user?.email ? data.session.user.email : 'Signed in';
   });
-
   document.getElementById('signout')!.addEventListener('click', async () => {
     await supabase.auth.signOut();
     window.location.href = '/';

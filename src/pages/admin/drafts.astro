@@ -1,28 +1,32 @@
 ---
 /**
- * /admin/drafts — a focused Drafts manager.
- * Lists only hidden (draft) posts from the admin-gated GET /api/admin/posts, with
- * per-row actions: edit, publish (make visible), email an early-access link, delete.
- * Mutations reuse the shared /api/admin/post endpoint (draft flag / delete). This is
- * a lean, drafts-only view of what /admin/posts shows behind its "Drafts" filter.
+ * /admin/drafts — the Drafts manager (Studio design).
+ * Lists hidden (draft) posts from the admin-gated GET /api/admin/posts as a card
+ * grid. Each card shows real per-draft progress read from the editor's own
+ * localStorage (word count + length target + last note-to-self, per device — the
+ * same store the Write chrome writes), plus the kept actions: continue (edit),
+ * early-access email, publish, delete. "Seeds" is a small private idea list
+ * (localStorage). No fabricated numbers — cards without local data just show less.
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
 
 <AdminLayout title="Drafts — Studio" heading="Drafts" active="drafts">
-  <section>
-    <div class="page-head">
-      <div>
-        <h1>Drafts</h1>
-        <p class="sub" id="drafts-sub">Work in progress — hidden until you publish.</p>
-      </div>
-      <div class="head-actions">
-        <a class="btn btn-primary" href="/admin/write"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> New post</a>
-      </div>
+  <section class="stack">
+    <div class="dsum" id="dsum">
+      <div>Unfinished<b id="d-count">—</b></div>
+      <div>In a series<b id="d-series">—</b></div>
+      <div>Words written<b id="d-words">—</b></div>
+      <div>Longest untouched<b id="d-old">—</b></div>
     </div>
+    <div style="font-size:12.5px;color:var(--ink-faint);margin-top:-14px">Nothing here is visible to readers.</div>
 
-    <div id="drafts-host">
-      <div class="table-wrap"><div class="card-pad muted">Loading drafts…</div></div>
+    <div id="drafts-host"><div class="muted">Loading drafts…</div></div>
+
+    <div>
+      <div class="dhead"><span>Seeds</span><em>ideas — not drafts yet, private to you</em></div>
+      <ul class="seeds" id="seeds"></ul>
+      <div style="margin-top:10px"><input class="inp" id="seed-input" placeholder="Jot an idea — press Enter" autocomplete="off" style="max-width:440px" /></div>
     </div>
   </section>
 </AdminLayout>
@@ -31,44 +35,67 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   import { whenAdmin, adminFetch } from '../../lib/admin-gate';
   import { fmtDate, esc } from '../../lib/admin-format';
 
+  const $ = (id: string) => document.getElementById(id)!;
   let all: any[] = [];
   let armedDelete: string | null = null;
   let armTimer: number | undefined;
-  const host = document.getElementById('drafts-host')!;
+  const host = $('drafts-host');
+
+  // Per-draft local progress (written by the Write editor chrome, this device).
+  const localWords = (slug: string) => { try { return parseInt(localStorage.getItem('aysr:words:post:' + slug) || '', 10) || 0; } catch { return 0; } };
+  const localTarget = (slug: string) => { try { return parseInt(localStorage.getItem('aysr:target:post:' + slug) || '', 10) || 0; } catch { return 0; } };
+  const localNote = (slug: string) => { try { const a = JSON.parse(localStorage.getItem('aysr:notes:post:' + slug) || '[]'); return a.length ? a[a.length - 1] : null; } catch { return null; } };
+  const daysSince = (d: string) => { if (!d) return null; const ms = Date.now() - new Date(d).getTime(); return ms > 0 ? Math.floor(ms / 86400000) : 0; };
+
+  function card(p: any): string {
+    const words = localWords(p.slug), target = localTarget(p.slug);
+    const note = localNote(p.slug);
+    const armed = armedDelete === p.slug;
+    const access = p.paid ? 'paid' : 'free';
+    const serBits = [p.series ? esc(p.seriesTitle || p.series) + (p.seriesOrder ? ' · part ' + p.seriesOrder : '') : (p.tags && p.tags.length ? p.tags.map((t: string) => '#' + esc(t)).join(' ') : 'Standalone'), access].join(' · ');
+    const prog = (words || target)
+      ? `<div class="dprog"><span>${words.toLocaleString()}</span><span class="bar"><i style="width:${target ? Math.min(100, Math.round((words / target) * 100)) : (words ? 100 : 0)}%"></i></span><span>${target ? target.toLocaleString() : '—'}</span></div>`
+      : '';
+    const noteEl = note ? `<div class="dnote"><b>Note to self</b>${esc(note.text)}</div>` : '';
+    const d = daysSince(p.pubDate);
+    const est = words ? ` · est. ${Math.max(1, Math.round(words / 200))} min` : '';
+    return `<article class="dcard" data-slug="${esc(p.slug)}">
+        <h3>${esc(p.title)}</h3>
+        <div class="ser">${serBits}</div>
+        ${prog}
+        ${noteEl}
+        <div class="dfoot"><span>${d != null ? d + ' day' + (d === 1 ? '' : 's') : esc(fmtDate(p.pubDate))}${est}</span><a class="go" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Continue →</a></div>
+        <div class="row-actions" style="margin-top:2px;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-ghost" data-act="early" data-slug="${esc(p.slug)}" title="Email confirmed subscribers a private early-access link">Early access</button>
+          <button class="btn btn-sm btn-primary" data-act="publish" data-slug="${esc(p.slug)}">Publish</button>
+          <button class="btn btn-sm ${armed ? 'btn-danger' : 'btn-ghost'}" data-act="delete" data-slug="${esc(p.slug)}">${armed ? 'Confirm' : 'Delete'}</button>
+        </div>
+      </article>`;
+  }
 
   function render() {
     const drafts = all.filter((p) => p.draft);
-    document.getElementById('drafts-sub')!.textContent = drafts.length
-      ? `${drafts.length} draft${drafts.length === 1 ? '' : 's'} — hidden until you publish.`
-      : 'Work in progress — hidden until you publish.';
+    // Summary
+    $('d-count').textContent = String(drafts.length);
+    $('d-series').textContent = String(drafts.filter((p) => p.series).length);
+    const totalWords = drafts.reduce((s, p) => s + localWords(p.slug), 0);
+    $('d-words').textContent = totalWords ? totalWords.toLocaleString() : '—';
+    const oldest = drafts.map((p) => daysSince(p.pubDate)).filter((n): n is number => n != null);
+    $('d-old').textContent = oldest.length ? Math.max(...oldest) + ' days' : '—';
+
     if (!drafts.length) {
-      host.innerHTML = '<div class="card"><div class="empty">'
-        + '<svg class="empty-icon" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>'
-        + '<h3>No drafts</h3><p>Everything you’ve written is published. Start something new when you’re ready.</p>'
-        + '<a class="btn btn-primary" href="/admin/write">Write a post</a></div></div>';
+      host.innerHTML = '<div class="panel"><div class="pb muted" style="text-align:center;padding:2.4rem 1rem">Everything you’ve written is published. <a href="/admin/write" style="color:var(--accent)">Start something new →</a></div></div>';
       return;
     }
-    // Newest first (list-posts already sorts, but be explicit).
-    drafts.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
-    host.innerHTML = '<div class="table-wrap"><table class="table"><tbody>'
-      + drafts.map((p) => {
-        const tags = (p.tags || []).length ? `<span class="t-sub">${(p.tags || []).map((t: string) => '#' + esc(t)).join(' ')}</span>` : '';
-        const series = p.series ? `<span style="color:var(--accent);font-weight:600">◆ ${esc(p.seriesTitle || p.series)}${p.seriesOrder ? ' · Part ' + p.seriesOrder : ''}</span>` : '';
-        const armed = armedDelete === p.slug;
-        return `<tr data-slug="${esc(p.slug)}">
-            <td>
-              <div class="t-title"><a href="/admin/write?slug=${encodeURIComponent(p.slug)}">${esc(p.title)}</a></div>
-              <div class="t-sub">${esc(fmtDate(p.pubDate))}${tags ? ' · ' : ''}${tags}${series ? ' · ' + series : ''}</div>
-            </td>
-            <td class="num"><div class="row-actions">
-              <a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a>
-              <button class="btn btn-sm" data-act="early" data-slug="${esc(p.slug)}" title="Email confirmed subscribers a private link to read this draft early">◔ Early access</button>
-              <button class="btn btn-sm btn-primary" data-act="publish" data-slug="${esc(p.slug)}">Publish</button>
-              <button class="btn btn-sm ${armed ? 'btn-danger' : 'btn-ghost'}" data-act="delete" data-slug="${esc(p.slug)}">${armed ? 'Confirm delete' : 'Delete'}</button>
-            </div></td>
-          </tr>`;
-      }).join('')
-      + '</tbody></table></div>';
+    // Nearly there (>=70% of target) vs the rest — a real split when local data exists.
+    const pct = (p: any) => { const t = localTarget(p.slug), w = localWords(p.slug); return t ? w / t : 0; };
+    drafts.sort((a, b) => pct(b) - pct(a) || (b.pubDate || '').localeCompare(a.pubDate || ''));
+    const near = drafts.filter((p) => pct(p) >= 0.7);
+    const rest = drafts.filter((p) => pct(p) < 0.7);
+    const section = (label: string, items: any[]) => items.length
+      ? `<div style="margin-bottom:22px"><div class="dhead"><span>${label}</span><em>${items.length}</em></div><div class="dgrid">${items.map(card).join('')}</div></div>`
+      : '';
+    host.innerHTML = (near.length ? section('Nearly there', near) : '') + section(near.length ? 'Everything else' : 'Drafts', rest);
   }
 
   async function load() {
@@ -79,39 +106,28 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       all = d.posts || [];
       render();
     } catch (e: any) {
-      host.innerHTML = `<div class="card card-pad notice err">Couldn't load drafts: ${esc(e.message || e)}</div>`;
+      host.innerHTML = `<div class="panel"><div class="pb notice err">Couldn't load drafts: ${esc(e.message || e)}</div></div>`;
     }
   }
 
   function disarm() { armedDelete = null; if (armTimer) clearTimeout(armTimer); }
-
   async function publish(slug: string) {
-    const r = await adminFetch('/api/admin/post', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ slug, draft: false }),
-    });
+    const r = await adminFetch('/api/admin/post', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ slug, draft: false }) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { alert(d.error || 'Publish failed'); return; }
-    await load(); // it leaves the drafts list once it's visible
+    await load();
   }
-
   async function del(slug: string) {
     const r = await adminFetch(`/api/admin/post?slug=${encodeURIComponent(slug)}`, { method: 'DELETE' });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) alert(d.error || 'Delete failed');
-    disarm();
-    await load();
+    disarm(); await load();
   }
-
   async function sendEarly(slug: string) {
-    const p = all.find((x) => x.slug === slug);
-    if (!p) return;
+    const p = all.find((x) => x.slug === slug); if (!p) return;
     if (!confirm(`Email confirmed subscribers a private early-access link to “${p.title}”?\n\nThe post stays hidden from the public until you publish it.`)) return;
     try {
-      const r = await adminFetch('/api/admin/early', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ slug, title: p.title, description: p.description || '' }),
-      });
+      const r = await adminFetch('/api/admin/early', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ slug, title: p.title, description: p.description || '' }) });
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.ok) alert(d.sent > 0 ? `Early-access link emailed to ${d.sent} subscriber(s).` : (d.message || 'Link created.') + (d.url ? '\n\n' + d.url : ''));
       else alert(d.error || 'Failed to send early access');
@@ -121,8 +137,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   host.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
     if (!btn) return;
-    const act = btn.dataset.act!;
-    const slug = btn.dataset.slug!;
+    const act = btn.dataset.act!, slug = btn.dataset.slug!;
     if (act === 'publish') publish(slug);
     else if (act === 'early') sendEarly(slug);
     else if (act === 'delete') {
@@ -131,5 +146,29 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     }
   });
 
+  // --- Seeds: a private idea list (localStorage, this device) ----------------
+  const SEEDS_KEY = 'aysr:seeds';
+  const loadSeeds = (): string[] => { try { return JSON.parse(localStorage.getItem(SEEDS_KEY) || '[]'); } catch { return []; } };
+  function renderSeeds() {
+    const list = loadSeeds();
+    $('seeds').innerHTML = list.length
+      ? list.map((s, i) => `<li><span class="d"></span>${esc(s)}<button class="w" data-seed="${i}" style="background:none;border:0;cursor:pointer;color:var(--ink-faint)" title="Remove">Remove</button></li>`).join('')
+      : '<li class="rempty" style="list-style:none;color:var(--ink-faint);font-style:italic">No seeds yet — jot an idea below.</li>';
+  }
+  $('seeds').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-seed]') as HTMLElement | null; if (!b) return;
+    const list = loadSeeds(); list.splice(parseInt(b.dataset.seed!, 10), 1);
+    try { localStorage.setItem(SEEDS_KEY, JSON.stringify(list)); } catch {}
+    renderSeeds();
+  });
+  $('seed-input').addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key !== 'Enter') return; e.preventDefault();
+    const v = ($('seed-input') as HTMLInputElement).value.trim(); if (!v) return;
+    const list = loadSeeds(); list.push(v);
+    try { localStorage.setItem(SEEDS_KEY, JSON.stringify(list)); } catch {}
+    ($('seed-input') as HTMLInputElement).value = ''; renderSeeds();
+  });
+
   whenAdmin.then(load);
+  renderSeeds();
 </script>

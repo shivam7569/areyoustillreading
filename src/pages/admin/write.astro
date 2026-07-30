@@ -947,6 +947,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
     function updateChrome(md) {
       const w = countWords(md), r = readMin(w);
+      // Persist the live word count for this doc so the Drafts view can show real
+      // progress bars (per-device, alongside the note + target it already reads).
+      try { localStorage.setItem('aysr:words:' + docKey, String(w)); } catch {}
       if (wc.words) wc.words.textContent = w.toLocaleString();
       if (wc.read) wc.read.textContent = r + ' min';
       if (wc.written) wc.written.textContent = w.toLocaleString();
