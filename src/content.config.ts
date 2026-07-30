@@ -104,6 +104,14 @@ const blog = defineCollection({
     series: z.string().optional(),
     seriesOrder: z.coerce.number().optional(),
     seriesTitle: z.string().optional(),
+    // Richer series metadata for the /series plate (all optional; set on ANY part —
+    // the series page reads the first non-empty across the group). `seriesTotal` is the
+    // planned number of parts (enables "3 of 5" + the empty progress segments + hollow
+    // "to-come" nodes on the plate). `seriesStatus` labels the collection. `seriesPlanned`
+    // lists upcoming part titles not yet published (shown as muted "soon" rows).
+    seriesTotal: z.coerce.number().optional(),
+    seriesStatus: z.enum(['in-progress', 'complete', 'paused']).optional(),
+    seriesPlanned: z.array(z.string()).default([]),
     // Draft flag. Defaults to false (published). Pages are expected to filter
     // out `draft: true` entries in production builds so unfinished posts stay
     // hidden. This is an editorial gate, NOT a security gate — a draft still

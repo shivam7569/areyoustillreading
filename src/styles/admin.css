@@ -298,7 +298,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 /* ---- Helpers ------------------------------------------------------------ */
 .muted { color: var(--muted); }
-.stack > * + * { margin-top: 1.2rem; }
+/* .stack layout (flex + gap) is defined in the Studio component block below. */
 .rowflex { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
 .spread { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .mono { font-family: var(--font-mono); }
@@ -335,3 +335,53 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .admin-side-foot .who { display: none; }
   .admin-main { padding: 1.1rem 1rem 3rem; }
 }
+
+/* ============================================================================
+   Claude Design "studio" view components (editorial/studio.css), ported onto our
+   tokens. Additive — used by the rebuilt dashboard views (Home/Analytics/Audience/
+   Engagement/etc.). All colours are our shared editorial tokens.
+   ============================================================================ */
+.stack { display: flex; flex-direction: column; gap: 26px; }
+.cols { display: grid; gap: 22px; }
+.cols.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cols.side3 { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+@media (max-width: 1060px) { .cols.two, .cols.side3 { grid-template-columns: 1fr; } }
+.rowhead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 0 0 16px; }
+.rowhead h2 { font-family: var(--serif-display); font-size: 19px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.rowhead .a { font-size: 12.5px; color: var(--accent); cursor: pointer; }
+.rowhead .a:hover { text-decoration: underline; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 13px; }
+.tile { border: 1px solid var(--rule); border-radius: 4px; background: var(--card); padding: 16px 17px; }
+.tile .l { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+.tile .v { font-family: var(--serif-display); font-size: 31px; font-weight: 600; margin: 9px 0 0; letter-spacing: -0.015em; line-height: 1; font-variant-numeric: tabular-nums; }
+.tile .d { font-size: 12px; color: var(--ink-faint); margin-top: 8px; }
+.tile .d b { color: var(--accent); font-weight: 600; }
+
+.panel { border: 1px solid var(--rule); border-radius: 4px; background: var(--card); overflow: hidden; }
+.panel > header { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 15px 17px; border-bottom: 1px solid var(--rule); }
+.panel > header h2 { font-family: var(--serif-display); font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.panel > header .hint { font-size: 11.5px; color: var(--ink-faint); }
+.panel .pb { padding: 17px; }
+.panel .pb.flush { padding: 0; }
+
+.barrow { display: grid; grid-template-columns: minmax(0, 1fr) 56px; gap: 12px; align-items: center; font-size: 13px; }
+.barrow + .barrow { margin-top: 13px; }
+.barrow .nm { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar { height: 5px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 13%, transparent); overflow: hidden; margin-top: 6px; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.barrow .pc { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-faint); font-size: 12.5px; }
+
+ul.feed { margin: 0; padding: 0; display: flex; flex-direction: column; }
+.feed li { list-style: none; display: flex; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--rule-soft); font-size: 13.5px; color: var(--ink-soft); }
+.feed li:last-child { border-bottom: 0; padding-bottom: 0; }
+.feed .when { flex: none; width: 52px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); padding-top: 2px; }
+.feed b { color: var(--ink); font-weight: 600; }
+
+.fr { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--ink-soft); padding: 6px 0; }
+.fr .v { color: var(--ink); text-align: right; }
+.fr .v.act { color: var(--accent); cursor: pointer; }
+.fr .v.act:hover { text-decoration: underline; }
+.mono { font-family: var(--font-mono); font-size: 12.5px; }
+.chart { width: 100%; display: block; }
+.chart-x { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-faint); margin-top: 10px; }

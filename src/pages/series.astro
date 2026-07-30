@@ -66,16 +66,29 @@ function combLines(parts: number) {
   return out;
 }
 
-// The spine: a node per published part, x spread evenly, y set by reading time
-// (longer read → sits higher). A bold curve threads them; every node is solid.
-function spine(mins: number[]) {
-  const n = mins.length;
-  const xs = n === 1 ? [150] : mins.map((_, i) => 30 + (i * 240) / (n - 1));
+// The spine: a node per published part (solid, y set by reading time), plus a node
+// per PLANNED-but-unpublished part (hollow ring) when a series declares a total. A
+// bold curve threads the published parts; a dashed tail runs on to the unwritten ones.
+function spine(mins: number[], total: number) {
+  const pub = mins.length;
+  const shown = Math.max(pub, Math.min(total || pub, 6)); // cap the plate at 6 nodes
+  const xs = shown === 1 ? [150] : Array.from({ length: shown }, (_, i) => 30 + (i * 240) / (shown - 1));
   const lo = Math.min(...mins), hi = Math.max(...mins);
-  const ys = mins.map((m) => (hi === lo ? 105 : 140 - ((m - lo) / (hi - lo)) * 74)); // 140 (short) … 66 (long)
+  const ys: number[] = [];
+  for (let i = 0; i < shown; i++) {
+    if (i < pub) ys.push(hi === lo ? 105 : 140 - ((mins[i] - lo) / (hi - lo)) * 74); // published: read-time height
+    else ys.push(ys.length ? ys[ys.length - 1] : 105);                               // future: flat at last height
+  }
   const nodes: Pt[] = xs.map((x, i) => [x, ys[i]]);
-  return { path: smooth(nodes), nodes };
+  return {
+    path: smooth(nodes.slice(0, pub)),                                   // solid spine through published
+    tail: pub < shown ? smooth(nodes.slice(Math.max(0, pub - 1))) : '',  // dashed tail into the unwritten parts
+    solidNodes: nodes.slice(0, pub),
+    futureNodes: nodes.slice(pub),
+  };
 }
+const STATUS_LABEL: Record<string, string> = { 'in-progress': 'In progress', complete: 'Complete', paused: 'Paused' };
+const firstOf = <T,>(members: any[], key: string): T | undefined => members.map((p) => p.data[key]).find((v) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0));
 
 const WASH = [
   { x: '16%', y: '10%', o: '13%' }, { x: '82%', y: '16%', o: '11%' },
@@ -89,12 +102,16 @@ const seriesList = [...bySeries.entries()]
     const title = members.map((p) => p.data.seriesTitle).find((t) => t && t.trim())?.trim() || prettify(slug);
     const parts = members.map((p) => ({ id: p.id, title: p.data.title, date: p.data.pubDate, mins: readMins(p.body) }));
     let h = 0; for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
+    const planned = (firstOf<string[]>(members, 'seriesPlanned') || []).filter((t) => t && t.trim());
+    const declaredTotal = firstOf<number>(members, 'seriesTotal');
+    const total = Math.max(parts.length, declaredTotal || parts.length, parts.length + planned.length);
+    const status = firstOf<string>(members, 'seriesStatus') || (total > parts.length ? 'in-progress' : 'complete');
     return {
-      slug, title, parts,
+      slug, title, parts, planned, total, status,
       description: members[0].data.description,
       latest: parts[parts.length - 1].date, first: parts[0].date,
-      comb: combLines(parts.length),
-      spine: spine(parts.map((p) => p.mins)),
+      comb: combLines(total),
+      spine: spine(parts.map((p) => p.mins), total),
       wash: WASH[h % WASH.length],
     };
   })
@@ -114,17 +131,19 @@ const seriesList = [...bySeries.entries()]
         <a class="art" href={`/blog/${s.parts[0].id}`} aria-label={`Start ${s.title}`} style={`--wx:${s.wash.x};--wy:${s.wash.y};--wo:${s.wash.o}`}>
           <svg viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
             {s.comb.map((c) => (<path d={c.d} fill="none" stroke="var(--accent)" stroke-width={c.w} opacity={c.o} />))}
+            {s.spine.tail && <path d={s.spine.tail} fill="none" stroke="var(--accent)" stroke-width="1.4" opacity="0.3" stroke-dasharray="5 7" stroke-linecap="round" />}
             {s.spine.path && <path d={s.spine.path} fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" />}
-            {s.spine.nodes.map((p) => (<circle cx={p[0]} cy={p[1]} r="4.8" fill="var(--accent)" />))}
+            {s.spine.solidNodes.map((p) => (<circle cx={p[0]} cy={p[1]} r="4.8" fill="var(--accent)" />))}
+            {s.spine.futureNodes.map((p) => (<circle cx={p[0]} cy={p[1]} r="3.8" fill="var(--paper)" stroke="var(--accent)" stroke-width="1.6" opacity="0.85" />))}
           </svg>
         </a>
         <div>
           <h2><a href={`/blog/${s.parts[0].id}`}>{s.title}</a></h2>
           {s.description && <p class="sum">{s.description}</p>}
           <div class="prog">
-            <span class="badge">{s.parts.length} {s.parts.length === 1 ? 'part' : 'parts'}</span>
-            <span class="segs">{s.parts.map(() => (<i class="on"></i>))}</span>
-            <span><em>{s.parts.length}</em> published · {fmtMonth(s.first)}{s.first.valueOf() !== s.latest.valueOf() ? ` – ${fmtMonth(s.latest)}` : ''}</span>
+            <span class={`badge${s.status !== 'in-progress' ? ' quiet' : ''}`}>{STATUS_LABEL[s.status] || 'In progress'}</span>
+            <span class="segs">{Array.from({ length: Math.min(s.total, 8) }).map((_, i) => (<i class={i < s.parts.length ? 'on' : ''}></i>))}</span>
+            <span><em>{s.parts.length}{s.total > s.parts.length ? ` of ${s.total}` : ''}</em> published · {fmtMonth(s.first)}{s.first.valueOf() !== s.latest.valueOf() ? ` – ${fmtMonth(s.latest)}` : ''}</span>
           </div>
           <ol class="parts">
             {s.parts.map((part, i) => (
@@ -134,6 +153,14 @@ const seriesList = [...bySeries.entries()]
                 <span class="lead"></span>
                 <span class="m">{fmtMonth(part.date)} · {part.mins} min</span>
               </a></li>
+            ))}
+            {s.planned.map((title, i) => (
+              <li><span class="soon">
+                <span class="n">{s.parts.length + i + 1}</span>
+                <span class="t">{title}</span>
+                <span class="lead"></span>
+                <span class="m">To come</span>
+              </span></li>
             ))}
           </ol>
         </div>
@@ -170,13 +197,16 @@ const seriesList = [...bySeries.entries()]
   .prog { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 26px; font-family: var(--sans); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
   .prog em { font-style: normal; color: var(--ink-soft); }
   .badge { display: inline-flex; font-family: var(--sans); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; background: var(--accent); color: var(--on-accent); padding: 5px 10px; border-radius: 2px; }
+  .badge.quiet { background: transparent; border: 1px solid var(--rule); color: var(--ink-faint); }
   .segs { display: flex; gap: 3px; width: 128px; flex: none; }
   .segs i { flex: 1; height: 5px; border-radius: 1px; background: color-mix(in srgb, var(--ink) 32%, transparent); }
   .segs i.on { background: var(--accent); }
   .parts { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
   .parts li { border-bottom: 1px solid var(--rule); }
-  .parts a { display: flex; align-items: baseline; gap: 12px; padding: 11px 2px; transition: padding-left .22s; }
+  .parts a, .parts .soon { display: flex; align-items: baseline; gap: 12px; padding: 11px 2px; transition: padding-left .22s; }
   .parts a:hover { padding-left: 8px; }
+  .parts .soon { color: var(--ink-faint); }
+  .parts .soon .t { font-style: italic; color: var(--ink-faint); }
   .parts .n { flex: none; width: 20px; font-family: var(--sans); font-size: 11px; letter-spacing: .1em; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
   .parts .t { flex: 0 1 auto; min-width: 0; font-family: var(--serif-display); font-size: 17.5px; line-height: 1.35; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .parts a:hover .t { color: var(--accent); }
