@@ -1,0 +1,45 @@
+# Publish scheduled posts.
+# A post scheduled in the Studio is committed as `draft: true` + `publishAt: <ISO>`
+# (hidden, out of the build). This workflow runs on a cron, flips any post now due to
+# `draft: false`, and commits — which triggers the normal Cloudflare Pages rebuild, so
+# the post goes live automatically. GitHub cron can lag a few minutes under load; that
+# is fine for a blog (posts appear within ~15 min of their time).
+name: Publish scheduled posts
+
+on:
+  schedule:
+    - cron: "*/15 * * * *" # every 15 minutes
+  workflow_dispatch: {} # allow a manual run from the Actions tab
+
+# Let the default GITHUB_TOKEN push the publish commit.
+permissions:
+  contents: write
+
+# Never let two runs publish the same post twice.
+concurrency:
+  group: scheduled-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Flip any due scheduled posts to published
+        run: node scripts/publish-scheduled.mjs
+      - name: Commit + push if anything went live
+        run: |
+          if [ -n "$(git status --porcelain src/content/blog)" ]; then
+            git config user.name "scheduled-publish[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/content/blog
+            git commit -m "chore(schedule): publish scheduled post(s)"
+            git push origin main
+          else
+            echo "Nothing due — no posts published."
+          fi

@@ -76,29 +76,52 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       </article>`;
   }
 
+  // A scheduled post = a hidden draft with a future publishAt (set from the publish
+  // sheet). It publishes on its own via the cron; here it's a distinct card.
+  function schedCard(p: any): string {
+    const when = new Date(p.publishAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    const ser = p.series ? esc(p.seriesTitle || p.series) + (p.seriesOrder ? ' · part ' + p.seriesOrder : '') : 'Standalone';
+    return `<article class="dcard" data-slug="${esc(p.slug)}">
+        <h3>${esc(p.title)}</h3>
+        <div class="ser">${ser}${p.paid ? ' · paid' : ''}</div>
+        <div class="dnote"><b>Scheduled</b>Goes live ${esc(when)} — publishes automatically, no action needed.</div>
+        <div class="dfoot"><span>Queued</span><a class="go" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit / reschedule →</a></div>
+        <div class="row-actions" style="margin-top:2px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm btn-primary" data-act="publish" data-slug="${esc(p.slug)}">Publish now</button></div>
+      </article>`;
+  }
+
   function render() {
     const drafts = all.filter((p) => p.draft);
+    const now = Date.now();
+    const scheduled = drafts.filter((p) => p.publishAt && new Date(p.publishAt).getTime() > now)
+      .sort((a, b) => new Date(a.publishAt).getTime() - new Date(b.publishAt).getTime());
+    const schedSet = new Set(scheduled.map((p) => p.slug));
+    const plain = drafts.filter((p) => !schedSet.has(p.slug));
     // Summary
-    $('d-count').textContent = String(drafts.length);
+    $('d-count').textContent = String(plain.length);
     $('d-series').textContent = String(drafts.filter((p) => p.series).length);
     const totalWords = drafts.reduce((s, p) => s + localWords(p.slug), 0);
     $('d-words').textContent = totalWords ? totalWords.toLocaleString() : '—';
-    const oldest = drafts.map((p) => daysSince(p.pubDate)).filter((n): n is number => n != null);
+    const oldest = plain.map((p) => daysSince(p.pubDate)).filter((n): n is number => n != null);
     $('d-old').textContent = oldest.length ? Math.max(...oldest) + ' days' : '—';
 
     if (!drafts.length) {
       host.innerHTML = '<div class="panel"><div class="pb muted" style="text-align:center;padding:2.4rem 1rem">Everything you’ve written is published. <a href="/admin/write" style="color:var(--accent)">Start something new →</a></div></div>';
       return;
     }
-    // Nearly there (>=70% of target) vs the rest — a real split when local data exists.
-    const pct = (p: any) => { const t = localTarget(p.slug), w = localWords(p.slug); return t ? w / t : 0; };
-    drafts.sort((a, b) => pct(b) - pct(a) || (b.pubDate || '').localeCompare(a.pubDate || ''));
-    const near = drafts.filter((p) => pct(p) >= 0.7);
-    const rest = drafts.filter((p) => pct(p) < 0.7);
-    const section = (label: string, items: any[]) => items.length
-      ? `<div style="margin-bottom:22px"><div class="dhead"><span>${label}</span><em>${items.length}</em></div><div class="dgrid">${items.map(card).join('')}</div></div>`
+    const section = (label: string, items: any[], render = card) => items.length
+      ? `<div style="margin-bottom:22px"><div class="dhead"><span>${label}</span><em>${items.length}</em></div><div class="dgrid">${items.map(render).join('')}</div></div>`
       : '';
-    host.innerHTML = (near.length ? section('Nearly there', near) : '') + section(near.length ? 'Everything else' : 'Drafts', rest);
+    // Scheduled first (queued to publish on their own), then the working drafts split
+    // by progress (Nearly there vs the rest) where local word data exists.
+    const pct = (p: any) => { const t = localTarget(p.slug), w = localWords(p.slug); return t ? w / t : 0; };
+    plain.sort((a, b) => pct(b) - pct(a) || (b.pubDate || '').localeCompare(a.pubDate || ''));
+    const near = plain.filter((p) => pct(p) >= 0.7);
+    const rest = plain.filter((p) => pct(p) < 0.7);
+    host.innerHTML =
+      section('Scheduled', scheduled, schedCard) +
+      (near.length ? section('Nearly there', near) : '') +
+      section(near.length ? 'Everything else' : 'Drafts', rest);
   }
 
   async function load() {

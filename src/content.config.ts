@@ -117,6 +117,12 @@ const blog = defineCollection({
     // hidden. This is an editorial gate, NOT a security gate — a draft still
     // exists in the source tree; it's simply not listed/rendered when filtered.
     draft: z.boolean().default(false),
+    // Scheduled publishing (optional). A SCHEDULED post is `draft: true` (so it stays
+    // hidden and out of the build) PLUS `publishAt` set to a future ISO datetime. A
+    // cron job (.github/workflows/scheduled-publish.yml) flips it to `draft: false` and
+    // drops `publishAt` once that time passes, committing → a rebuild makes it live.
+    // Display-only in the schema; the scheduler is what enforces the timing.
+    publishAt: z.coerce.date().optional(),
     // Phase 3 (paywall): a "gateable" post is monetizable — its full body is
     // meant to be kept OUT of the static HTML and served only via the runtime
     // entitlement-checking gate (Pages Function → Supabase RLS → Dodo Payments

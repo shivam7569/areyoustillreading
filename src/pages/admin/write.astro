@@ -152,7 +152,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
               <div class="dl">When</div>
               <div class="pick" id="whenpick">
                 <button class="pk on" type="button" data-w="now"><span class="rd"></span><span><b>Publish now</b><small>Live in a few seconds.</small></span></button>
-                <button class="pk" type="button" data-w="later" disabled><span class="rd"></span><span><b>Schedule it</b><small>Not yet — coming soon.</small></span></button>
+                <button class="pk" type="button" data-w="later"><span class="rd"></span><span><b>Schedule it</b><small>Goes live on its own at a time you pick.</small></span></button>
+              </div>
+              <div class="sub-x off" id="schedbox">
+                <div class="sched"><input type="date" id="pm-sched-date" aria-label="Publish date"><input type="time" id="pm-sched-time" aria-label="Publish time"><span id="pm-sched-tz" style="color:var(--ink-faint)"></span></div>
+                <div id="pm-sched-note" style="margin-top:6px;color:var(--ink-faint)">Saved hidden until then; a cron publishes it (within ~15 min of the time).</div>
               </div>
             </div>
 
@@ -1250,6 +1254,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       // session check runs; refreshAuthView() swaps to the form if already signed in.
       $('pm-signin').hidden = false;
       $('pm-form').hidden = true;
+      // Reset the "when" picker to Publish-now on every open.
+      whenChoice = 'now';
+      document.getElementById('schedbox')?.classList.add('off');
+      document.querySelectorAll('#whenpick .pk').forEach((x) => x.classList.toggle('on', (x as HTMLElement).dataset.w === 'now'));
       refreshAuthView();
     };
     const closeModal = () => { modal.hidden = true; };
@@ -1260,12 +1268,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
     // --- Press-check footer + pre-flight checklist ----------------------------
     // The publish ENGINE (#pm-publish's handler) is unchanged. #pm-draft is a hidden
-    // flag: Save-draft sets it on then runs the same handler; Publish-now clears it on
-    // pointer-down (which fires before the handler's click reads it) so the post goes
-    // live. Everything the checklist shows is real editor/post state — no mock numbers.
+    // flag the footer sets on pointer-down (before the handler's click reads it):
+    // Save-draft = on; the primary button = on when SCHEDULING (a scheduled post is a
+    // hidden draft with a publishAt), off for Publish now. Everything the checklist
+    // shows is real editor/post state — no mock numbers.
     $('pm-cancel').addEventListener('click', closeModal);
-    $('pm-publish').addEventListener('pointerdown', () => { $('pm-draft').checked = false; });
-    $('pm-save-draft').addEventListener('click', () => { $('pm-draft').checked = true; $('pm-publish').click(); });
+    $('pm-publish').addEventListener('pointerdown', () => { $('pm-draft').checked = whenChoice === 'later'; });
+    $('pm-save-draft').addEventListener('click', () => { $('pm-draft').checked = true; whenChoice = 'now'; $('pm-publish').click(); });
 
     // "Who can read it" — Free / Paid. The publish handler reads `accessChoice` (writes
     // frontmatter `gateable`), and applies the suggested price to post_paywall once the
@@ -1279,6 +1288,35 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       $('pricebox').classList.toggle('off', accessChoice !== 'paid');
       refreshSheet();
     });
+
+    // "When" — Publish now vs Schedule it. Scheduling saves the post as a HIDDEN draft
+    // with a `publishAt`; the cron (.github/workflows/scheduled-publish.yml) flips it
+    // live at that time. The primary button relabels to "Schedule" while scheduling.
+    let whenChoice = 'now';
+    const whenpick = $('whenpick');
+    const schedDate = $('pm-sched-date') as HTMLInputElement;
+    const schedTime = $('pm-sched-time') as HTMLInputElement;
+    const setPrimaryLabel = () => { $('pm-publish').textContent = whenChoice === 'later' ? 'Schedule' : (editing ? 'Update' : 'Publish now'); };
+    whenpick.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('button[data-w]') as HTMLElement | null; if (!b) return;
+      whenChoice = b.dataset.w!;
+      whenpick.querySelectorAll('.pk').forEach((x) => x.classList.toggle('on', x === b));
+      $('schedbox').classList.toggle('off', whenChoice !== 'later');
+      if (whenChoice === 'later' && !schedDate.value) {
+        const d = new Date(Date.now() + 24 * 3600 * 1000); // default tomorrow 09:00 local
+        schedDate.value = d.toISOString().slice(0, 10); schedTime.value = '09:00';
+      }
+      try { $('pm-sched-tz').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch {}
+      setPrimaryLabel();
+    });
+    // The scheduled instant as an ISO string, or '' when not scheduling / incomplete.
+    const scheduledIso = () => {
+      if (whenChoice !== 'later') return '';
+      const d = (schedDate.value || '').trim(), t = (schedTime.value || '').trim();
+      if (!d || !t) return '';
+      const dt = new Date(d + 'T' + t); // interpreted in the author's local time
+      return isNaN(dt.getTime()) ? '' : dt.toISOString();
+    };
 
     // The mail toggle drives the hidden #pm-email-subs checkbox the engine reads.
     const mailTog = $('pm-mail-tog');
@@ -1535,6 +1573,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (!title) return void (status.textContent = 'Add a title.');
       if (!description) return void (status.textContent = 'Add a description.');
       if (!slug) return void (status.textContent = 'Need a permalink.');
+      // Scheduling: a valid FUTURE time is required (the post is saved as a hidden
+      // draft with this publishAt; the cron flips it live then).
+      const scheduleAt = scheduledIso();
+      if (whenChoice === 'later') {
+        if (!scheduleAt) return void (status.textContent = 'Pick a date and time to schedule.');
+        if (new Date(scheduleAt).getTime() <= Date.now()) return void (status.textContent = 'Choose a time in the future.');
+      }
       const { data } = await supabase.auth.getSession();
       const token = data.session && data.session.access_token;
       if (!token) { status.textContent = 'Please sign in again.'; refreshAuthView(); return; }
@@ -1583,6 +1628,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       // Access: "Paid" marks the post gateable (build-time body split). The runtime
       // price/on-state (post_paywall) is applied best-effort after publish, below.
       if (accessChoice === 'paid') fmLines.push('gateable: true');
+      // Scheduled: keep it a hidden draft (draft is already true here) + record when the
+      // cron should publish it. Cleared automatically by the cron when it goes live.
+      if (scheduleAt) fmLines.push(`publishAt: ${yaml(scheduleAt)}`);
       fmLines.push(`draft: ${draft}`, '---', '');
       const content = fmLines.join('\n') + body;
 
@@ -1685,7 +1733,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           // excluded from the build and not served by the KV overlay), so the live-poll
           // below would hang on a permanent 404. Confirm the save and stop here.
           if (draft) {
-            status.textContent = (j.updated ? 'Draft updated.' : 'Draft saved.') + ' It stays hidden until you publish.';
+            if (scheduleAt) {
+              const nice = new Date(scheduleAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+              status.textContent = `Scheduled for ${nice}. It stays hidden until then, when it publishes on its own.`;
+            } else {
+              status.textContent = (j.updated ? 'Draft updated.' : 'Draft saved.') + ' It stays hidden until you publish.';
+            }
             navigating = false; // nothing to navigate to; let the button re-enable
             return;
           }
