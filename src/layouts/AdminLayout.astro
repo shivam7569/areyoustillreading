@@ -33,7 +33,7 @@ import BaseHead from '../components/BaseHead.astro';
 interface Props {
   title: string;
   heading?: string;
-  active?: 'home' | 'posts' | 'drafts' | 'write' | 'audience' | 'engagement' | 'analytics' | 'revenue' | 'settings';
+  active?: 'home' | 'posts' | 'drafts' | 'write' | 'series' | 'audience' | 'engagement' | 'analytics' | 'revenue' | 'settings';
 }
 const { title, heading, active } = Astro.props;
 
@@ -45,6 +45,7 @@ const icon = {
   posts: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>',
   drafts: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 13h4"/></svg>',
   write: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  series: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>',
   audience: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg>',
   engagement: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-9 8.3 8.5 8.5 0 0 1-3.9-.9L3 20l1.1-5.1A8.38 8.38 0 0 1 3.7 11 8.5 8.5 0 0 1 12 3a8.38 8.38 0 0 1 8.3 8.5Z"/></svg>',
   analytics: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="0.5"/><rect x="12" y="8" width="3" height="10" rx="0.5"/><rect x="17" y="5" width="3" height="13" rx="0.5"/></svg>',
@@ -63,6 +64,7 @@ const navGroups = [
     { key: 'posts', href: '/admin/posts', label: 'Posts', icon: icon.posts },
     { key: 'drafts', href: '/admin/drafts', label: 'Drafts', icon: icon.drafts },
     { key: 'write', href: '/admin/write', label: 'Write', icon: icon.write },
+    { key: 'series', href: '/admin/series', label: 'Series', icon: icon.series },
   ] },
   { label: 'Readers', items: [
     { key: 'audience', href: '/admin/audience', label: 'Audience', icon: icon.audience },

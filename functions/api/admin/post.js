@@ -135,7 +135,10 @@ export async function onRequestPost({ request, env }) {
   const hasDraft = typeof body.draft === 'boolean';
   const hasGateable = typeof body.gateable === 'boolean';
   const hasSeries = Object.prototype.hasOwnProperty.call(body, 'series');
-  if (!hasDraft && !hasGateable && !hasSeries) return json({ error: 'Nothing to change' }, 400);
+  // Series knobs for the /series plate (total / status / planned), written to whichever
+  // post is the series' canonical member (the intro) by the Studio's Series page.
+  const hasSeriesMeta = Object.prototype.hasOwnProperty.call(body, 'seriesMeta');
+  if (!hasDraft && !hasGateable && !hasSeries && !hasSeriesMeta) return json({ error: 'Nothing to change' }, 400);
   if (hasSeries && body.series !== null && (typeof body.series !== 'object' || !String(body.series.title || '').trim())) {
     return json({ error: 'A series needs a name' }, 400);
   }
@@ -173,6 +176,19 @@ export async function onRequestPost({ request, env }) {
       actions.push('series-set');
     }
   }
+  if (hasSeriesMeta) {
+    const m = body.seriesMeta || {};
+    const total = Number(m.total);
+    if (Number.isFinite(total) && total > 0) updated = setScalarField(updated, 'seriesTotal', String(Math.round(total)));
+    else updated = removeFields(updated, ['seriesTotal']);
+    const status = String(m.status || '').trim();
+    if (['in-progress', 'complete', 'paused'].includes(status)) updated = setScalarField(updated, 'seriesStatus', JSON.stringify(status));
+    else updated = removeFields(updated, ['seriesStatus']);
+    const planned = Array.isArray(m.planned) ? m.planned.map((s) => String(s).trim()).filter(Boolean) : [];
+    if (planned.length) updated = setScalarField(updated, 'seriesPlanned', '[' + planned.map((s) => JSON.stringify(s)).join(', ') + ']');
+    else updated = removeFields(updated, ['seriesPlanned']);
+    actions.push('series-meta');
+  }
 
   let put;
   try {
@@ -201,7 +217,8 @@ export async function onRequestPost({ request, env }) {
   return json({ ok: true, slug,
     ...(hasDraft ? { draft: body.draft } : {}),
     ...(hasGateable ? { gateable: body.gateable } : {}),
-    ...(hasSeries ? { series: body.series } : {}) });
+    ...(hasSeries ? { series: body.series } : {}),
+    ...(hasSeriesMeta ? { seriesMeta: body.seriesMeta } : {}) });
 }
 
 export async function onRequestDelete({ request, env }) {

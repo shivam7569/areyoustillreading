@@ -1,0 +1,117 @@
+---
+/**
+ * /admin/series — the Studio's Series control room.
+ * One card per series (grouped from the live post catalog), showing its parts and
+ * the plate knobs — planned total, status, and upcoming ("still to come") parts —
+ * that drive the public /series page's badge, "N of M", and greyed rows.
+ *
+ * WHERE THE KNOBS LIVE: they're frontmatter on the series' canonical member (the
+ * intro — lowest part number), which is exactly what the /series page reads at
+ * build time (firstOf across the group). Saving here commits to that post via the
+ * admin-gated /api/admin/post ({ slug, seriesMeta }) — the same build-time path as
+ * publishing, so the change goes live on the next rebuild.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Series — Studio" heading="Series" active="series">
+  <section class="stack">
+    <div class="rowhead">
+      <div style="color:var(--ink-faint);font-size:12.5px">The knobs behind each collection — total, status, and what's still to come. These drive the public series page.</div>
+      <a class="btn btn-sm btn-ghost" href="/series/" target="_blank" rel="noopener">View series page ↗</a>
+    </div>
+    <div id="series-host"><div class="muted">Loading series…</div></div>
+  </section>
+</AdminLayout>
+
+<script>
+  import { onAdminReady, adminFetch, swrFetch } from '../../lib/admin-gate';
+  import { esc } from '../../lib/admin-format';
+
+  const host = document.getElementById('series-host')!;
+  const STATUS = [['', 'Auto'], ['in-progress', 'In progress'], ['complete', 'Complete'], ['paused', 'Paused']];
+  const firstOf = (members: any[], key: string) => { for (const m of members) { const v = m[key]; if (v != null && v !== '' && !(Array.isArray(v) && v.length === 0)) return v; } return undefined; };
+
+  function render(d: any) {
+    if (d && d.__error) { host.innerHTML = `<div class="panel"><div class="pb notice err">Couldn't load series: ${esc(d.error || ('HTTP ' + d.status))}</div></div>`; return; }
+    const posts = (d.posts || []).filter((p: any) => p.series);
+    const groups: Record<string, any[]> = {};
+    for (const p of posts) (groups[p.series] ||= []).push(p);
+    const slugs = Object.keys(groups);
+    if (!slugs.length) {
+      host.innerHTML = '<div class="panel"><div class="pb muted" style="text-align:center;padding:2.4rem 1rem">No series yet. Group posts into a series from the publish sheet or the Posts page, and they’ll gather here.</div></div>';
+      return;
+    }
+    // Sort groups by their newest part.
+    slugs.sort((a, b) => {
+      const la = groups[a].reduce((m, p) => (p.pubDate > m ? p.pubDate : m), '');
+      const lb = groups[b].reduce((m, p) => (p.pubDate > m ? p.pubDate : m), '');
+      return lb.localeCompare(la);
+    });
+    host.innerHTML = slugs.map((slug) => {
+      const members = groups[slug].slice().sort((a: any, b: any) => (a.seriesOrder ?? 1e9) - (b.seriesOrder ?? 1e9) || (a.pubDate || '').localeCompare(b.pubDate || ''));
+      const title = firstOf(members, 'seriesTitle') || slug;
+      const intro = members[0];
+      const published = members.filter((m: any) => !m.draft).length;
+      const total = firstOf(members, 'seriesTotal') || '';
+      const status = firstOf(members, 'seriesStatus') || '';
+      const planned = (firstOf(members, 'seriesPlanned') as string[]) || [];
+      const partsRows = members.map((m: any) => `<div class="fr"><span>${m.seriesOrder ? '<b style="color:var(--ink);font-weight:600">' + esc(String(m.seriesOrder)) + '</b> · ' : ''}${esc(m.title)}${m.draft ? ' <span class="pill" style="margin-left:4px">Draft</span>' : ''}</span><a class="v act" href="/admin/write?slug=${encodeURIComponent(m.slug)}">Edit</a></div>`).join('');
+      return `<div class="panel" data-slug="${esc(intro.slug)}" data-series="${esc(slug)}">
+        <header><h2>${esc(title)}</h2><span class="hint">${published} of ${total || members.length} published · saved on “${esc(intro.title)}”</span></header>
+        <div class="pb">
+          <div class="cols two" style="gap:24px">
+            <div>
+              <div class="gl" style="font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px">On the plate</div>
+              <div class="fr"><span>Planned total</span><span class="v"><input class="input sr-total" type="number" min="1" placeholder="—" value="${total}" style="width:90px;text-align:right"></span></div>
+              <div class="fr"><span>Status</span><span class="v"><select class="select sr-status" style="width:auto;min-width:150px">${STATUS.map(([v, l]) => `<option value="${v}"${v === status ? ' selected' : ''}>${l}</option>`).join('')}</select></span></div>
+              <div style="margin-top:12px">
+                <div class="gl" style="font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:7px">Parts still to come</div>
+                <textarea class="input sr-planned" rows="3" placeholder="One title per line — shown greyed on the series page" style="width:100%;resize:vertical">${esc(planned.join('\n'))}</textarea>
+              </div>
+              <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+                <button class="btn btn-primary btn-sm sr-save" type="button">Save</button>
+                <span class="muted sr-status-msg" style="font-size:12.5px"></span>
+              </div>
+            </div>
+            <div>
+              <div class="gl" style="font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px">Parts (${members.length})</div>
+              ${partsRows}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function save(panel: HTMLElement) {
+    const slug = panel.dataset.slug!;
+    const btn = panel.querySelector('.sr-save') as HTMLButtonElement;
+    const msg = panel.querySelector('.sr-status-msg') as HTMLElement;
+    const total = parseInt((panel.querySelector('.sr-total') as HTMLInputElement).value, 10);
+    const status = (panel.querySelector('.sr-status') as HTMLSelectElement).value;
+    const planned = (panel.querySelector('.sr-planned') as HTMLTextAreaElement).value.split('\n').map((s) => s.trim()).filter(Boolean);
+    btn.disabled = true; msg.textContent = 'Saving…';
+    try {
+      const r = await adminFetch('/api/admin/post', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug, seriesMeta: { total: Number.isFinite(total) && total > 0 ? total : null, status, planned } }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      msg.textContent = 'Saved — live on the next rebuild.';
+      try { sessionStorage.removeItem('aysr:swr:/api/admin/posts'); } catch {}
+    } catch (e: any) {
+      msg.textContent = 'Error: ' + (e.message || e);
+    } finally { btn.disabled = false; }
+  }
+
+  host.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('.sr-save') as HTMLElement | null;
+    if (!btn) return;
+    const panel = btn.closest('.panel') as HTMLElement;
+    if (panel) save(panel);
+  });
+
+  onAdminReady(() => swrFetch('/api/admin/posts', (d) => render(d)));
+</script>
