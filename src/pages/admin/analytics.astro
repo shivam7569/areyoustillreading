@@ -72,7 +72,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 </style>
 
 <script>
-  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
+  import { onAdminReady, adminFetch, swrFetch } from '../../lib/admin-gate';
   import { fmtNum, esc } from '../../lib/admin-format';
 
   let range = '30d';
@@ -155,44 +155,43 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     host.innerHTML = all.length ? all.join('') : '<div class="card-pad muted">No referrers yet.</div>';
   }
 
-  async function loadTitles() {
-    try {
-      const r = await adminFetch('/api/admin/posts');
-      const d = await r.json();
-      if (r.ok && Array.isArray(d.posts)) {
+  function loadTitles() {
+    return swrFetch('/api/admin/posts', (d: any) => {
+      if (d && !d.__error && Array.isArray(d.posts)) {
         titles = {};
         for (const p of d.posts) titles[p.slug] = p.title;
+        // If the analytics data already painted (with slugs), relabel with real titles.
+        if (lastData && Array.isArray(lastData.topPosts)) renderPosts(lastData.topPosts);
       }
-    } catch { /* fall back to slugs */ }
+    });
   }
 
-  async function load() {
-    try {
-      const r = await adminFetch(`/api/admin/analytics?range=${encodeURIComponent(range)}`);
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Failed');
-      if (d.configured === false) {
-        $('setup').hidden = false;
-        for (const id of ['k-views', 'k-visitors', 'k-read', 'k-subs', 'k-unlocks']) setKpi(id, '0');
-        renderChart([]); renderPosts([]); renderRefs([], 0);
-        return;
-      }
-      $('setup').hidden = true;
-      const t = d.totals || {};
-      setKpi('k-views', fmtNum(t.views || 0));
-      setKpi('k-visitors', fmtNum(t.uniqueSessions || 0));
-      setKpi('k-read', (t.avgReadPct || 0) + '%');
-      $('k-read-foot').textContent = t.reads ? `${fmtNum(t.reads)} reads · ~${fmtDwell(t.avgDwellMs || 0)} on page` : 'how far people scroll';
-      $('k-views-foot').textContent = d.truncated ? 'page loads (capped)' : 'page loads';
-      setKpi('k-subs', fmtNum((d.conversion && d.conversion.newSubscribers) || 0));
-      setKpi('k-unlocks', fmtNum((d.conversion && d.conversion.unlocks) || 0));
-      renderChart(d.byDay || []);
-      renderPosts(d.topPosts || []);
-      renderRefs(d.referrers || [], d.directViews || 0);
-    } catch (e: any) {
-      $('chart').innerHTML = `<div class="notice err">Couldn't load analytics: ${esc(e.message || e)}</div>`;
+  let lastData: any = null; // remembered so a late titles fetch can re-render posts
+  function renderAll(d: any) {
+    if (d && d.__error) { $('chart').innerHTML = `<div class="notice err">Couldn't load analytics: ${esc(d.error || ('HTTP ' + d.status))}</div>`; return; }
+    if (d && d.configured === false) {
+      $('setup').hidden = false;
+      for (const id of ['k-views', 'k-visitors', 'k-read', 'k-subs', 'k-unlocks']) setKpi(id, '0');
+      renderChart([]); renderPosts([]); renderRefs([], 0);
+      return;
     }
+    lastData = d;
+    $('setup').hidden = true;
+    const t = d.totals || {};
+    setKpi('k-views', fmtNum(t.views || 0));
+    setKpi('k-visitors', fmtNum(t.uniqueSessions || 0));
+    setKpi('k-read', (t.avgReadPct || 0) + '%');
+    $('k-read-foot').textContent = t.reads ? `${fmtNum(t.reads)} reads · ~${fmtDwell(t.avgDwellMs || 0)} on page` : 'how far people scroll';
+    $('k-views-foot').textContent = d.truncated ? 'page loads (capped)' : 'page loads';
+    setKpi('k-subs', fmtNum((d.conversion && d.conversion.newSubscribers) || 0));
+    setKpi('k-unlocks', fmtNum((d.conversion && d.conversion.unlocks) || 0));
+    renderChart(d.byDay || []);
+    renderPosts(d.topPosts || []);
+    renderRefs(d.referrers || [], d.directViews || 0);
   }
+  // Stale-while-revalidate: paints the last-seen numbers for this range instantly,
+  // then updates from the network — so re-opening Analytics has no lag.
+  function load() { return swrFetch(`/api/admin/analytics?range=${encodeURIComponent(range)}`, (d) => renderAll(d)); }
 
   document.querySelectorAll('.seg').forEach((b) => {
     b.addEventListener('click', () => {
@@ -225,5 +224,5 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   $('purge-synthetic').addEventListener('click', () => purge('purge-synthetic', 'Delete all load-test rows'));
   $('purge-old').addEventListener('click', () => purge('purge-old', 'Delete analytics older than 90 days'));
 
-  onAdminReady(async () => { await loadTitles(); load(); });
+  onAdminReady(() => { loadTitles(); load(); }); // both fire in parallel; SWR paints instantly
 </script>

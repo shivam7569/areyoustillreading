@@ -60,7 +60,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 </AdminLayout>
 
 <script>
-  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
+  import { onAdminReady, swrFetch } from '../../lib/admin-gate';
   import { fmtNum, fmtMoney, fmtDate, esc } from '../../lib/admin-format';
 
   const $ = (id: string) => document.getElementById(id);
@@ -70,11 +70,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   }
   let titles: Record<string, string> = {};
 
-  async function loadOverview() {
-    try {
-      const r = await adminFetch('/api/admin/overview');
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Failed');
+  function loadOverview() {
+    return swrFetch('/api/admin/overview', (d: any) => {
+      if (d.__error) { set('k-subs', '—'); set('k-rev', '—'); set('k-drafts', '—'); return; }
       set('k-subs', fmtNum(d.subscribers.confirmed));
       const el = $('k-subs-foot'); if (el) el.textContent = `${fmtNum(d.subscribers.confirmed)} confirmed · ${fmtNum(d.subscribers.pending)} pending`;
       set('k-rev', fmtMoney(d.revenue.grossCents, d.revenue.currency));
@@ -83,14 +81,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       const df = $('k-drafts-foot'); if (df) df.textContent = d.posts.paywalled ? `${fmtNum(d.posts.paywalled)} paywalled live` : 'unfinished';
       const lr = $('l-recip'); if (lr) lr.textContent = fmtNum(d.subscribers.confirmed);
       const lp = $('l-pending'); if (lp) lp.textContent = fmtNum(d.subscribers.pending);
-    } catch { set('k-subs', '—'); set('k-rev', '—'); set('k-drafts', '—'); }
+    });
   }
 
-  async function loadDepth() {
-    try {
-      const r = await adminFetch('/api/admin/analytics?range=all');
-      const d = await r.json();
-      if (!r.ok || d.configured === false) { set('k-depth', '—'); $('k-depth-foot')!.textContent = 'analytics not set up'; $('stops')!.innerHTML = '<div class="muted">Read-depth analytics isn’t set up yet.</div>'; return; }
+  function loadDepth() {
+    return swrFetch('/api/admin/analytics?range=all', (d: any) => {
+      if (d.__error || d.configured === false) { set('k-depth', '—'); $('k-depth-foot')!.textContent = 'analytics not set up'; $('stops')!.innerHTML = '<div class="muted">Read-depth analytics isn’t set up yet.</div>'; return; }
       const pct = (d.totals && d.totals.avgReadPct) || 0;
       set('k-depth', pct + '%');
       $('k-depth-foot')!.textContent = d.totals && d.totals.reads ? `${fmtNum(d.totals.reads)} reads measured` : 'how far readers get';
@@ -98,16 +94,14 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       const host = $('stops')!;
       if (!top.length) { host.innerHTML = '<div class="muted">No completion data yet.</div>'; return; }
       host.innerHTML = top.map((p: any) => `<div class="barrow"><div><div class="nm">${esc(titles[p.slug] || p.slug)}</div><div class="bar"><i style="width:${p.avgReadPct}%"></i></div></div><div class="pc">${p.avgReadPct}%</div></div>`).join('');
-    } catch { set('k-depth', '—'); }
+    });
   }
 
   const statusPill = (p: any) => p.draft ? '<span class="pill">Draft</span>' : '<span class="pill live">Live</span>';
 
-  async function loadPosts() {
-    try {
-      const r = await adminFetch('/api/admin/posts');
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Failed');
+  function loadPosts() {
+    return swrFetch('/api/admin/posts', (d: any) => {
+      if (d.__error) { $('recent')!.innerHTML = `<div class="card-pad notice err">Couldn't load posts: ${esc(d.error || ('HTTP ' + d.status))}</div>`; return; }
       const posts = d.posts || [];
       titles = {}; for (const p of posts) titles[p.slug] = p.title;
 
@@ -132,16 +126,14 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
               <td class="num"><a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Continue →</a></td>
             </tr>`).join('') + '</tbody></table>'
         : '<div class="card-pad muted">Nothing in flight. <a href="/admin/write" style="color:var(--accent)">Start something →</a></div>';
-    } catch (e: any) {
-      $('recent')!.innerHTML = `<div class="card-pad notice err">Couldn't load posts: ${esc(e.message || e)}</div>`;
-    }
+    });
   }
 
-  onAdminReady(async () => {
-    // Overview fires in parallel (independent); posts must land before depth
-    // (depth needs the slug→title map), so those two stay sequential.
+  onAdminReady(() => {
+    // All three fire in parallel; SWR paints last-seen values instantly. loadDepth's
+    // barrow relabels with real titles once loadPosts populates the map (both cached).
     loadOverview();
-    await loadPosts();
+    loadPosts();
     loadDepth();
   });
 </script>

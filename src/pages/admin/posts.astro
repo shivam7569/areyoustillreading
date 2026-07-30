@@ -96,7 +96,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
 <script>
   import { supabase } from '../../lib/supabase';
-  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
+  import { onAdminReady, adminFetch, swrFetch } from '../../lib/admin-gate';
   import { fmtDate, esc } from '../../lib/admin-format';
 
   let all: any[] = [];
@@ -229,16 +229,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       + '</tbody></table></div>';
   }
 
-  async function load() {
-    try {
-      const r = await adminFetch('/api/admin/posts');
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Failed to load');
+  function load() {
+    // Stale-while-revalidate: paints the last-seen list instantly, then refreshes.
+    return swrFetch('/api/admin/posts', (d: any) => {
+      if (d && d.__error) { host.innerHTML = `<div class="card card-pad notice err">Couldn't load posts: ${esc(d.error || ('HTTP ' + d.status))}</div>`; return; }
       all = d.posts || [];
       view();
-    } catch (e: any) {
-      host.innerHTML = `<div class="card card-pad notice err">Couldn't load posts: ${esc(e.message || e)}</div>`;
-    }
+    });
   }
 
   function disarm() {

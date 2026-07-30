@@ -107,96 +107,110 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       </div>
     </div>
     <div id="publish-modal" class="pm-overlay" hidden>
-      <div class="pm-card" role="dialog" aria-modal="true" aria-label="Publish">
-        <button class="pm-close" id="pm-close" type="button" aria-label="Close">&times;</button>
+      {/* Sign-in view (a small card) */}
+      <div id="pm-signin" class="pm-card" role="dialog" aria-modal="true" aria-label="Sign in to publish" hidden>
+        <h2 class="pm-title">Sign in to publish</h2>
+        <p class="pm-sub">Your draft is saved on this device. Sign in once to publish it to the world.</p>
+        <button class="pm-btn pm-btn-primary" id="pm-github" type="button">Continue with GitHub</button>
+        <div class="pm-or">or</div>
+        <form id="pm-magic" class="pm-magic">
+          <input id="pm-email" type="email" placeholder="you@example.com" required />
+          <button class="pm-btn" type="submit">Email me a link</button>
+        </form>
+        <p class="pm-status" id="pm-signin-status"></p>
+      </div>
 
-        <div id="pm-signin" hidden>
-          <h2 class="pm-title">Sign in to publish</h2>
-          <p class="pm-sub">Your draft is saved on this device. Sign in once to publish it to the world.</p>
-          <button class="pm-btn pm-btn-primary" id="pm-github" type="button">Continue with GitHub</button>
-          <div class="pm-or">or</div>
-          <form id="pm-magic" class="pm-magic">
-            <input id="pm-email" type="email" placeholder="you@example.com" required />
-            <button class="pm-btn" type="submit">Email me a link</button>
-          </form>
-          <p class="pm-status" id="pm-signin-status"></p>
-        </div>
+      {/* Press-check sheet — built to editorial/studio.css exactly. The publish ENGINE
+          is unchanged: every input ID is the one the #pm-publish handler reads; #pm-draft
+          is a hidden flag the footer buttons set. Scheduling + members-only aren't in our
+          backend, so those are disabled/omitted (not faked). */}
+      <div id="pm-form" class="sh" role="dialog" aria-modal="true" aria-label="Publish" hidden>
+        <header class="shhead">
+          <div>
+            <span class="eyebrow">Press check</span>
+            <h2 id="pm-form-title">Ready to publish</h2>
+            <div class="shsub" id="ps-sub"></div>
+          </div>
+          <button class="shx" id="pm-close" type="button" aria-label="Close">✕</button>
+        </header>
 
-        <div id="pm-form" hidden>
-          {/* Press-check publish sheet. The engine is unchanged: every input ID below
-              is exactly the one the publish handler reads; #pm-draft is now a hidden flag
-              the footer buttons set. Access + timing are honest (paywall is managed on
-              Posts; publishing is instant — no scheduler). */}
-          <header class="ps-head">
-            <span class="ps-eyebrow">Press check</span>
-            <h2 class="ps-title" id="pm-form-title">Ready to publish</h2>
-            <div class="ps-sub" id="ps-sub"></div>
-          </header>
-
-          <div class="ps-body">
-            <div class="ps-col">
-              <div class="ps-group">
-                <div class="ps-dl">What readers will see</div>
-                <label class="pm-field"><span class="pm-label">Title</span>
-                  <input id="pm-post-title" type="text" placeholder="Your title" /></label>
-                <label class="pm-field"><span class="pm-label">Standfirst</span>
-                  <textarea id="pm-post-desc" rows="2" placeholder="One sentence that makes people want to read."></textarea></label>
-                <div class="pm-field"><span class="pm-label">Tags</span>
-                  <div class="pm-tags" id="pm-tags"><input id="pm-tag-input" type="text" placeholder="Add a tag…" /></div></div>
-                <p class="pm-permalink">areyoustillreading.dev/blog/<span id="pm-slug" class="pm-slug" contenteditable="true" spellcheck="false"></span></p>
+        <div class="shbody">
+          <div class="shcol">
+            <div>
+              <div class="dl">Who can read it</div>
+              <div class="pick" id="accpick">
+                <button class="pk on" type="button" data-a="free"><span class="rd"></span><span><b>Free</b><small>Anyone, no account.</small></span></button>
+                <button class="pk" type="button" data-a="paid"><span class="rd"></span><span><b>Paid</b><small>A teaser shows; readers pay what they want to unlock the rest.</small></span></button>
               </div>
+              <div class="sub-x off" id="pricebox">
+                <div class="para"><span>Suggested price</span><span>$<input id="pm-price" class="pin" type="number" min="0" step="0.5" value="5" aria-label="Suggested price"></span><span>readers can pay more</span></div>
+                <div style="margin-top:6px;color:var(--ink-faint)">Add a <b>Paywall</b> block in the editor to place the cut; you can change all this on Posts.</div>
+              </div>
+            </div>
 
-              <div class="ps-group">
-                <div class="ps-dl">Series <span class="ps-opt">— optional</span></div>
-                <div style="display:flex; gap:0.5rem;">
-                  <input id="pm-series" type="text" placeholder="Series name — e.g. Rust Basics" style="flex:1 1 auto" />
-                  <input id="pm-series-order" type="number" min="1" step="1" placeholder="Part #" style="flex:0 0 92px" aria-label="Part number" />
-                </div>
-                <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
-                  <input id="pm-series-total" type="number" min="1" step="1" placeholder="Planned total" style="flex:0 0 130px" aria-label="Planned total parts" title="How many parts the series will have (drives the “3 of 5” plate)" />
-                  <select id="pm-series-status" class="pm-select" style="flex:1 1 auto" aria-label="Series status" title="Shown as the badge on the series page">
+            <div>
+              <div class="dl">When</div>
+              <div class="pick" id="whenpick">
+                <button class="pk on" type="button" data-w="now"><span class="rd"></span><span><b>Publish now</b><small>Live in a few seconds.</small></span></button>
+                <button class="pk" type="button" data-w="later" disabled><span class="rd"></span><span><b>Schedule it</b><small>Not yet — coming soon.</small></span></button>
+              </div>
+            </div>
+
+            <div>
+              <div class="dl">Who gets told</div>
+              <div class="mailrow">
+                <span class="who" id="pm-email-subs-label">Send with the letter</span>
+                <button class="tog" id="pm-mail-tog" type="button" aria-pressed="false" aria-label="Send with the letter"></button>
+              </div>
+              <div class="subj"><input id="pm-subject" aria-label="Subject line" placeholder="Subject line — defaults to the title"></div>
+              <div style="font-size:11.5px;color:var(--ink-faint);margin-top:7px">Free readers get up to the cut; paid readers get the whole thing. One-click unsubscribe in every email.</div>
+            </div>
+          </div>
+
+          <div class="shcol">
+            <div>
+              <div class="dl">Before it goes</div>
+              <ul class="chk" id="ps-checklist"><li>Checking…</li></ul>
+            </div>
+            <div>
+              <div class="dl">What readers will see</div>
+              <div class="rec">
+                <div class="rr"><span class="k">Title</span><span class="v"><input id="pm-post-title" class="recin" placeholder="Your title" /></span></div>
+                <div class="rr"><span class="k">Standfirst</span><span class="v"><textarea id="pm-post-desc" class="recin" rows="2" placeholder="One sentence that makes people want to read."></textarea></span></div>
+                <div class="rr"><span class="k">Tags</span><span class="v"><div class="pm-tags chips" id="pm-tags"><input id="pm-tag-input" class="recin" placeholder="Add a tag…" style="width:auto;flex:1;min-width:80px" /></div></span></div>
+                <div class="rr"><span class="k">Series</span><span class="v"><span style="display:flex;gap:8px;align-items:center"><input id="pm-series" class="recin" placeholder="No series" style="flex:1" /><input id="pm-series-order" class="recin" type="number" min="1" placeholder="Part" style="width:52px;text-align:right" aria-label="Part number" /><span class="ed" id="pm-series-more" role="button" tabindex="0">Specs</span></span></span></div>
+                <div class="rr"><span class="k">Address</span><span class="v slug"><i>areyoustillreading.dev/blog/</i><span id="pm-slug" class="pm-slug" contenteditable="true" spellcheck="false"></span></span></div>
+              </div>
+              <div class="sub-x off" id="seriesknobs">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <input id="pm-series-total" class="pin" type="number" min="1" placeholder="of N" aria-label="Planned total parts" title="Total planned parts — drives “3 of 5” + the Complete badge" />
+                  <select id="pm-series-status" class="sel" aria-label="Series status" style="width:auto;flex:1;min-width:130px">
                     <option value="">Status — auto</option>
                     <option value="in-progress">In progress</option>
                     <option value="complete">Complete</option>
                     <option value="paused">Paused</option>
                   </select>
                 </div>
-                <textarea id="pm-series-planned" rows="2" placeholder="Planned part titles — one per line (upcoming parts, shown greyed on the series page)" style="margin-top:0.5rem; width:100%; resize:vertical;"></textarea>
-              </div>
-            </div>
-
-            <div class="ps-col">
-              <div class="ps-group">
-                <div class="ps-dl">Before it goes</div>
-                <ul class="ps-chk" id="ps-checklist"><li>Checking…</li></ul>
-              </div>
-              <div class="ps-group">
-                <div class="ps-dl">Who gets told</div>
-                <label class="pm-toggle ps-mail"><input id="pm-email-subs" type="checkbox" /> <span id="pm-email-subs-label">Email subscribers about this post</span></label>
-              </div>
-              <div class="ps-group">
-                <div class="ps-dl">Access &amp; timing</div>
-                <div class="ps-fr"><span>Who can read it</span><span class="v" id="ps-access">Free</span></div>
-                <div class="ps-fr"><span>When</span><span class="v">Live in a few seconds</span></div>
+                <textarea id="pm-series-planned" rows="2" placeholder="Planned part titles — one per line" style="width:100%;margin-top:7px;background:var(--paper-2);border:1px solid var(--rule);border-radius:3px;color:var(--ink);font:inherit;font-size:12px;padding:6px 9px;resize:vertical"></textarea>
               </div>
             </div>
           </div>
-
-          <footer class="ps-foot">
-            <span class="ps-note" id="ps-note"></span>
-            <span class="pm-actions ps-acts">
-              <button class="pm-btn" id="pm-cancel" type="button">Cancel</button>
-              <button class="pm-btn" id="pm-save-draft" type="button">Save draft</button>
-              <button class="pm-btn pm-btn-primary" id="pm-publish" type="button">Publish now</button>
-              <span class="pm-progress" aria-hidden="true"></span>
-              <span class="pm-status" id="pm-form-status" role="status" aria-live="polite"></span>
-            </span>
-          </footer>
-
-          {/* Draft flag — set by the footer buttons (Save draft = on, Publish now = off
-              via pointerdown), read unchanged by the publish handler. */}
-          <input id="pm-draft" type="checkbox" hidden />
         </div>
+
+        <footer class="shfoot">
+          <span class="shnote" id="ps-note"></span>
+          <span class="shacts pm-actions">
+            <button class="btn btn-ghost btn-sm" id="pm-cancel" type="button">Cancel</button>
+            <button class="btn btn-ghost btn-sm" id="pm-save-draft" type="button">Save draft</button>
+            <button class="btn btn-primary btn-sm" id="pm-publish" type="button">Publish now</button>
+            <span class="pm-progress" aria-hidden="true"></span>
+            <span class="pm-status" id="pm-form-status" role="status" aria-live="polite"></span>
+          </span>
+        </footer>
+        {/* Hidden flags/inputs read by the unchanged engine: draft (footer buttons set it),
+            email opt-in (the mail toggle drives it). */}
+        <input id="pm-draft" type="checkbox" hidden />
+        <input id="pm-email-subs" type="checkbox" hidden />
       </div>
     </div>
     <div class="wr">
@@ -866,6 +880,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           seriesTotal: fm.seriesTotal != null && fm.seriesTotal !== '' ? String(fm.seriesTotal) : '',
           seriesStatus: typeof fm.seriesStatus === 'string' ? fm.seriesStatus : '',
           seriesPlanned: Array.isArray(fm.seriesPlanned) ? fm.seriesPlanned.map(String) : [],
+          // Paywall state (frontmatter flag) so the access picker prefills correctly.
+          gateable: fm.gateable === true,
         };
         restoredMsg = 'Editing “' + title + '”';
       } catch (e) {
@@ -1203,6 +1219,37 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     $('pm-publish').addEventListener('pointerdown', () => { $('pm-draft').checked = false; });
     $('pm-save-draft').addEventListener('click', () => { $('pm-draft').checked = true; $('pm-publish').click(); });
 
+    // "Who can read it" — Free / Paid. The publish handler reads `accessChoice` (writes
+    // frontmatter `gateable`), and applies the suggested price to post_paywall once the
+    // post is live. Members-only + scheduling aren't in our backend (disabled in markup).
+    let accessChoice = 'free';
+    const accpick = $('accpick');
+    accpick.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('button[data-a]') as HTMLElement | null; if (!b) return;
+      accessChoice = b.dataset.a!;
+      accpick.querySelectorAll('.pk').forEach((x) => x.classList.toggle('on', x === b));
+      $('pricebox').classList.toggle('off', accessChoice !== 'paid');
+      refreshSheet();
+    });
+
+    // The mail toggle drives the hidden #pm-email-subs checkbox the engine reads.
+    const mailTog = $('pm-mail-tog');
+    function syncMailTog() {
+      const cb = $('pm-email-subs') as HTMLInputElement;
+      mailTog.setAttribute('aria-pressed', String(cb.checked));
+      mailTog.toggleAttribute('disabled', cb.disabled);
+      mailTog.style.opacity = cb.disabled ? '0.45' : '1';
+    }
+    mailTog.addEventListener('click', () => {
+      const cb = $('pm-email-subs') as HTMLInputElement;
+      if (cb.disabled) return;
+      cb.checked = !cb.checked; syncMailTog();
+    });
+
+    // Series specs (total / status / planned) live in a sub-panel — the "Specs"
+    // affordance toggles it (also auto-revealed when the post is in a series).
+    $('pm-series-more').addEventListener('click', () => $('seriesknobs').classList.toggle('off'));
+
     const CK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>';
     const WK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v11"/><path d="M12 19.5v.5"/></svg>';
     function refreshSheet() {
@@ -1214,8 +1261,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (seriesName) bits.push(escHtml(seriesName) + (order ? ' · part ' + escHtml(order) : ''));
       bits.push(words.toLocaleString() + ' words'); bits.push(read + ' min read');
       $('ps-sub').innerHTML = bits.join(' · ');
-      const acc = $('ps-access');
-      if (acc) acc.textContent = (editing && editing.paid) ? 'Paid — manage on Posts' : 'Free — set a paywall on Posts';
+      if (seriesName) $('seriesknobs').classList.remove('off');
 
       const title = $('pm-post-title').value.trim();
       const desc = $('pm-post-desc').value.trim();
@@ -1226,11 +1272,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (!title) items.push({ warn: true, html: '<b>No title yet</b> — the post needs one' });
       if (target && words < target) items.push({ warn: true, html: `<b>${(target - words).toLocaleString()} words short</b> of the ${target.toLocaleString()} you set for this`, a: 'Keep writing' });
       if (notes > 0) items.push({ warn: true, html: `<b>${notes} note${notes === 1 ? '' : 's'} to self</b> — private, never published`, a: 'Jump to it' });
-      items.push({ ok: !!desc, html: desc ? `Standfirst written · ${desc.length} characters` : 'No standfirst yet — add one on the left' });
-      items.push({ ok: pubTags.length > 0, html: pubTags.length ? `${pubTags.length} tag${pubTags.length === 1 ? '' : 's'}` : 'No tags yet' });
-      items.push({ ok: !!slug, html: slug ? `Address set · <span class="mono">/${escHtml(slug)}</span>` : 'No address yet' });
+      items.push({ ok: !!desc, html: desc ? `Standfirst written · ${desc.length} characters` : 'No standfirst yet — write one below' });
+      items.push({ ok: pubTags.length > 0, html: pubTags.length ? `${pubTags.length} tag${pubTags.length === 1 ? '' : 's'}, all yours` : 'No tags yet' });
+      items.push({ ok: !!slug, html: slug ? 'Address set' : 'No address yet' });
       if (seriesName) items.push({ ok: !!order, html: order ? `In “${escHtml(seriesName)}” · part ${escHtml(order)}` : `In “${escHtml(seriesName)}” — set a part number` });
-      $('ps-checklist').innerHTML = items.map((it) => `<li class="${it.warn ? 'warn' : ''}">${it.warn ? WK : CK}<span>${it.html}</span>${it.a ? `<a href="#" data-jump>${it.a}</a>` : ''}</li>`).join('');
+      if (accessChoice === 'paid') items.push({ ok: true, html: 'Paid — a teaser, then pay-what-you-want' });
+      $('ps-checklist').innerHTML = items.map((it) => `<li class="${it.warn ? 'warn' : ''}">${it.warn ? WK : CK}<span>${it.html}</span>${it.a ? `<a data-jump>${it.a}</a>` : ''}</li>`).join('');
       const warns = items.filter((it) => it.warn).length;
       $('ps-note').innerHTML = warns ? `<b>${warns} thing${warns === 1 ? '' : 's'} worth a look.</b> Your call — nothing here stops you.` : 'Everything checks out.';
     }
@@ -1286,6 +1333,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         $('pm-series-status').value = editing.seriesStatus || '';
         $('pm-series-planned').value = (editing.seriesPlanned || []).join('\n');
         slugEdited = true; // don't let title edits rewrite an existing post's permalink
+        // Reflect the post's current paywall state in the access picker.
+        accessChoice = editing.gateable ? 'paid' : 'free';
+        accpick.querySelectorAll('.pk').forEach((x) => x.classList.toggle('on', (x as HTMLElement).dataset.a === accessChoice));
+        $('pricebox').classList.toggle('off', accessChoice !== 'paid');
         $('pm-form-title').textContent = 'Update post';
         $('pm-publish').textContent = 'Update';
         renderTags();
@@ -1308,11 +1359,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if ($('pm-draft').checked) {
         emailChk.checked = false;
         emailChk.disabled = true;
-        emailLbl.textContent = "Drafts aren't emailed to subscribers";
+        emailLbl.textContent = "Drafts aren't emailed";
+        try { syncMailTog(); } catch {}
         return;
       }
       emailChk.disabled = true; // until we know the count
-      emailLbl.textContent = 'Email subscribers about this post';
+      emailLbl.textContent = 'Send with the letter';
+      try { syncMailTog(); } catch {}
       try {
         const { data } = await supabase.auth.getSession();
         const token = data.session && data.session.access_token;
@@ -1322,18 +1375,19 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         const n = (j.counts && j.counts.confirmed) || 0;
         if (n > 0) {
           emailChk.disabled = false;
-          emailLbl.textContent = 'Email ' + n + ' subscriber' + (n === 1 ? '' : 's') + ' about this post';
+          emailLbl.textContent = 'Send with the letter — ' + n + ' recipient' + (n === 1 ? '' : 's');
         } else {
           emailChk.checked = false;
           emailChk.disabled = true;
-          emailLbl.textContent = 'No confirmed subscribers to email yet';
+          emailLbl.textContent = 'No confirmed subscribers yet';
         }
       } catch {
         // Count unavailable — leave the toggle usable with a generic label; the
         // server re-checks the real list on send, so nothing is lost.
         emailChk.disabled = false;
-        emailLbl.textContent = 'Email subscribers about this post';
+        emailLbl.textContent = 'Send with the letter';
       }
+      try { syncMailTog(); } catch {}
     }
     $('pm-draft').addEventListener('change', updateEmailToggle);
 
@@ -1441,6 +1495,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         if (seriesStatus) fmLines.push(`seriesStatus: ${yaml(seriesStatus)}`);
         if (seriesPlanned.length) fmLines.push(`seriesPlanned: [${seriesPlanned.map(yaml).join(', ')}]`);
       }
+      // Access: "Paid" marks the post gateable (build-time body split). The runtime
+      // price/on-state (post_paywall) is applied best-effort after publish, below.
+      if (accessChoice === 'paid') fmLines.push('gateable: true');
       fmLines.push(`draft: ${draft}`, '---', '');
       const content = fmLines.join('\n') + body;
 
@@ -1490,6 +1547,17 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         const j = await res.json().catch(() => ({}));
         if (res.ok && j.ok) {
           navigating = true;
+          // Access: apply the chosen paywall to post_paywall (best-effort, non-blocking) —
+          // exactly as the Posts page does. The post is already committed; a failure here
+          // never fails the publish. Turning an existing paid post to Free switches it off.
+          try {
+            if (accessChoice === 'paid') {
+              const dollars = parseFloat(($('pm-price') as HTMLInputElement).value) || 5;
+              supabase.from('post_paywall').upsert({ post_id: slug, is_paid: true, price_cents: Math.max(0, Math.round(dollars * 100)), currency: 'usd', updated_at: new Date().toISOString() }, { onConflict: 'post_id' }).then(() => {}, () => {});
+            } else if (editing && editing.gateable) {
+              supabase.from('post_paywall').upsert({ post_id: slug, is_paid: false, updated_at: new Date().toISOString() }, { onConflict: 'post_id' }).then(() => {}, () => {});
+            }
+          } catch {}
           // Published — clear the new-post draft (local + durable) so it can't resurrect
           // next time the editor opens. Only for a genuinely new post, not an edit.
           if (!editing) {

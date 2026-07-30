@@ -534,32 +534,68 @@ table.t th.num { text-align: right; }
 .seeds .d { flex: none; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .seeds .w { margin-left: auto; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
 
-/* Publish "press check" sheet (Write modal, #pm-form). Global because the checklist
-   is injected via innerHTML. The publish engine/IDs are unchanged — this is layout. */
-.ps-head { margin-bottom: 18px; }
-.ps-eyebrow { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
-.ps-title { font-family: var(--serif-display); font-size: 24px; font-weight: 600; letter-spacing: -0.015em; margin: 5px 0 6px; }
-.ps-sub { font-size: 12.5px; color: var(--ink-faint); }
-.ps-body { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
-@media (max-width: 720px) { .ps-body { grid-template-columns: 1fr; gap: 20px; } }
-.ps-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.ps-group { }
-.ps-dl { font-size: 10.5px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 10px; font-weight: 600; }
-.ps-opt { font-weight: 400; color: var(--ink-faint); text-transform: none; letter-spacing: 0; }
-.ps-chk { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
-.ps-chk li { display: grid; grid-template-columns: 18px 1fr auto; gap: 9px; align-items: start; font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; }
-.ps-chk li svg { width: 16px; height: 16px; margin-top: 1px; color: var(--ok); }
-.ps-chk li.warn svg { color: var(--warn); }
-.ps-chk li b { color: var(--ink); font-weight: 600; }
-.ps-chk li a { color: var(--accent); font-size: 12px; white-space: nowrap; text-decoration: none; }
-.ps-chk li a:hover { text-decoration: underline; }
-.ps-mail { display: flex !important; align-items: center; gap: 10px; margin: 0 !important; }
-.ps-fr { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--ink-faint); padding: 5px 0; }
-.ps-fr .v { color: var(--ink-soft); text-align: right; }
-.ps-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--rule); }
-.ps-note { font-size: 12.5px; color: var(--ink-faint); }
-.ps-note b { color: var(--ink); font-weight: 600; }
-.ps-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Publish "press check" sheet (Write modal) — EXACT match to editorial/studio.css.
+   Global (not scoped): the checklist/record are injected. The publish engine/IDs
+   are unchanged — this is the design's own layout + styling. */
+@keyframes adm-pop { from { transform: translateY(10px) scale(0.985); opacity: 0; } to { transform: none; opacity: 1; } }
+.sh { width: min(950px, 100%); max-height: 92vh; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--rule); border-radius: 5px; box-shadow: 0 34px 90px -24px rgba(0,0,0,.55); animation: adm-pop 0.18s cubic-bezier(0.2,0.8,0.2,1); }
+.shhead { display: flex; align-items: flex-start; gap: 18px; padding: 21px 26px 17px; border-bottom: 1px solid var(--rule); }
+.shhead .eyebrow { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); }
+.shhead h2 { font-family: var(--serif-display); font-size: 26px; font-weight: 600; letter-spacing: -.015em; margin: 7px 0 5px; color: var(--ink); line-height: 1.15; }
+.shsub { font-size: 12.5px; color: var(--ink-faint); }
+.shx { margin-left: auto; background: none; border: 0; color: var(--ink-faint); font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 5px; border-radius: 3px; }
+.shx:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.shbody { display: grid; grid-template-columns: 1fr 1fr; overflow: auto; }
+.shcol { padding: 21px 26px 24px; display: flex; flex-direction: column; gap: 21px; min-width: 0; }
+.shcol + .shcol { border-left: 1px solid var(--rule); }
+.dl { font-size: 10px; letter-spacing: .17em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 9px; }
+.pick { display: flex; flex-direction: column; gap: 7px; }
+.pk { display: flex; align-items: flex-start; gap: 11px; padding: 10px 13px; border: 1px solid var(--rule); border-radius: 4px; cursor: pointer; background: none; text-align: left; width: 100%; color: inherit; font: inherit; transition: border-color .18s, background .18s; }
+.pk:hover { border-color: color-mix(in srgb, var(--accent) 42%, var(--rule)); }
+.pk.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.pk:disabled { opacity: .5; cursor: default; }
+.pk:disabled:hover { border-color: var(--rule); }
+.pk .rd { flex: none; width: 12px; height: 12px; border-radius: 999px; border: 1px solid var(--rule); margin-top: 3px; }
+.pk.on .rd { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 2.5px var(--card); }
+.pk b { display: block; font-family: var(--sans); font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+.pk small { display: block; font-size: 11.5px; color: var(--ink-faint); line-height: 1.45; }
+.sub-x { margin: 8px 0 2px 24px; padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+.sub-x.off { display: none; }
+.para { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.para .pin { width: 78px; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 3px; color: var(--ink); font: inherit; font-size: 12.5px; padding: 5px 8px; }
+.mailrow { display: flex; align-items: center; gap: 12px; padding: 11px 13px; border: 1px solid var(--rule); border-radius: 4px; }
+.mailrow .who { font-size: 13px; color: var(--ink); }
+.mailrow .who small { display: block; font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
+.mailrow .tog { margin-left: auto; }
+.subj { margin-top: 8px; }
+.subj input { width: 100%; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 3px; color: var(--ink); font-family: var(--serif-display); font-size: 14px; padding: 8px 11px; }
+.chk { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule-soft); }
+.chk li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--rule-soft); font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
+.chk svg { flex: none; width: 13px; height: 13px; margin-top: 3px; color: color-mix(in srgb, var(--ink) 34%, transparent); }
+.chk li.warn { color: var(--ink); }
+.chk li.warn svg { color: var(--accent); }
+.chk li b { font-weight: 600; color: var(--ink); }
+.chk a { margin-left: auto; color: var(--accent); font-size: 11.5px; white-space: nowrap; flex: none; cursor: pointer; }
+.chk a:hover { text-decoration: underline; }
+.rec { border-top: 1px solid var(--rule-soft); }
+.rr { display: flex; align-items: baseline; gap: 13px; padding: 10px 0; border-bottom: 1px solid var(--rule-soft); }
+.rr .k { flex: none; width: 74px; font-size: 10px; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); padding-top: 4px; }
+.rr .v { flex: 1; min-width: 0; font-size: 13px; color: var(--ink); line-height: 1.5; }
+.rr .v em { font-style: italic; color: var(--ink-faint); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chips span { font-size: 11px; letter-spacing: .06em; padding: 3px 8px; border: 1px solid var(--rule); border-radius: 2px; color: var(--ink-soft); }
+.slug { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+.slug i { color: var(--ink-faint); font-style: normal; }
+.slug b, .slug .pm-slug { color: var(--accent); font-weight: 400; }
+/* Inline record inputs — look like the design's plain text, edit in place. */
+.recin { width: 100%; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; line-height: 1.5; padding: 2px 0; resize: vertical; }
+.recin:focus { outline: 0; box-shadow: inset 0 -1px 0 var(--accent); }
+.recin::placeholder { color: var(--ink-faint); }
+.shfoot { display: flex; align-items: center; gap: 14px; padding: 15px 26px; border-top: 1px solid var(--rule); background: color-mix(in srgb, var(--ink) 4%, transparent); flex-wrap: wrap; border-radius: 0 0 5px 5px; }
+.shnote { font-size: 12px; color: var(--ink-faint); line-height: 1.45; }
+.shnote b { color: var(--ink); font-weight: 600; }
+.shacts { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+@media (max-width: 860px) { .shbody { grid-template-columns: 1fr; } .shcol + .shcol { border-left: 0; border-top: 1px solid var(--rule); } }
 
 /* Engagement — reader interaction (comments / highlights / notes) moderation rows.
    Global (not scoped) because the rows are injected via innerHTML. */

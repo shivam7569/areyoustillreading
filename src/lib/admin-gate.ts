@@ -132,3 +132,35 @@ export async function adminFetch(input: string, init: RequestInit = {}): Promise
     headers: { ...(init.headers || {}), ...auth },
   });
 }
+
+/**
+ * Stale-while-revalidate GET for the Studio: renders the LAST-SEEN response for a
+ * URL instantly from sessionStorage (so returning to a page shows its numbers with
+ * zero lag), then fetches fresh in the background and re-renders. `render` must be
+ * idempotent (it usually just sets innerHTML/textContent) — it can run twice: once
+ * with cached data (fromCache=true) then once with fresh data. On a fetch/HTTP error
+ * with no cache to fall back on, render is called with { __error, status, error }.
+ * Cache lives in sessionStorage (per tab, cleared when the tab closes), so it never
+ * shows another visitor's data and never goes truly stale across sessions.
+ */
+export async function swrFetch<T = any>(
+  url: string,
+  render: (data: T, fromCache: boolean) => void,
+  init: RequestInit = {},
+): Promise<void> {
+  const key = 'aysr:swr:' + url;
+  let hadCache = false;
+  try {
+    const c = sessionStorage.getItem(key);
+    if (c) { render(JSON.parse(c) as T, true); hadCache = true; }
+  } catch { /* no/blocked storage — just fetch */ }
+  try {
+    const r = await adminFetch(url, init);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { render({ __error: true, status: r.status, error: (d as any).error } as any, false); return; }
+    try { sessionStorage.setItem(key, JSON.stringify(d)); } catch { /* over quota / blocked */ }
+    render(d as T, false);
+  } catch (e: any) {
+    if (!hadCache) render({ __error: true, error: String((e && e.message) || e) } as any, false);
+  }
+}
