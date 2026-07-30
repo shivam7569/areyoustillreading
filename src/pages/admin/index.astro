@@ -1,62 +1,60 @@
 ---
 /**
- * /admin — the dashboard Home / overview.
- * At-a-glance KPIs (posts · audience · revenue), quick actions, and a recent-posts
- * preview. All data is loaded client-side from admin-gated Functions AFTER the
- * shared gate confirms an admin (whenAdmin), so nothing here trusts the client.
+ * /admin — the dashboard Home / overview (Studio design).
+ * At-a-glance tiles (audience · read-depth · revenue · drafts), the drafts "in
+ * flight" table, the letter panel, recent posts, and a real completion ("where
+ * readers stop") barrow. All data is loaded client-side from admin-gated
+ * Functions AFTER the shared gate confirms an admin (whenAdmin) — nothing here
+ * trusts the client, and every number is real (no design placeholders).
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
 
 <AdminLayout title="Home — Studio" heading="Home" active="home">
-  <section>
-    <div class="page-head">
-      <div>
-        <h1>Overview</h1>
-        <p class="sub">Your writing, audience, and revenue at a glance.</p>
-      </div>
-      <div class="head-actions">
-        <a class="btn btn-primary" href="/admin/write"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Write a post</a>
-      </div>
-    </div>
-
-    <div class="kpi-grid">
-      <a class="kpi card" href="/admin/posts" style="text-decoration:none;color:inherit">
-        <p class="kpi-label">Posts</p>
-        <div class="kpi-value loading" id="k-posts">—</div>
-        <div class="kpi-foot" id="k-posts-foot"></div>
+  <section class="stack">
+    <div class="tiles">
+      <a class="tile" href="/admin/audience" style="text-decoration:none;color:inherit">
+        <div class="l">Subscribers</div><div class="v loading" id="k-subs">—</div><div class="d" id="k-subs-foot">confirmed</div>
       </a>
-      <a class="kpi card" href="/admin/audience" style="text-decoration:none;color:inherit">
-        <p class="kpi-label">Subscribers</p>
-        <div class="kpi-value loading" id="k-subs">—</div>
-        <div class="kpi-foot" id="k-subs-foot"></div>
+      <a class="tile" href="/admin/engagement" style="text-decoration:none;color:inherit">
+        <div class="l">Read depth</div><div class="v loading" id="k-depth">—</div><div class="d" id="k-depth-foot">how far readers get</div>
       </a>
-      <a class="kpi card" href="/admin/revenue" style="text-decoration:none;color:inherit">
-        <p class="kpi-label">Revenue</p>
-        <div class="kpi-value loading" id="k-rev">—</div>
-        <div class="kpi-foot" id="k-rev-foot"></div>
+      <a class="tile" href="/admin/revenue" style="text-decoration:none;color:inherit">
+        <div class="l">Revenue</div><div class="v loading" id="k-rev">—</div><div class="d" id="k-rev-foot">to date</div>
       </a>
-      <a class="kpi card" href="/admin/revenue" style="text-decoration:none;color:inherit">
-        <p class="kpi-label">Paywalled</p>
-        <div class="kpi-value loading" id="k-paid">—</div>
-        <div class="kpi-foot">posts behind the paywall</div>
+      <a class="tile" href="/admin/drafts" style="text-decoration:none;color:inherit">
+        <div class="l">In draft</div><div class="v loading" id="k-drafts">—</div><div class="d" id="k-drafts-foot">unfinished</div>
       </a>
     </div>
 
-    <div class="card" style="margin-bottom:1.4rem">
-      <div class="card-head">
-        <h2>Recent posts</h2>
-        <a class="btn btn-sm btn-ghost" href="/admin/posts">Manage all →</a>
+    <div class="cols side3">
+      <div class="panel">
+        <header><h2>In flight</h2><span class="hint">Drafts — only you can see these</span></header>
+        <div class="pb flush" id="inflight"><div class="card-pad muted">Loading…</div></div>
       </div>
-      <div id="recent"><div class="card-pad muted">Loading…</div></div>
+      <div class="panel">
+        <header><h2>The letter</h2></header>
+        <div class="pb">
+          <div class="fr"><span>Recipients</span><span class="v" id="l-recip">—</span></div>
+          <div class="fr"><span>Pending confirm</span><span class="v" id="l-pending">—</span></div>
+          <div class="fr"><span>Delivery</span><span class="v">Resend · one-click unsub</span></div>
+          <div style="margin-top:14px;display:flex;gap:9px;flex-wrap:wrap">
+            <a class="btn btn-ghost btn-sm" href="/admin/write">Write an issue</a>
+            <a class="btn btn-ghost btn-sm" href="/admin/audience">Manage list</a>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="card card-pad rowflex" style="justify-content:space-between">
-      <div>
-        <strong>Read-through analytics</strong>
-        <p class="muted" style="margin:0.2rem 0 0;font-size:0.9rem">See how far readers actually get — the whole point. Connect a privacy-friendly analytics source.</p>
+    <div class="cols two">
+      <div class="panel">
+        <header><h2>Recent posts</h2><a class="hint" href="/admin/posts" style="color:var(--accent);text-decoration:none">Manage all →</a></header>
+        <div class="pb flush" id="recent"><div class="card-pad muted">Loading…</div></div>
       </div>
-      <a class="btn btn-sm" href="/admin/settings">Set up</a>
+      <div class="panel">
+        <header><h2>Where readers stop</h2><span class="hint">By completion</span></header>
+        <div class="pb" id="stops"><div class="muted">Loading…</div></div>
+      </div>
     </div>
   </section>
 </AdminLayout>
@@ -65,64 +63,83 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   import { whenAdmin, adminFetch } from '../../lib/admin-gate';
   import { fmtNum, fmtMoney, fmtDate, esc } from '../../lib/admin-format';
 
+  const $ = (id: string) => document.getElementById(id);
   function set(id: string, text: string) {
-    const el = document.getElementById(id);
-    if (el) {
-      el.textContent = text;
-      el.classList.remove('loading');
-    }
+    const el = $(id);
+    if (el) { el.textContent = text; el.classList.remove('loading'); }
   }
-  function foot(id: string, html: string) {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = html;
-  }
+  let titles: Record<string, string> = {};
 
-  async function loadKpis() {
+  async function loadOverview() {
     try {
       const r = await adminFetch('/api/admin/overview');
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Failed');
-      set('k-posts', fmtNum(d.posts.total));
-      foot('k-posts-foot', `${fmtNum(d.posts.published)} live · ${fmtNum(d.posts.drafts)} draft`);
       set('k-subs', fmtNum(d.subscribers.confirmed));
-      foot('k-subs-foot', `${fmtNum(d.subscribers.confirmed)} confirmed · ${fmtNum(d.subscribers.pending)} pending`);
+      const el = $('k-subs-foot'); if (el) el.textContent = `${fmtNum(d.subscribers.confirmed)} confirmed · ${fmtNum(d.subscribers.pending)} pending`;
       set('k-rev', fmtMoney(d.revenue.grossCents, d.revenue.currency));
-      foot('k-rev-foot', `${fmtNum(d.revenue.sales)} ${d.revenue.sales === 1 ? 'sale' : 'sales'}${d.revenue.estimated ? ' · estimated' : ''}`);
-      set('k-paid', fmtNum(d.posts.paywalled));
-    } catch (e) {
-      for (const id of ['k-posts', 'k-subs', 'k-rev', 'k-paid']) set(id, '—');
-    }
+      const rf = $('k-rev-foot'); if (rf) rf.textContent = `${fmtNum(d.revenue.sales)} ${d.revenue.sales === 1 ? 'sale' : 'sales'}${d.revenue.estimated ? ' · estimated' : ''}`;
+      set('k-drafts', fmtNum(d.posts.drafts));
+      const df = $('k-drafts-foot'); if (df) df.textContent = d.posts.paywalled ? `${fmtNum(d.posts.paywalled)} paywalled live` : 'unfinished';
+      const lr = $('l-recip'); if (lr) lr.textContent = fmtNum(d.subscribers.confirmed);
+      const lp = $('l-pending'); if (lp) lp.textContent = fmtNum(d.subscribers.pending);
+    } catch { set('k-subs', '—'); set('k-rev', '—'); set('k-drafts', '—'); }
   }
 
-  const badge = (p: any) => (p.draft ? '<span class="badge draft">Draft</span>' : '<span class="badge live">Live</span>')
-    + (p.paid ? ' <span class="badge paid">Paid</span>' : '');
+  async function loadDepth() {
+    try {
+      const r = await adminFetch('/api/admin/analytics?range=all');
+      const d = await r.json();
+      if (!r.ok || d.configured === false) { set('k-depth', '—'); $('k-depth-foot')!.textContent = 'analytics not set up'; $('stops')!.innerHTML = '<div class="muted">Read-depth analytics isn’t set up yet.</div>'; return; }
+      const pct = (d.totals && d.totals.avgReadPct) || 0;
+      set('k-depth', pct + '%');
+      $('k-depth-foot')!.textContent = d.totals && d.totals.reads ? `${fmtNum(d.totals.reads)} reads measured` : 'how far readers get';
+      const top = (d.topPosts || []).filter((p: any) => typeof p.avgReadPct === 'number').slice(0, 5);
+      const host = $('stops')!;
+      if (!top.length) { host.innerHTML = '<div class="muted">No completion data yet.</div>'; return; }
+      host.innerHTML = top.map((p: any) => `<div class="barrow"><div><div class="nm">${esc(titles[p.slug] || p.slug)}</div><div class="bar"><i style="width:${p.avgReadPct}%"></i></div></div><div class="pc">${p.avgReadPct}%</div></div>`).join('');
+    } catch { set('k-depth', '—'); }
+  }
 
-  async function loadRecent() {
-    const host = document.getElementById('recent')!;
+  const statusPill = (p: any) => p.draft ? '<span class="pill">Draft</span>' : '<span class="pill live">Live</span>';
+
+  async function loadPosts() {
     try {
       const r = await adminFetch('/api/admin/posts');
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Failed');
-      const posts = (d.posts || []).slice(0, 5);
-      if (!posts.length) {
-        host.innerHTML = '<div class="empty"><svg class="empty-icon" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><h3>No posts yet</h3><p>Your first post is one click away.</p><a class="btn btn-primary" href="/admin/write">Write your first post</a></div>';
-        return;
-      }
-      host.innerHTML = '<div class="table-wrap" style="border:0;box-shadow:none;border-radius:0"><table class="table"><tbody>'
-        + posts.map((p: any) => `<tr>
-            <td><div class="t-title"><a href="/admin/write?slug=${encodeURIComponent(p.slug)}">${esc(p.title)}</a></div>
-              <div class="t-sub">${esc(fmtDate(p.pubDate))}</div></td>
-            <td class="num">${badge(p)}</td>
-            <td class="num"><a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a></td>
-          </tr>`).join('')
-        + '</tbody></table></div>';
+      const posts = d.posts || [];
+      titles = {}; for (const p of posts) titles[p.slug] = p.title;
+
+      // Recent posts (newest five)
+      const recentHost = $('recent')!;
+      const recent = posts.slice(0, 5);
+      recentHost.innerHTML = recent.length
+        ? '<table class="t"><tbody>' + recent.map((p: any) => `<tr>
+              <td><a class="ti" href="/admin/write?slug=${encodeURIComponent(p.slug)}" style="text-decoration:none">${esc(p.title)}</a><span class="sub">${esc(fmtDate(p.pubDate))}</span></td>
+              <td class="num">${statusPill(p)}${p.paid ? ' <span class="pill">Paid</span>' : ''}</td>
+              <td class="num"><a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a></td>
+            </tr>`).join('') + '</tbody></table>'
+        : '<div class="card-pad muted">No posts yet. <a href="/admin/write" style="color:var(--accent)">Write your first →</a></div>';
+
+      // In flight (drafts)
+      const flightHost = $('inflight')!;
+      const drafts = posts.filter((p: any) => p.draft);
+      flightHost.innerHTML = drafts.length
+        ? '<table class="t"><tbody>' + drafts.slice(0, 6).map((p: any) => `<tr>
+              <td><a class="ti" href="/admin/write?slug=${encodeURIComponent(p.slug)}" style="text-decoration:none">${esc(p.title)}</a><span class="sub">${p.series ? esc(p.series) : 'No series'}</span></td>
+              <td class="num" style="color:var(--ink-faint)">${esc(fmtDate(p.pubDate))}</td>
+              <td class="num"><a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Continue →</a></td>
+            </tr>`).join('') + '</tbody></table>'
+        : '<div class="card-pad muted">Nothing in flight. <a href="/admin/write" style="color:var(--accent)">Start something →</a></div>';
     } catch (e: any) {
-      host.innerHTML = `<div class="card-pad notice err">Couldn't load posts: ${esc(e.message || e)}</div>`;
+      $('recent')!.innerHTML = `<div class="card-pad notice err">Couldn't load posts: ${esc(e.message || e)}</div>`;
     }
   }
 
-  whenAdmin.then(() => {
-    loadKpis();
-    loadRecent();
+  whenAdmin.then(async () => {
+    await loadPosts();   // populates titles first (used by loadDepth)
+    loadOverview();
+    loadDepth();
   });
 </script>
