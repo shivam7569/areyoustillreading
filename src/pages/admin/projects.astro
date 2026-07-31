@@ -74,11 +74,13 @@ import { PLATES } from '../../lib/plates.mjs';
   .projectstudio .pj-status.err { color:var(--danger,#c2603f); }
   .projectstudio .pj-status.ok { color:var(--accent); }
 
-  .projectstudio .tabs { display:flex; gap:2px; flex-wrap:wrap; }
-  .projectstudio .tabs button { font-family:var(--sans); font-size:13px; color:var(--ink-soft); background:transparent; border:1px solid transparent; border-radius:3px; padding:7px 13px; cursor:pointer; }
-  .projectstudio .tabs button:hover { background:var(--paper-2); color:var(--ink); }
-  .projectstudio .tabs button.on { background:color-mix(in srgb,var(--accent) 13%,transparent); color:var(--accent); }
-  .projectstudio .tabs .n { opacity:.7; margin-left:6px; font-variant-numeric:tabular-nums; }
+  /* Boxed segmented tabs — identical to the Posts page (.tabs in admin.css). */
+  .projectstudio .tabs { display:inline-flex; flex-wrap:wrap; gap:2px; background:color-mix(in srgb,var(--ink) 5%,transparent); border-radius:var(--admin-radius); padding:3px; }
+  .projectstudio .tabs button { border:0; background:transparent; padding:6px 12px; border-radius:var(--admin-radius-sm); font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .projectstudio .tabs button:hover { color:var(--ink); }
+  .projectstudio .tabs button.on { background:var(--paper); color:var(--ink); box-shadow:0 1px 2px color-mix(in srgb,var(--ink) 10%,transparent); }
+  .projectstudio .tabs .n { font-size:11px; color:var(--ink-faint); font-variant-numeric:tabular-nums; }
+  .projectstudio .tabs button.on .n { color:var(--accent); }
 
   .projectstudio .panel { border:1px solid var(--rule); border-radius:4px; background:var(--card); overflow:hidden; }
   .projectstudio .panel + .panel { margin-top:16px; }

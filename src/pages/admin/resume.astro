@@ -33,7 +33,7 @@ import seed from '../../data/resume.json';
 
     <div class="rs-top">
       <div class="tabs" id="rs-tabs">
-        <button class="on" data-tab="sections" type="button">Sections</button>
+        <button class="on" data-tab="sections" type="button">Sections<span class="n">8</span></button>
         <button data-tab="content" type="button">Content</button>
         <button data-tab="print" type="button">Print &amp; PDF</button>
       </div>
@@ -147,10 +147,13 @@ import seed from '../../data/resume.json';
   .resumestudio .rs-status.err { color:var(--danger,#c2603f); }
   .resumestudio .rs-status.ok { color:var(--accent); }
 
-  .resumestudio .tabs { display:flex; gap:2px; flex-wrap:wrap; }
-  .resumestudio .tabs button { font-family:var(--sans); font-size:13px; color:var(--ink-soft); background:transparent; border:1px solid transparent; border-radius:3px; padding:7px 13px; cursor:pointer; transition:background .18s,color .18s; }
-  .resumestudio .tabs button:hover { background:var(--paper-2); color:var(--ink); }
-  .resumestudio .tabs button.on { background:color-mix(in srgb,var(--accent) 13%,transparent); color:var(--accent); }
+  /* Boxed segmented tabs — identical to the Posts page (.tabs in admin.css). */
+  .resumestudio .tabs { display:inline-flex; flex-wrap:wrap; gap:2px; background:color-mix(in srgb,var(--ink) 5%,transparent); border-radius:var(--admin-radius); padding:3px; }
+  .resumestudio .tabs button { border:0; background:transparent; padding:6px 12px; border-radius:var(--admin-radius-sm); font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .resumestudio .tabs button:hover { color:var(--ink); }
+  .resumestudio .tabs button.on { background:var(--paper); color:var(--ink); box-shadow:0 1px 2px color-mix(in srgb,var(--ink) 10%,transparent); }
+  .resumestudio .tabs button .n { font-size:11px; color:var(--ink-faint); font-variant-numeric:tabular-nums; }
+  .resumestudio .tabs button.on .n { color:var(--accent); }
 
   .resumestudio .panel { border:1px solid var(--rule); border-radius:4px; background:var(--card); overflow:hidden; }
   .resumestudio .panel > header { display:flex; align-items:baseline; justify-content:space-between; gap:14px; padding:15px 17px; border-bottom:1px solid var(--rule); }
