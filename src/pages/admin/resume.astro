@@ -1,0 +1,692 @@
+---
+/**
+ * /admin/resume — the Studio "Resume" page (Claude Design's studio.html Resume view).
+ * =============================================================================
+ * Calibrate the public /resume page by hand: edit the content, toggle/lay out
+ * sections, and manage the downloadable PDF — all with a live miniature preview.
+ *
+ * DATA FLOW (no auto-parsing): the source of truth is src/data/resume.json in the
+ * repo. This page is CLIENT-RENDERED from that model — it loads the committed
+ * copy via GET /api/admin/resume (falling back to the build-time seed embedded
+ * below so the editor is populated instantly and works offline/in the sandbox),
+ * lets you edit an in-memory copy, then:
+ *   - "Save changes" POSTs the model → commits resume.json → Cloudflare rebuild.
+ *   - PDF upload POSTs the file → commits public/resume.pdf (served at /resume.pdf).
+ * The public page (src/pages/resume.astro) renders the same JSON at build time,
+ * so the CV stays fully static / SEO / print-friendly.
+ *
+ * ACCESS: AdminLayout gates the shell; every /api/admin/resume method re-verifies
+ * admin server-side (requireAdmin). Nothing here is a security boundary.
+ *
+ * STYLING: the calibration components are ported from the design's studio.css into
+ * a <style is:global> prefixed with `.resumestudio` — global (not scoped) because
+ * the editor rows + live preview are built with innerHTML, which Astro's scoped
+ * styles never reach; the `.resumestudio` prefix keeps them from leaking.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import seed from '../../data/resume.json';
+---
+
+<AdminLayout title="Resume — Studio" heading="Resume" active="resume">
+  <div class="resumestudio">
+    <script type="application/json" id="rs-seed" set:html={JSON.stringify(seed)} />
+
+    <div class="rs-top">
+      <div class="tabs" id="rs-tabs">
+        <button class="on" data-tab="sections" type="button">Sections</button>
+        <button data-tab="content" type="button">Content</button>
+        <button data-tab="print" type="button">Print &amp; PDF</button>
+      </div>
+      <a class="btn btn-ghost btn-sm rs-view" href="/resume" target="_blank" rel="noopener">View the page ↗</a>
+      <button class="btn btn-primary btn-sm" id="rs-save" type="button">Save changes</button>
+      <span class="rs-status" id="rs-status" role="status" aria-live="polite"></span>
+    </div>
+
+    <div class="rs-body">
+      <div class="pjwork" id="rs-work">
+        <div class="rs-left">
+          <div class="pane on" data-pane="sections" id="pane-sections">
+            <div class="panel">
+              <header><h2>Sections</h2><span class="hint">Toggle to show or hide on the CV</span></header>
+              <div class="pb"><div class="seclist" id="secList"></div></div>
+            </div>
+            <div class="panel" style="margin-top:14px">
+              <header><h2>Structure</h2><span class="hint">Layout &amp; density</span></header>
+              <div class="pb" id="structCtls"></div>
+            </div>
+          </div>
+          <div class="pane" data-pane="content" id="pane-content">
+            <div id="editors"></div>
+          </div>
+        </div>
+
+        <div class="pvwrap">
+          <div class="pvhead"><i></i>Live preview</div>
+          <div class="pvbody">
+            <div class="rpv-scale" id="rpvscale"><div class="rpv" id="rpv"></div></div>
+          </div>
+          <div class="pvnote">What the CV page renders — it honours these on screen and in print.</div>
+        </div>
+      </div>
+
+      <div class="panel pane" data-pane="print" id="pane-print">
+        <header><h2>Print &amp; PDF</h2><span class="hint">What the Download button does, and how the CV prints</span></header>
+        <div class="pb">
+          <div class="pgrid">
+            <div>
+              <span class="fl">The download button</span>
+              <div class="modes" id="dlmodes">
+                <label class="mode on" data-mode="print"><input type="radio" name="dlmode" value="print" checked>
+                  <span class="mt">Print the page<small>Opens the print dialog against the CV's own print styles — nav, footer and buttons drop out, ink goes black on white.</small></span>
+                </label>
+                <label class="mode dim" data-mode="file"><input type="radio" name="dlmode" value="file">
+                  <span class="mt">Serve a PDF<small id="modeFileSub">No file yet — upload one below and this becomes the default.</small></span>
+                </label>
+              </div>
+
+              <span class="fl" style="margin-top:20px">The file</span>
+              <div class="pdfbox" id="pdfbox">
+                <div class="pdficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="m8 10 4 4 4-4"/><path d="M5 19h14"/></svg><b>PDF</b></div>
+                <div class="pdfmeta">
+                  <b id="pdfname">No file uploaded</b>
+                  <small id="pdfsub">Choose a PDF. It is committed and served at /resume.pdf.</small>
+                </div>
+                <div class="pdfacts">
+                  <label class="gbtn" for="pdffile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V6"/><path d="m8 10 4-4 4 4"/><path d="M5 19h14"/></svg><span id="pdfbtn">Upload a PDF</span></label>
+                  <button class="gbtn" type="button" id="pdfclear" style="display:none">Remove</button>
+                  <input type="file" id="pdffile" accept="application/pdf">
+                </div>
+              </div>
+              <div class="fh" id="dlstate">With no file the button prints the page — which is why the print styles exist.</div>
+
+              <span class="fl" style="margin-top:20px">When the page is printed</span>
+              <div class="togs">
+                <label class="blocktog"><input type="checkbox" id="pfFigs" checked>Include the figures strip<small>saves a line without it</small></label>
+                <label class="blocktog"><input type="checkbox" id="pfLinks">Print links in full<small>spells out URLs</small></label>
+              </div>
+              <div class="fh">Paper size and margins come from the print dialog. The print styles hold at both Letter and A4.</div>
+            </div>
+
+            <div>
+              <span class="fl">Printed sheet</span>
+              <div class="psheet" id="sheet">
+                <span class="sn"></span><span class="sr"></span>
+                <span class="sc"><i></i><i></i><i></i></span>
+                <span class="sf" id="sheetFigs"><b></b><b></b><b></b><b></b></span>
+                <span class="sp"><span></span><span></span><span></span></span>
+                <span class="sl"></span>
+                <span class="srow"><span class="d"></span><span class="sp"><span></span><span></span><span></span></span></span>
+                <span class="srow"><span class="d"></span><span class="sp"><span></span><span></span><span></span></span></span>
+                <span class="sl"></span><span class="sp"><span></span><span></span></span>
+              </div>
+              <div class="estimate"><b id="estPages">One page</b><span id="estWhy">at Letter, figures included</span></div>
+
+              <span class="fl" style="margin-top:18px">What print changes</span>
+              <ul class="pchecks">
+                <li>Navigation, footer and buttons removed</li>
+                <li>Black on white, hairlines lightened</li>
+                <li>Roles, cards and the figures strip never split across pages</li>
+                <li>Bullets at 10.5pt, summary at 11pt, name at 32pt</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style is:global>
+  /* ---- Studio Resume components (ported from the design's studio.css). GLOBAL +
+     `.resumestudio`-prefixed so they reach innerHTML-built rows/preview without
+     leaking into the rest of the Studio. ---- */
+  .resumestudio { font-family: var(--sans); }
+  .resumestudio .rs-top { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  .resumestudio .rs-view { margin-left:auto; }
+  .resumestudio .rs-status { font-size:12.5px; color:var(--ink-faint); flex-basis:100%; min-height:1.1em; }
+  .resumestudio .rs-status.err { color:var(--danger,#c2603f); }
+  .resumestudio .rs-status.ok { color:var(--accent); }
+
+  .resumestudio .tabs { display:flex; gap:2px; flex-wrap:wrap; }
+  .resumestudio .tabs button { font-family:var(--sans); font-size:13px; color:var(--ink-soft); background:transparent; border:1px solid transparent; border-radius:3px; padding:7px 13px; cursor:pointer; transition:background .18s,color .18s; }
+  .resumestudio .tabs button:hover { background:var(--paper-2); color:var(--ink); }
+  .resumestudio .tabs button.on { background:color-mix(in srgb,var(--accent) 13%,transparent); color:var(--accent); }
+
+  .resumestudio .panel { border:1px solid var(--rule); border-radius:4px; background:var(--card); overflow:hidden; }
+  .resumestudio .panel > header { display:flex; align-items:baseline; justify-content:space-between; gap:14px; padding:15px 17px; border-bottom:1px solid var(--rule); }
+  .resumestudio .panel > header h2 { font-family:var(--serif-display); font-size:17px; font-weight:600; margin:0; letter-spacing:-.01em; }
+  .resumestudio .panel > header .hint { font-size:11.5px; color:var(--ink-faint); }
+  .resumestudio .panel .pb { padding:17px; }
+
+  .resumestudio .pane { display:none; }
+  .resumestudio .pane.on { display:block; }
+  .resumestudio .pjwork { display:grid; grid-template-columns:minmax(0,1fr) 344px; gap:clamp(20px,2.6vw,30px); align-items:start; }
+  @media(max-width:1040px){ .resumestudio .pjwork { grid-template-columns:1fr; } }
+
+  .resumestudio .fl { display:block; font-family:var(--sans); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:7px; font-weight:600; }
+  .resumestudio .fh { font-size:11.5px; color:var(--ink-faint); margin-top:6px; }
+  .resumestudio .ctl + .ctl { margin-top:22px; padding-top:20px; border-top:1px solid var(--rule-soft); }
+  .resumestudio .ctl > .fl { margin-bottom:11px; }
+
+  .resumestudio .inp { font-family:var(--sans); font-size:13.5px; color:var(--ink); background:var(--paper); border:1px solid var(--rule); border-radius:2px; padding:9px 11px; width:100%; box-sizing:border-box; }
+  .resumestudio .inp:focus { outline:2px solid var(--accent); outline-offset:1px; border-color:transparent; }
+
+  .resumestudio .inline-ctl { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px; }
+  .resumestudio .inline-ctl > span { font-family:var(--sans); font-size:12.5px; color:var(--ink-faint); min-width:118px; }
+  .resumestudio .segctl { display:inline-flex; border:1px solid var(--rule); border-radius:3px; overflow:hidden; }
+  .resumestudio .segctl button { background:none; border:0; font-family:var(--sans); font-size:12px; color:var(--ink-soft); padding:7px 13px; cursor:pointer; }
+  .resumestudio .segctl button + button { border-left:1px solid var(--rule); }
+  .resumestudio .segctl button.on { background:var(--accent); color:var(--on-accent); }
+
+  .resumestudio .togs { display:flex; flex-direction:column; gap:9px; }
+  .resumestudio .blocktog { display:flex; align-items:center; gap:11px; font-family:var(--sans); font-size:13.5px; color:var(--ink); cursor:pointer; }
+  .resumestudio .blocktog input { appearance:none; -webkit-appearance:none; width:34px; height:19px; border-radius:999px; background:var(--rule); position:relative; cursor:pointer; flex:none; transition:background .18s; }
+  .resumestudio .blocktog input::after { content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:999px; background:var(--card); transition:transform .18s; }
+  .resumestudio .blocktog input:checked { background:var(--accent); }
+  .resumestudio .blocktog input:checked::after { transform:translateX(15px); }
+  .resumestudio .blocktog small { color:var(--ink-faint); font-size:12px; margin-left:auto; }
+
+  .resumestudio .seclist { display:flex; flex-direction:column; border:1px solid var(--rule); border-radius:4px; overflow:hidden; background:var(--card); }
+  .resumestudio .secrow { display:flex; align-items:center; gap:12px; padding:11px 13px; border-bottom:1px solid var(--rule-soft); }
+  .resumestudio .secrow:last-child { border-bottom:0; }
+  .resumestudio .secrow.locked { opacity:.72; }
+  .resumestudio .secrow .g2 { color:var(--ink-faint); line-height:0; flex:none; }
+  .resumestudio .secrow .g2 svg { width:11px; height:11px; }
+  .resumestudio .secrow .nm { font-family:var(--sans); font-size:13.5px; color:var(--ink); }
+  .resumestudio .secrow .nm small { display:block; font-size:11.5px; color:var(--ink-faint); margin-top:2px; }
+  .resumestudio .secrow .sp { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .resumestudio .secrow .always { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+
+  .resumestudio .pjblk { border:1px solid var(--rule); border-radius:4px; background:var(--card); overflow:hidden; }
+  .resumestudio .pjblk + .pjblk { margin-top:10px; }
+  .resumestudio .pjblk-head { display:flex; align-items:center; gap:11px; padding:11px 13px; }
+  .resumestudio .pjblk-body { display:none; padding:0 13px 14px; border-top:1px solid var(--rule-soft); margin-top:2px; }
+  .resumestudio .pjblk.on .pjblk-body { display:block; }
+  .resumestudio .pjblk-body .fl { margin-top:14px; }
+  .resumestudio .rowedit { display:grid; grid-template-columns:13px 118px minmax(0,1fr) 24px; gap:7px; align-items:center; margin-bottom:7px; }
+  .resumestudio .rowedit.item { grid-template-columns:13px minmax(0,1fr) 24px; }
+  .resumestudio .rowedit .g2 { color:var(--ink-faint); cursor:grab; line-height:0; }
+  .resumestudio .rowedit .g2 svg { width:11px; height:11px; }
+  .resumestudio .rowedit .inp { font-size:13px; padding:7px 9px; }
+  .resumestudio .xrow { border:0; background:none; color:var(--ink-faint); cursor:pointer; font-size:15px; line-height:1; padding:4px; }
+  .resumestudio .xrow:hover { color:var(--danger,#c2603f); }
+  .resumestudio .miniadd { margin-top:4px; border:1px dashed var(--rule); background:none; border-radius:3px; font-family:var(--sans); font-size:12px; color:var(--ink-soft); padding:7px 11px; cursor:pointer; width:100%; }
+  .resumestudio .miniadd:hover { border-color:var(--accent); color:var(--accent); }
+
+  .resumestudio .rolecard .pjblk-head { cursor:pointer; }
+  .resumestudio .rolecard .rname { flex:1; min-width:0; font-family:var(--sans); font-size:13px; color:var(--ink); }
+  .resumestudio .rolecard .rname small { display:block; font-size:11.5px; color:var(--ink-faint); margin-top:2px; }
+  .resumestudio .rolecard .cv { width:11px; height:11px; color:var(--ink-faint); transition:transform .18s; flex:none; }
+  .resumestudio .rolecard.on .cv { transform:rotate(90deg); color:var(--accent); }
+  .resumestudio .rolecard .pair { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:7px; }
+  .resumestudio .rolecard .pair .inp { font-size:13px; padding:7px 9px; }
+
+  .resumestudio .sumbox { border:1px solid var(--rule); border-radius:4px; background:var(--card); overflow:hidden; }
+  .resumestudio .sumbox-head { display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid var(--rule-soft); font-family:var(--sans); font-size:10.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+  .resumestudio .sumbox-head .c { width:6px; height:6px; border-radius:999px; background:var(--accent); flex:none; }
+  .resumestudio .sumbox-head .n { margin-left:auto; font-weight:400; letter-spacing:0; text-transform:none; font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--ink-soft); }
+  .resumestudio .sumbox textarea { display:block; width:100%; box-sizing:border-box; border:0; background:transparent; padding:13px; font-family:var(--serif-body); font-size:15px; line-height:1.6; color:var(--ink); resize:vertical; min-height:108px; }
+  .resumestudio .sumbox textarea:focus { outline:2px solid var(--accent); outline-offset:-2px; }
+  .resumestudio .sumbox-foot { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:9px 12px; border-top:1px solid var(--rule-soft); background:var(--paper-2); }
+  .resumestudio .meter { flex:none; width:150px; height:4px; border-radius:2px; background:var(--rule); overflow:hidden; }
+  .resumestudio .meter i { display:block; height:100%; width:0; background:var(--accent); transition:width .2s,background .2s; }
+  .resumestudio .meter.over i { background:var(--danger,#c2603f); }
+  .resumestudio .sumbox-foot .hint { font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); }
+  .resumestudio .sumbox-foot .hint b { color:var(--ink-soft); font-weight:600; }
+
+  /* preview */
+  .resumestudio .pvwrap { position:sticky; top:12px; border:1px solid var(--rule); border-radius:5px; background:var(--paper-2); overflow:hidden; }
+  .resumestudio .pvhead { display:flex; align-items:center; gap:9px; padding:10px 13px; border-bottom:1px solid var(--rule); font-family:var(--sans); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+  .resumestudio .pvhead i { width:6px; height:6px; border-radius:999px; background:var(--accent); display:block; }
+  .resumestudio .pvbody { padding:16px; }
+  .resumestudio .pvnote { padding:0 16px 14px; font-size:11px; line-height:1.5; color:var(--ink-faint); }
+  .resumestudio .rpv-scale { position:relative; overflow:hidden; }
+  .resumestudio .rpv { width:688px; transform-origin:0 0; background:var(--card); border:1px solid var(--rule); border-radius:6px; padding:26px 28px; font-family:var(--serif-body); color:var(--ink); box-sizing:border-box; }
+  .resumestudio .rpv .nm { font-family:var(--serif-display); font-weight:600; font-size:36px; line-height:1.02; letter-spacing:-.025em; margin:0; }
+  .resumestudio .rpv .role { font-family:var(--serif-display); font-size:15px; color:var(--ink-soft); margin:9px 0 0; }
+  .resumestudio .rpv .role b { font-style:italic; color:var(--accent); font-weight:600; }
+  .resumestudio .rpv .cts { display:flex; gap:16px; flex-wrap:wrap; font-family:var(--sans); font-size:11px; color:var(--ink-faint); margin-top:10px; padding-top:11px; border-top:1px solid var(--rule); }
+  .resumestudio .rpv .figs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:4px; overflow:hidden; margin-top:15px; }
+  .resumestudio .rpv .figs div { background:var(--card); padding:9px 10px; }
+  .resumestudio .rpv .figs b { display:block; font-family:var(--serif-display); font-weight:600; font-size:21px; line-height:1; color:var(--accent); letter-spacing:-.015em; }
+  .resumestudio .rpv .figs span { display:block; font-family:var(--sans); font-size:9px; line-height:1.35; color:var(--ink-faint); margin-top:5px; }
+  .resumestudio .rpv .sum { font-size:13px; line-height:1.55; color:var(--ink-soft); margin:14px 0 0; padding-bottom:14px; border-bottom:1px solid var(--rule); }
+  .resumestudio .rpv .lbl { display:flex; align-items:center; gap:10px; font-family:var(--sans); font-size:9px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin:16px 0 11px; }
+  .resumestudio .rpv .lbl::after { content:""; flex:1; height:1px; background:var(--rule); }
+  .resumestudio .rpv .job { display:grid; grid-template-columns:118px minmax(0,1fr); gap:16px; padding-bottom:12px; margin-bottom:12px; border-bottom:1px solid var(--rule); }
+  .resumestudio .rpv .job:last-of-type { border-bottom:0; margin-bottom:0; padding-bottom:0; }
+  .resumestudio .rpv .job .when { font-family:var(--sans); font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); }
+  .resumestudio .rpv .job .when .place { display:block; margin-top:5px; font-family:var(--serif-display); font-size:12px; letter-spacing:0; text-transform:none; color:var(--ink); line-height:1.25; }
+  .resumestudio .rpv .job .when .where { display:block; margin-top:3px; text-transform:none; letter-spacing:0; }
+  .resumestudio .rpv .job h3 { font-family:var(--serif-display); font-weight:600; font-size:15px; margin:0 0 8px; line-height:1.2; }
+  .resumestudio .rpv .job ul { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; }
+  .resumestudio .rpv .job li { position:relative; padding-left:14px; font-size:11.5px; line-height:1.5; color:var(--ink); }
+  .resumestudio .rpv .job li::before { content:""; position:absolute; left:0; top:.7em; width:7px; height:1px; background:var(--accent); }
+  .resumestudio .rpv .job li b { color:var(--accent); font-weight:600; }
+  .resumestudio .rpv .sk { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
+  .resumestudio .rpv .sk h4 { font-family:var(--sans); font-size:8.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); margin:0 0 8px; }
+  .resumestudio .rpv .chips { display:flex; flex-wrap:wrap; gap:4px; }
+  .resumestudio .rpv .chips span { font-family:var(--sans); font-size:9px; color:var(--ink-soft); border:1px solid var(--rule); border-radius:2px; padding:3px 5px; background:var(--card); }
+  .resumestudio .rpv .pubs { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .resumestudio .rpv .pubs div { border:1px solid var(--rule); border-radius:4px; padding:11px; }
+  .resumestudio .rpv .pubs .k { display:block; font-family:var(--sans); font-size:8px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin-bottom:6px; }
+  .resumestudio .rpv .pubs p { margin:0; font-size:11px; line-height:1.5; color:var(--ink-soft); }
+  .resumestudio .rpv .edu { display:flex; justify-content:space-between; gap:14px; padding:10px 0; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); }
+  .resumestudio .rpv .edu .t { font-family:var(--serif-display); font-size:13px; font-weight:600; }
+  .resumestudio .rpv .edu .t small { display:block; font-family:var(--sans); font-size:9.5px; font-weight:400; color:var(--ink-faint); margin-top:4px; }
+  .resumestudio .rpv .edu .y { font-family:var(--sans); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint); white-space:nowrap; }
+  .resumestudio .rpv .close { margin-top:15px; padding-top:12px; border-top:1px solid var(--rule); font-family:var(--sans); font-size:10px; color:var(--ink-faint); }
+  .resumestudio .rpv[data-exp-show="off"] .expsect,
+  .resumestudio .rpv[data-figs="off"] .figs, .resumestudio .rpv[data-summary="off"] .sum, .resumestudio .rpv[data-pubs="off"] .pubsect, .resumestudio .rpv[data-edu="off"] .edusect, .resumestudio .rpv[data-skills-show="off"] .skillsect, .resumestudio .rpv[data-close="off"] .close { display:none; }
+  .resumestudio .rpv[data-fig-cols="3"] .figs { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .resumestudio .rpv[data-fig-cols="2"] .figs { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .resumestudio .rpv[data-exp-layout="inline"] .job { grid-template-columns:1fr; gap:7px; }
+  .resumestudio .rpv[data-exp-layout="inline"] .job .when { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .resumestudio .rpv[data-exp-layout="inline"] .job .when .place { margin-top:0; }
+  .resumestudio .rpv[data-exp-density="tight"] .job li:nth-child(n+3) { display:none; }
+  .resumestudio .rpv[data-skills="list"] .chips { flex-direction:column; gap:5px; }
+  .resumestudio .rpv[data-skills="list"] .chips span { border:0; background:none; padding:0; font-size:10px; }
+  .resumestudio .rpv[data-skill-cols="2"] .sk { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .resumestudio .rpv[data-pub-cols="1"] .pubs { grid-template-columns:1fr; }
+
+  /* print & pdf pane */
+  .resumestudio .pgrid { display:grid; grid-template-columns:minmax(0,1fr) 286px; gap:clamp(20px,2.6vw,30px); align-items:start; }
+  @media(max-width:820px){ .resumestudio .pgrid { grid-template-columns:1fr; } }
+  .resumestudio .modes { display:flex; flex-direction:column; gap:9px; }
+  .resumestudio .mode { display:flex; gap:11px; align-items:flex-start; padding:13px 14px; border:1px solid var(--rule); border-radius:4px; background:var(--card); cursor:pointer; transition:border-color .16s,box-shadow .16s; }
+  .resumestudio .mode:hover { border-color:color-mix(in srgb,var(--accent) 50%,var(--rule)); }
+  .resumestudio .mode.on { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .resumestudio .mode input { appearance:none; -webkit-appearance:none; width:15px; height:15px; border-radius:999px; border:1px solid var(--rule); flex:none; margin-top:2px; position:relative; cursor:pointer; }
+  .resumestudio .mode.on input { border-color:var(--accent); }
+  .resumestudio .mode.on input::after { content:""; position:absolute; inset:3px; border-radius:999px; background:var(--accent); }
+  .resumestudio .mode .mt { font-family:var(--sans); font-size:13.5px; color:var(--ink); min-width:0; }
+  .resumestudio .mode .mt small { display:block; font-size:11.5px; line-height:1.5; color:var(--ink-faint); margin-top:4px; }
+  .resumestudio .mode.on .mt { color:var(--accent); }
+  .resumestudio .mode.on .mt small { color:var(--ink-soft); }
+  .resumestudio .mode.dim { opacity:.6; }
+  .resumestudio .pdfbox { display:flex; align-items:center; gap:15px; padding:15px 16px; border:1px dashed var(--rule); border-radius:4px; background:var(--paper-2); margin-top:8px; }
+  .resumestudio .pdfbox.filled { border-style:solid; border-color:color-mix(in srgb,var(--accent) 40%,var(--rule)); background:var(--card); }
+  .resumestudio .pdficon { width:40px; height:50px; flex:none; border:1px solid var(--rule); border-radius:3px; background:var(--card); display:grid; place-content:center; color:var(--ink-faint); position:relative; overflow:hidden; }
+  .resumestudio .pdfbox.filled .pdficon { border-color:var(--accent); color:var(--accent); }
+  .resumestudio .pdficon svg { width:17px; height:17px; }
+  .resumestudio .pdficon b { position:absolute; left:0; right:0; bottom:0; font-family:var(--sans); font-size:8px; letter-spacing:.1em; text-align:center; background:var(--accent); color:var(--on-accent); padding:2px 0; }
+  .resumestudio .pdfmeta { min-width:0; flex:1; }
+  .resumestudio .pdfmeta b { display:block; font-family:var(--sans); font-size:13.5px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .resumestudio .pdfmeta small { display:block; font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); margin-top:3px; }
+  .resumestudio .pdfacts { display:flex; gap:8px; flex-wrap:wrap; }
+  .resumestudio .pdfbox input[type="file"] { display:none; }
+  .resumestudio .gbtn { font-family:var(--sans); font-size:12.5px; display:inline-flex; align-items:center; gap:7px; padding:7px 12px; border-radius:3px; border:1px solid var(--rule); background:transparent; color:var(--ink-soft); cursor:pointer; white-space:nowrap; }
+  .resumestudio .gbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .resumestudio .gbtn svg { width:13px; height:13px; flex:none; }
+  .resumestudio .psheet { aspect-ratio:8.5/11; border:1px solid var(--rule); border-radius:3px; background:#fff; box-shadow:0 8px 22px -14px rgba(40,28,14,.5); padding:15px 14px; display:flex; flex-direction:column; gap:7px; }
+  .resumestudio .psheet .sn { height:9px; width:56%; border-radius:2px; background:#1c1813; opacity:.85; }
+  .resumestudio .psheet .sr { height:4px; width:78%; border-radius:2px; background:#5e3560; }
+  .resumestudio .psheet .sc { display:flex; gap:4px; }
+  .resumestudio .psheet .sc i { height:3px; width:22px; border-radius:2px; background:#1c1813; opacity:.25; display:block; }
+  .resumestudio .psheet .sf { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; border:1px solid #d8cfbd; border-radius:2px; padding:4px; }
+  .resumestudio .psheet .sf b { height:6px; border-radius:2px; background:#5e3560; display:block; }
+  .resumestudio .psheet .sl { height:3px; border-radius:2px; background:#5e3560; opacity:.75; width:30%; margin-top:4px; }
+  .resumestudio .psheet .sp { display:flex; flex-direction:column; gap:2.5px; }
+  .resumestudio .psheet .sp span { height:3px; border-radius:2px; background:#1c1813; opacity:.18; display:block; }
+  .resumestudio .psheet .sp span:last-child { width:64%; }
+  .resumestudio .psheet .srow { display:grid; grid-template-columns:26% 1fr; gap:6px; }
+  .resumestudio .psheet .srow .d { height:3px; border-radius:2px; background:#1c1813; opacity:.3; }
+  .resumestudio .estimate { display:flex; align-items:baseline; gap:9px; margin-top:11px; }
+  .resumestudio .estimate b { font-family:var(--serif-display); font-size:19px; font-weight:600; color:var(--accent); letter-spacing:-.01em; }
+  .resumestudio .estimate span { font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); line-height:1.4; }
+  .resumestudio .pchecks { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:7px; }
+  .resumestudio .pchecks li { position:relative; padding-left:20px; font-family:var(--sans); font-size:12px; line-height:1.5; color:var(--ink-soft); }
+  .resumestudio .pchecks li::before { content:""; position:absolute; left:0; top:.32em; width:9px; height:5px; border-left:1.5px solid var(--accent); border-bottom:1.5px solid var(--accent); transform:rotate(-45deg); }
+</style>
+
+<script>
+  import { adminFetch, onAdminReady } from '../../lib/admin-gate';
+
+  const GRIP = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="2"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>';
+  const CHEV = '<svg class="cv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>';
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const attr = (s = '') => String(s).replace(/"/g, '&quot;');
+  const splitList = (s) => String(s || '').split(/\s*(?:,|·)\s*/).map((x) => x.trim()).filter(Boolean);
+  const hrefFor = (c) => (/@/.test(c) && !/^https?:/.test(c)) ? 'mailto:' + c : (/^https?:\/\//.test(c) ? c : '//' + c);
+  const deep = (o) => JSON.parse(JSON.stringify(o));
+
+  // Section metadata: [name, sub, locked, alwaysOn]
+  const SEC = {
+    header: ['Header', 'Name, role line, contact links', true, true],
+    figs: ['Figures strip', 'Four numbers pulled from the bullets'],
+    summary: ['Summary', 'One paragraph under the figures'],
+    experience: ['Experience', 'Your roles', true],
+    skills: ['What I work with', 'Skill groups'],
+    pubs: ['Publications & patents', 'Two cards'],
+    education: ['Education', 'One line'],
+    close: ['Closing line', 'References and get in touch'],
+  };
+
+  const root = $('.resumestudio');
+  let model = normalize(JSON.parse($('#rs-seed').textContent || '{}'));
+  let hasPdf = !!(model.download && model.download.pdfName);
+
+  function normalize(m) {
+    m = m || {};
+    m.header = m.header || { name: '', role: '', contacts: [] };
+    m.header.contacts = m.header.contacts || [];
+    m.figs = m.figs || []; m.figCols = m.figCols || 4;
+    m.summary = m.summary || '';
+    m.experience = m.experience || {}; m.experience.layout = m.experience.layout || 'rail';
+    m.experience.density = m.experience.density || 'full'; m.experience.roles = m.experience.roles || [];
+    m.skills = m.skills || {}; m.skills.style = m.skills.style || 'chips'; m.skills.cols = m.skills.cols || 4; m.skills.groups = m.skills.groups || [];
+    m.pubs = m.pubs || {}; m.pubs.cols = m.pubs.cols || 2; m.pubs.items = m.pubs.items || [];
+    m.education = m.education || { degree: '', school: '', dates: '' };
+    m.close = m.close || '';
+    if (!m.sections || !m.sections.length) m.sections = Object.keys(SEC).map((k) => ({ key: k, show: true }));
+    m.download = m.download || { mode: 'print', pdfName: '', printFigs: true, printLinks: false };
+    return m;
+  }
+
+  // ---- row / block builders (HTML strings) ----
+  const rowFig = (a = '', b = '') => `<div class="rowedit"><span class="g2">${GRIP}</span><input class="inp" value="${attr(a)}" placeholder="100K+" aria-label="Figure"><input class="inp" value="${attr(b)}" placeholder="Caption" aria-label="Caption"><button class="xrow" type="button" data-del aria-label="Remove">×</button></div>`;
+  const rowGroup = (a = '', b = '') => `<div class="rowedit"><span class="g2">${GRIP}</span><input class="inp" value="${attr(a)}" placeholder="Group" aria-label="Group"><input class="inp" value="${attr(b)}" placeholder="Comma-separated items" aria-label="Items"><button class="xrow" type="button" data-del aria-label="Remove">×</button></div>`;
+  const rowPub = (a = '', b = '') => `<div class="rowedit"><span class="g2">${GRIP}</span><input class="inp" value="${attr(a)}" placeholder="Kicker" aria-label="Kicker"><input class="inp" value="${attr(b)}" placeholder="Detail" aria-label="Detail"><button class="xrow" type="button" data-del aria-label="Remove">×</button></div>`;
+  const rowBullet = (b = '') => `<div class="rowedit item"><span class="g2">${GRIP}</span><input class="inp" value="${attr(b)}" placeholder="Achievement — wrap a metric in **asterisks**" aria-label="Bullet"><button class="xrow" type="button" data-del aria-label="Remove bullet">×</button></div>`;
+  const roleCard = (r = {}, open = false) => `<div class="pjblk rolecard${open ? ' on' : ''}" data-role>
+      <div class="pjblk-head"><span class="g2">${GRIP}</span>${CHEV}<span class="rname">${esc(r.company || 'New role')}<small>${esc(r.title || '')}</small></span>
+        <label class="blocktog" title="Show on the CV"><input type="checkbox" data-role-show ${r.show !== false ? 'checked' : ''} aria-label="Show role"></label>
+        <button class="xrow" type="button" data-del-role title="Delete role" aria-label="Delete role">×</button></div>
+      <div class="pjblk-body">
+        <div class="pair"><input class="inp" data-f="dates" value="${attr(r.dates || '')}" placeholder="May '25 — Present" aria-label="Dates"><input class="inp" data-f="company" value="${attr(r.company || '')}" placeholder="Company" aria-label="Company"></div>
+        <div class="pair"><input class="inp" data-f="title" value="${attr(r.title || '')}" placeholder="Title" aria-label="Title"><input class="inp" data-f="where" value="${attr(r.where || '')}" placeholder="Location / note (optional)" aria-label="Location"></div>
+        <span class="fl">Bullets</span>
+        <div data-bullets>${(r.bullets || []).map((b) => rowBullet(b)).join('')}</div>
+        <button class="miniadd" type="button" data-add="bullet">+ Add a bullet</button>
+      </div>
+    </div>`;
+  const seg = (label, g, opts, cur) => `<div class="inline-ctl"><span>${label}</span><div class="segctl">${opts.map(([v, t]) => `<button type="button" data-g="${g}" data-v="${v}"${String(v) === String(cur) ? ' class="on"' : ''}>${t}</button>`).join('')}</div></div>`;
+  const ctl = (label, inner) => `<div class="ctl"><span class="fl">${label}</span>${inner}</div>`;
+
+  // ---- build the three areas from `model` ----
+  function buildSections() {
+    $('#secList').innerHTML = model.sections.map((s) => {
+      const [name, sub, locked, always] = SEC[s.key] || [s.key, ''];
+      const tog = always
+        ? '<span class="always">Always on</span>'
+        : `<label class="blocktog"><input type="checkbox" data-sec="${s.key}" ${s.show !== false ? 'checked' : ''} aria-label="Show ${attr(name)}"></label>`;
+      return `<div class="secrow${locked ? ' locked' : ''}"><span class="g2">${GRIP}</span><span class="nm">${esc(name)}<small>${esc(sub)}</small></span><span class="sp">${tog}</span></div>`;
+    }).join('');
+    $('#structCtls').innerHTML =
+      seg('Figures across', 'figCols', [['4', 'Four'], ['3', 'Three'], ['2', 'Two']], model.figCols) +
+      seg('Experience dates', 'expLayout', [['rail', 'Left rail'], ['inline', 'Above title']], model.experience.layout) +
+      seg('Bullets shown', 'expDensity', [['full', 'All'], ['tight', 'First two']], model.experience.density) +
+      seg('Skills style', 'skills', [['chips', 'Chips'], ['list', 'Plain list']], model.skills.style) +
+      seg('Skills columns', 'skillCols', [['4', 'Four'], ['2', 'Two']], String(model.skills.cols)) +
+      seg('Publication cards', 'pubCols', [['2', 'Side by side'], ['1', 'Stacked']], String(model.pubs.cols));
+  }
+
+  function buildEditors() {
+    const contacts = model.header.contacts.map((c) => c.label).join(', ');
+    $('#editors').innerHTML =
+      ctl('Header', `<input class="inp" id="rName" style="margin-bottom:8px" value="${attr(model.header.name)}" placeholder="Full name" aria-label="Name">
+        <input class="inp" id="rRole" style="margin-bottom:8px" value="${attr(model.header.role)}" placeholder="Role · focus · focus" aria-label="Role line">
+        <input class="inp" id="rCts" value="${attr(contacts)}" placeholder="email, github.com/…, linkedin.com/…" aria-label="Contacts">
+        <div class="fh">Role line and contacts are comma or ·-separated. The first phrase of the role is set in the accent italic.</div>`) +
+      ctl('Figures strip', `<div data-rows id="figRows">${model.figs.map((f) => rowFig(f.n, f.l)).join('')}</div><button class="miniadd" type="button" data-add="fig">+ Add a figure</button>`) +
+      ctl('Summary', `<div class="sumbox"><div class="sumbox-head"><span class="c"></span>The paragraph under the figures<span class="n" id="sumCount">0 words</span></div><textarea id="sumText" aria-label="Summary">${esc(model.summary)}</textarea><div class="sumbox-foot"><span class="meter" id="sumMeter"><i></i></span><span class="hint" id="sumHint">Aim for <b>40–60 words</b></span></div></div>`) +
+      ctl('Experience', `<div id="roleList">${model.experience.roles.map((r, i) => roleCard(r, i === 0)).join('')}</div><button class="miniadd" type="button" data-add="role">+ Add a role</button><div class="fh">Wrap a metric in **asterisks** to set it in the accent. Toggle a role off to keep it on file but off the CV.</div>`) +
+      ctl('What I work with', `<div data-rows id="groupRows">${model.skills.groups.map((g) => rowGroup(g.group, g.items)).join('')}</div><button class="miniadd" type="button" data-add="group">+ Add a group</button>`) +
+      ctl('Publications & patents', `<div data-rows id="pubRows">${model.pubs.items.map((p) => rowPub(p.kicker, p.body)).join('')}</div><button class="miniadd" type="button" data-add="pub">+ Add a publication</button>`) +
+      ctl('Education', `<input class="inp" id="eduDegree" style="margin-bottom:8px" value="${attr(model.education.degree)}" placeholder="Degree" aria-label="Degree">
+        <input class="inp" id="eduSchool" style="margin-bottom:8px" value="${attr(model.education.school)}" placeholder="School · minor" aria-label="School">
+        <input class="inp" id="eduDates" value="${attr(model.education.dates)}" placeholder="Aug '16 — Jul '20" aria-label="Dates">`) +
+      ctl('Closing line', `<input class="inp" id="closeText" value="${attr(model.close)}" placeholder="References available on request…" aria-label="Closing line">`);
+  }
+
+  function buildPrint() {
+    const d = model.download || {};
+    $('#pfFigs').checked = d.printFigs !== false;
+    $('#pfLinks').checked = !!d.printLinks;
+    setPdfState(hasPdf, d.pdfName, null);
+    setMode(hasPdf && d.mode === 'file' ? 'file' : 'print');
+  }
+
+  function buildAll() { buildSections(); buildEditors(); buildPrint(); syncPreview(); }
+
+  // ---- serialize DOM → model ----
+  function segVal(g, d) { const b = $(`[data-g="${g}"].on`); return b ? b.dataset.v : d; }
+  function rowsOf(sel) { return $$(`${sel} .rowedit`).map((r) => $$('input', r).map((i) => i.value.trim())); }
+  function collect() {
+    const contacts = splitList($('#rCts').value).map((c) => ({ label: c, href: hrefFor(c) }));
+    const roles = $$('#roleList .rolecard').map((c) => ({
+      company: $('[data-f="company"]', c).value.trim(),
+      title: $('[data-f="title"]', c).value.trim(),
+      dates: $('[data-f="dates"]', c).value.trim(),
+      where: $('[data-f="where"]', c).value.trim(),
+      show: $('[data-role-show]', c).checked,
+      bullets: $$('[data-bullets] .rowedit input', c).map((i) => i.value.trim()).filter(Boolean),
+    }));
+    const sections = model.sections.map((s) => {
+      if (SEC[s.key] && SEC[s.key][3]) return { ...s, show: true };
+      const cb = $(`[data-sec="${s.key}"]`);
+      return { ...s, show: cb ? cb.checked : s.show !== false };
+    });
+    const mode = ($('input[name="dlmode"]:checked') || {}).value || 'print';
+    return {
+      header: { name: $('#rName').value.trim(), role: $('#rRole').value.trim(), contacts },
+      figs: rowsOf('#figRows').filter((r) => r[0] || r[1]).map((r) => ({ n: r[0], l: r[1] })),
+      figCols: Number(segVal('figCols', 4)),
+      summary: $('#sumText').value.trim(),
+      experience: { layout: segVal('expLayout', 'rail'), density: segVal('expDensity', 'full'), roles },
+      skills: { style: segVal('skills', 'chips'), cols: Number(segVal('skillCols', 4)), groups: rowsOf('#groupRows').filter((r) => r[0]).map((r) => ({ group: r[0], items: r[1] })) },
+      pubs: { cols: Number(segVal('pubCols', 2)), items: rowsOf('#pubRows').filter((r) => r[0] || r[1]).map((r) => ({ kicker: r[0], body: r[1] })) },
+      education: { degree: $('#eduDegree').value.trim(), school: $('#eduSchool').value.trim(), dates: $('#eduDates').value.trim() },
+      close: $('#closeText').value.trim(),
+      sections,
+      download: { mode: hasPdf ? mode : 'print', pdfName: model.download.pdfName || '', printFigs: $('#pfFigs').checked, printLinks: $('#pfLinks').checked },
+    };
+  }
+
+  // ---- live preview ----
+  function syncPreview() {
+    const m = collect();
+    model.download = m.download;
+    const show = {}; m.sections.forEach((s) => { show[s.key] = s.show; });
+    const rpv = $('#rpv');
+    rpv.dataset.figs = show.figs ? 'on' : 'off';
+    rpv.dataset.summary = show.summary ? 'on' : 'off';
+    rpv.dataset.expShow = show.experience ? 'on' : 'off';
+    rpv.dataset.skillsShow = show.skills ? 'on' : 'off';
+    rpv.dataset.pubs = show.pubs ? 'on' : 'off';
+    rpv.dataset.edu = show.education ? 'on' : 'off';
+    rpv.dataset.close = show.close ? 'on' : 'off';
+    rpv.dataset.figCols = m.figCols;
+    rpv.dataset.expLayout = m.experience.layout;
+    rpv.dataset.expDensity = m.experience.density;
+    rpv.dataset.skills = m.skills.style;
+    rpv.dataset.skillCols = m.skills.cols;
+    rpv.dataset.pubCols = m.pubs.cols;
+
+    const rp = m.header.role.split('·').map((x) => x.trim()).filter(Boolean);
+    const jobs = m.experience.roles.filter((r) => r.show).map((r) =>
+      `<div class="job"><div class="when">${esc(r.dates)}<span class="place">${esc(r.company)}</span>${r.where ? `<span class="where">${esc(r.where)}</span>` : ''}</div><div><h3>${esc(r.title)}</h3><ul>${r.bullets.map((b) => `<li>${esc(b).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</li>`).join('')}</ul></div></div>`
+    ).join('') || '<div class="job"><div class="when">—</div><div><h3>No roles shown</h3></div></div>';
+    const sk = m.skills.groups.map((g) => `<div><h4>${esc(g.group)}</h4><div class="chips">${splitList(g.items).slice(0, 5).map((c) => `<span>${esc(c)}</span>`).join('')}</div></div>`).join('');
+    const pubsH = m.pubs.items.map((p) => `<div><span class="k">${esc(p.kicker)}</span><p>${esc(p.body)}</p></div>`).join('');
+    rpv.innerHTML =
+      `<p class="nm">${esc(m.header.name) || 'Your name'}</p>` +
+      `<p class="role">${rp.length ? `<b>${esc(rp[0])}</b>${rp.length > 1 ? ' · ' + rp.slice(1).map(esc).join(' · ') : ''}` : ''}</p>` +
+      `<div class="cts">${m.header.contacts.map((c) => `<span>${esc(c.label)}</span>`).join('')}</div>` +
+      `<div class="figs">${m.figs.map((f) => `<div><b>${esc(f.n)}</b><span>${esc(f.l)}</span></div>`).join('')}</div>` +
+      `<p class="sum">${esc(m.summary)}</p>` +
+      `<div class="expsect"><div class="lbl">Experience</div><div class="jobs">${jobs}</div></div>` +
+      `<div class="skillsect"><div class="lbl">What I work with</div><div class="sk">${sk}</div></div>` +
+      `<div class="pubsect"><div class="lbl">Publications &amp; patents</div><div class="pubs">${pubsH}</div></div>` +
+      `<div class="edusect"><div class="lbl">Education</div><div class="edu"><span class="t">${esc(m.education.degree)}<small>${esc(m.education.school)}</small></span><span class="y">${esc(m.education.dates)}</span></div></div>` +
+      `<div class="close">${esc(m.close)}</div>`;
+    fitPreview(); meter(); estimate();
+  }
+
+  function fitPreview() {
+    const scale = $('#rpvscale'), rpv = $('#rpv');
+    const avail = scale.clientWidth; if (!avail) return;
+    const s = Math.min(avail / 688, 1);
+    rpv.style.transform = 'scale(' + s + ')'; rpv.style.transformOrigin = '0 0';
+    scale.style.height = Math.ceil(rpv.offsetHeight * s) + 'px';
+  }
+  if (window.ResizeObserver) new ResizeObserver(fitPreview).observe($('#rpvscale'));
+  addEventListener('resize', fitPreview);
+
+  function meter() {
+    const t = $('#sumText'); if (!t) return;
+    const n = t.value.trim().split(/\s+/).filter(Boolean).length;
+    $('#sumCount').textContent = n + (n === 1 ? ' word' : ' words');
+    $('#sumMeter i').style.width = Math.min(n / 60, 1) * 100 + '%';
+    $('#sumMeter').classList.toggle('over', n > 70);
+    $('#sumHint').innerHTML = n > 70 ? '<b>Long</b> — the figures strip already carries the numbers'
+      : n < 40 ? 'Aim for <b>40–60 words</b> — three sentences at most' : '<b>Good length</b> — reads in one breath';
+  }
+  function estimate() {
+    const roles = $$('#roleList .rolecard [data-role-show]:checked').length;
+    const figsOn = $('#pfFigs').checked, dense = segVal('expDensity', 'full') === 'full';
+    const score = 1 + (figsOn ? .18 : 0) + (dense ? .4 : 0) + (roles > 3 ? .3 : 0);
+    const why = [figsOn ? 'figures included' : 'figures dropped'];
+    if (!dense) why.push('two bullets a role');
+    if (roles < 4) why.push(roles + (roles === 1 ? ' role' : ' roles') + ' shown');
+    $('#estPages').textContent = score > 1.6 ? 'Two pages' : 'One page';
+    $('#estWhy').textContent = 'at Letter, ' + why.join(' · ');
+    $('#sheetFigs').style.display = figsOn ? '' : 'none';
+  }
+
+  // ---- PDF / mode ----
+  function setMode(m) {
+    $$('#dlmodes .mode').forEach((el) => { const on = el.dataset.mode === m; el.classList.toggle('on', on); const i = $('input', el); if (i) i.checked = on; });
+    $('#dlstate').innerHTML = m === 'file'
+      ? 'The button downloads the uploaded file. Print styles still apply if a reader prints the page.'
+      : 'With no file the button prints the page — which is why the print styles exist.';
+  }
+  function setPdfState(filled, name, size) {
+    const box = $('#pdfbox');
+    box.classList.toggle('filled', !!filled);
+    if (filled) {
+      $('#pdfname').textContent = name || 'resume.pdf';
+      $('#pdfsub').textContent = (size ? (size / 1024 / 1024).toFixed(2) + ' MB · ' : '') + 'served at /resume.pdf';
+      $('#pdfbtn').textContent = 'Replace'; $('#pdfclear').style.display = '';
+      $('#modeFileSub').textContent = (name || 'resume.pdf') + ' — served at /resume.pdf';
+      $('#dlmodes .mode[data-mode="file"]').classList.remove('dim');
+    } else {
+      $('#pdfname').textContent = 'No file uploaded';
+      $('#pdfsub').textContent = 'Choose a PDF. It is committed and served at /resume.pdf.';
+      $('#pdfbtn').textContent = 'Upload a PDF'; $('#pdfclear').style.display = 'none';
+      $('#modeFileSub').textContent = 'No file yet — upload one below and this becomes the default.';
+      $('#dlmodes .mode[data-mode="file"]').classList.add('dim');
+    }
+  }
+  const fileToB64 = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(file); });
+
+  // ---- status ----
+  let statusTimer;
+  function status(msg, kind) {
+    const el = $('#rs-status'); el.textContent = msg;
+    el.className = 'rs-status' + (kind === 'err' ? ' err' : kind === 'ok' ? ' ok' : '');
+    clearTimeout(statusTimer);
+    if (kind === 'ok') statusTimer = setTimeout(() => { el.textContent = ''; el.className = 'rs-status'; }, 6000);
+  }
+
+  // ---- events (delegated on the whole tool, so dynamic rows work) ----
+  let deb;
+  root.addEventListener('input', (e) => {
+    if (e.target.id === 'sumText') meter();
+    clearTimeout(deb); deb = setTimeout(syncPreview, 160);
+  });
+  root.addEventListener('change', (e) => {
+    if (e.target.matches('[data-sec],[data-role-show]')) syncPreview();
+    if (e.target.id === 'pfFigs' || e.target.id === 'pfLinks') estimate();
+  });
+  root.addEventListener('click', (e) => {
+    const segBtn = e.target.closest('[data-g][data-v]');
+    if (segBtn) { segBtn.parentNode.querySelectorAll('[data-g]').forEach((b) => b.classList.toggle('on', b === segBtn)); syncPreview(); return; }
+    const add = e.target.closest('[data-add]');
+    if (add) {
+      const kind = add.dataset.add;
+      if (kind === 'fig') $('#figRows').insertAdjacentHTML('beforeend', rowFig());
+      else if (kind === 'group') $('#groupRows').insertAdjacentHTML('beforeend', rowGroup());
+      else if (kind === 'pub') $('#pubRows').insertAdjacentHTML('beforeend', rowPub());
+      else if (kind === 'role') { $('#roleList').insertAdjacentHTML('beforeend', roleCard({}, true)); }
+      else if (kind === 'bullet') add.previousElementSibling.insertAdjacentHTML('beforeend', rowBullet());
+      syncPreview(); return;
+    }
+    const delRole = e.target.closest('[data-del-role]');
+    if (delRole) { if ($$('#roleList .rolecard').length > 1) { delRole.closest('.rolecard').remove(); syncPreview(); } return; }
+    const del = e.target.closest('[data-del]');
+    if (del) { del.closest('.rowedit').remove(); syncPreview(); return; }
+    const head = e.target.closest('.rolecard .pjblk-head');
+    if (head && !e.target.closest('input') && !e.target.closest('label') && !e.target.closest('.xrow')) head.parentNode.classList.toggle('on');
+  });
+
+  // tabs
+  $('#rs-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tab]'); if (!b) return;
+    const tab = b.dataset.tab;
+    $$('#rs-tabs button').forEach((x) => x.classList.toggle('on', x === b));
+    $('#rs-work').style.display = tab === 'print' ? 'none' : '';
+    $('#pane-print').classList.toggle('on', tab === 'print');
+    if (tab !== 'print') {
+      $('#pane-sections').classList.toggle('on', tab === 'sections');
+      $('#pane-content').classList.toggle('on', tab === 'content');
+      requestAnimationFrame(fitPreview);
+    }
+  });
+
+  // PDF upload / remove
+  $('#pdffile').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) { status('That is not a PDF.', 'err'); return; }
+    if (file.size > 8 * 1024 * 1024) { status('PDF too large (max 8 MB).', 'err'); return; }
+    status('Uploading PDF…');
+    try {
+      const b64 = await fileToB64(file);
+      const r = await adminFetch('/api/admin/resume', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'pdf', pdfBase64: b64, pdfName: file.name }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      hasPdf = true; model.download.pdfName = file.name; model.download.mode = 'file';
+      setPdfState(true, file.name, file.size); setMode('file'); syncPreview();
+      status('PDF uploaded and committed. Hit “Save changes” to make it the download.', 'ok');
+    } catch (err) { status('Upload failed: ' + err.message, 'err'); }
+    e.target.value = '';
+  });
+  $('#pdfclear').addEventListener('click', async () => {
+    status('Removing PDF…');
+    try {
+      const r = await adminFetch('/api/admin/resume?pdf', { method: 'DELETE' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      hasPdf = false; model.download.pdfName = ''; model.download.mode = 'print';
+      setPdfState(false); setMode('print'); syncPreview();
+      status('PDF removed. Hit “Save changes” to switch the button back to print.', 'ok');
+    } catch (err) { status('Remove failed: ' + err.message, 'err'); }
+  });
+
+  // Save
+  $('#rs-save').addEventListener('click', async () => {
+    const content = collect();
+    status('Saving…');
+    try {
+      const r = await adminFetch('/api/admin/resume', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      model = normalize(content);
+      status('Saved. The public page rebuilds in ~1 minute.', 'ok');
+    } catch (err) { status('Save failed: ' + err.message, 'err'); }
+  });
+
+  // Build from the embedded seed immediately, then refresh from the committed copy.
+  buildAll();
+  onAdminReady(async () => {
+    try {
+      const r = await adminFetch('/api/admin/resume');
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d && d.content) { model = normalize(d.content); hasPdf = !!(d.pdf && d.pdf.exists); buildAll(); if (d.pdf) setPdfState(d.pdf.exists, model.download.pdfName, d.pdf.size); }
+    } catch { /* keep the seed */ }
+  });
+</script>

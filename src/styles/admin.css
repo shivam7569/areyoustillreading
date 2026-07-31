@@ -147,6 +147,11 @@
 /* Active section: a flat accent tint (matches the design's .snav a.on). */
 .admin-nav a.is-active { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); }
 .admin-nav a svg { width: 16px; height: 16px; flex: none; opacity: 0.9; }
+/* Per-section count pushed to the right edge (matches the design's .snav .ct).
+   Filled client-side from real data (/api/admin/overview); hidden until loaded so
+   no fake zero ever shows. */
+.admin-nav a .ct { margin-left: auto; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.admin-nav a.is-active .ct { color: var(--accent); }
 .admin-nav .nav-label-sm { margin: 0.95rem 0.65rem 0.3rem; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
 .admin-nav-spacer { flex: 1 1 auto; }
 

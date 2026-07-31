@@ -1,0 +1,109 @@
+{
+  "header": {
+    "name": "Shivam Chaudhary",
+    "role": "Senior Data Scientist · Production LLM & Agentic AI · Causal Inference · Computer Vision",
+    "contacts": [
+      { "label": "shivam.iitmandi@gmail.com", "href": "mailto:shivam.iitmandi@gmail.com" },
+      { "label": "github.com/shivam7569", "href": "https://github.com/shivam7569" },
+      { "label": "linkedin.com/in/shivam7569", "href": "https://www.linkedin.com/in/shivam7569/" }
+    ]
+  },
+  "figs": [
+    { "n": "100K+", "l": "Deals processed daily by a multi-agent LLM system" },
+    { "n": "~12%", "l": "Lift in sales-rep engagement from causal recommendations" },
+    { "n": "1 → 5", "l": "Grew the LLM engineering function from scratch" },
+    { "n": "$200M+", "l": "Annual losses projected prevented for a U.S. health insurer" }
+  ],
+  "figCols": 4,
+  "summary": "Senior Data Scientist with 6+ years applying scientific methods to high-stakes business problems, building production-grade ML/DL and end-to-end LLM/Agentic AI systems at scale. Hands-on across time-series forecasting, causal inference, recommendation, and large-scale data, with a product-oriented mindset and a habit of turning research into real-world impact.",
+  "experience": {
+    "layout": "rail",
+    "density": "full",
+    "roles": [
+      {
+        "company": "Aviso AI",
+        "title": "Sr. Data Scientist",
+        "dates": "May '25 — Present",
+        "where": "",
+        "show": true,
+        "bullets": [
+          "Architected a multi-agent LLM system processing **100K+ deals daily** across 15 enterprise clients, replacing rule-based logic with insight generation from CRM and engagement data, governed by evaluation and safety guardrails.",
+          "Replaced correlation-based explainability with a causal-inference backbone (Double Machine Learning, Causal Forests) to surface actionable recommendations — driving a **~12% increase** in sales-rep engagement.",
+          "Built and scaled the LLM engineering function: defined the technical hiring bar and grew the team **from 1 to 5** engineers for end-to-end development and production deployment."
+        ]
+      },
+      {
+        "company": "Bosch Global Software Technologies",
+        "title": "Sr. Computer Vision Engineer",
+        "dates": "Aug '22 — Apr '25",
+        "where": "",
+        "show": true,
+        "bullets": [
+          "Published a research paper and filed a patent on enhancing foundation models (EVA-02), leveraging **90%+ unlabeled** Bosch data to boost performance by ~5%; collaborated with Bosch Romania to further improve EVA by **~4.31%** via cluster analysis and hypothesis testing on DINOv2 embeddings.",
+          "Built a Vision Assignment Marketplace, training SWin, DeiT, and DeTr with ~6.72% average performance deviation; designed a ConvNeXt segmentation pipeline on fisheye images (**~57% F1**).",
+          "Deployed an object detector and motion analyzer on a Jetson Nano edge test-bed at **~30 FPS**; refactored legacy code for newer vision-transformer architectures, improving adaptability/efficiency by 14%."
+        ]
+      },
+      {
+        "company": "HiLabs Inc.",
+        "title": "Data Scientist II",
+        "dates": "Oct '20 — Jul '22",
+        "where": "",
+        "show": true,
+        "bullets": [
+          "Engineered a multi-million-dollar data pipeline moving anomalies from large-scale SQL/RDBMS sources to HBase and Solr for ticket-based remediation, improving Data Quality Index from ~78 to **~86**; projected to prevent **$200M+** in annual losses for a leading U.S. health insurer.",
+          "Deployed an enterprise-grade OCR solution (NLP + custom algorithms) on contracts after GAN-based image enhancement, generating **$100K+** in business value."
+        ]
+      },
+      {
+        "company": "GMO Research",
+        "title": "Machine Learning Engineer Intern",
+        "dates": "Jan '20 — Mar '20",
+        "where": "Japan · internship",
+        "show": true,
+        "bullets": [
+          "Forecast 6-hour survey response likelihood with time-aware Random Forests, Decision Trees, and DNNs; addressed class imbalance via SMOTE and custom metrics, achieving **91% efficacy** on responsive marketing panels."
+        ]
+      }
+    ]
+  },
+  "skills": {
+    "style": "chips",
+    "cols": 4,
+    "groups": [
+      { "group": "Languages & libraries", "items": "Python, SQL, Scala, Pandas, NumPy, Scikit-Learn" },
+      { "group": "Big data & MLOps", "items": "Spark, Hadoop, HBase, Solr, AWS, Docker, Git, CI/CD, GPU/HPC" },
+      { "group": "ML / DL / LLM", "items": "PyTorch, TensorFlow, Transformers, LangChain, LangGraph, RAG, Agentic AI, MCP" },
+      { "group": "Models & paradigms", "items": "Time-Series Forecasting, Recommendation, Causal Inference, Anomaly Detection, Computer Vision" }
+    ]
+  },
+  "pubs": {
+    "cols": 2,
+    "items": [
+      { "kicker": "Patent · co-authored", "body": "Dimensionality-reduction techniques to detect and localize failure regions in segmentation outputs from foundation models, improving interpretability and reliability." },
+      { "kicker": "Research", "body": "A two-stage fine-tuning approach improving foundation-model segmentation performance by 5%+ mIoU using unlabeled data — semi-supervised learning." }
+    ]
+  },
+  "education": {
+    "degree": "B.Tech, Mechanical Engineering",
+    "school": "Indian Institute of Technology, Mandi · Minor in Intelligent Systems",
+    "dates": "Aug '16 — Jul '20"
+  },
+  "close": "References available on request. Email is the fastest way to reach me.",
+  "sections": [
+    { "key": "header", "show": true, "locked": true },
+    { "key": "figs", "show": true },
+    { "key": "summary", "show": true },
+    { "key": "experience", "show": true, "locked": true },
+    { "key": "skills", "show": true },
+    { "key": "pubs", "show": true },
+    { "key": "education", "show": true },
+    { "key": "close", "show": true }
+  ],
+  "download": {
+    "mode": "print",
+    "pdfName": "",
+    "printFigs": true,
+    "printLinks": false
+  }
+}

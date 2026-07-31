@@ -65,7 +65,7 @@ describe('resume page', () => {
     expect(existsSync(file)).toBe(true);
   });
 
-  it('shows the real name and a PDF download link', () => {
+  it('shows the real name and a Download PDF affordance', () => {
     // Read the produced HTML as a raw string and assert on substrings. These are
     // deliberately coarse content contracts, each guarding against a specific
     // real-world regression:
@@ -73,10 +73,13 @@ describe('resume page', () => {
     // - The real name must render: catches accidental placeholder text, an empty
     //   data binding, or a broken layout that drops the page heading.
     expect(html).toContain('Shivam Chaudhary');
-    // - The PDF download must point at the exact public asset path. If the link
-    //   href changes or the asset is renamed/removed, the "Download resume"
-    //   affordance silently 404s in production — this pins it.
-    expect(html).toContain('href="/resume.pdf"');
+    // - The "Download PDF" control must render, in whichever mode resume.json's
+    //   `download.mode` selects: a real /resume.pdf link (file mode, after a PDF
+    //   is uploaded from the Studio) OR a print-the-page button (default). Pinning
+    //   the label + at least one working mechanism guards against the affordance
+    //   silently disappearing.
+    expect(html).toContain('Download PDF');
+    expect(html.includes('href="/resume.pdf"') || html.includes('window.print()')).toBe(true);
     // - A known section label ("Experience") proves the body actually rendered,
     //   not just the header/shell. Guards against a template that builds an empty
     //   or truncated page.

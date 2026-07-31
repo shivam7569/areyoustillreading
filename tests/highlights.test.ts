@@ -63,15 +63,17 @@ const html = readFileSync(
 );
 
 describe('highlights', () => {
-  it('renders the highlights + discussion section and save button', () => {
+  it('renders the highlights + discussion section and selection toolbar', () => {
     // Assert the human-visible section heading made it into the static HTML.
     // Guards against the highlights/discussion component being removed or its
     // heading text changing.
     expect(html).toContain('Highlights');
-    // Assert the save button's stable id is present. This id is the hydration
-    // hook the client-side script binds its click handler to — if it's missing
-    // or renamed, the "save highlight" interaction silently breaks at runtime,
-    // so we pin it here as a contract between markup and client JS.
-    expect(html).toContain('id="hl-save-btn"');
+    // Assert the selection toolbar's stable id is present. The redesigned
+    // highlights UI injects its actions (Highlight / Note / Discuss) into this
+    // toolbar from the client script, so `#seltool` — carrying the post-id/author
+    // data the script reads — is the markup↔JS contract now (the old static
+    // `#hl-save-btn` was removed in the highlights redesign). If it's missing or
+    // renamed, selecting text silently does nothing at runtime.
+    expect(html).toContain('id="seltool"');
   });
 });
