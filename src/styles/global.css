@@ -27,7 +27,8 @@
   --ink: #1c1813; --ink-soft: #443c30; --ink-faint: #726752;
   --rule: #d8cfbd; --rule-soft: #e6dfd0; --card: #fffdf8;
   --accent: #5e3560; --accent-soft: #764a78; --on-accent: #faf3fa;
-  --code-fg: #e7ddc9;
+  --code-fg: #33291b;   /* light theme: dark ink on a cream code card */
+  --plot-mat: #14110b;  /* the Plotly demo screen stays dark in BOTH themes */
 
   /* Serif faces are self-hosted (src/styles/fonts.css); names MUST match verbatim.
      UI/chrome stays on the existing sans stack (--font-sans) for now — the editorial
@@ -47,7 +48,7 @@
   --accent-ink: var(--accent-soft);
   --border: var(--rule-soft);
   --border-strong: var(--rule);
-  --code-bg: #2a231a;           /* warm light code surface (theme-following; dark override below) */
+  --code-bg: #f4efe4;           /* light theme: cream code card (dark override below) */
 
   /* ---- Type family aliases: UI keeps the current sans; body/headings go serif ---- */
   --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -106,8 +107,8 @@
   --ink: #1c1813; --ink-soft: #443c30; --ink-faint: #726752;
   --rule: #d8cfbd; --rule-soft: #e6dfd0; --card: #fffdf8;
   --accent: #5e3560; --accent-soft: #764a78; --on-accent: #faf3fa;
-  --code-fg: #e7ddc9;
-  --code-bg: #2a231a;
+  --code-fg: #33291b;
+  --code-bg: #f4efe4;
   --shadow: 24px 40px 80px -48px rgba(40, 28, 14, 0.45);
 }
 
@@ -195,8 +196,8 @@ pre code { display: block; background: none; border: 0; color: inherit; padding:
 }
 .post-body .codeblock .code-top {
   display: flex; align-items: center; gap: 12px; padding: 9px 16px;
-  background: color-mix(in srgb, var(--code-bg) 84%, #ffffff 16%);
-  border-bottom: 1px solid color-mix(in srgb, var(--code-bg) 62%, #ffffff 38%);
+  background: color-mix(in srgb, var(--code-bg) 88%, var(--code-fg) 12%);
+  border-bottom: 1px solid color-mix(in srgb, var(--code-bg) 70%, var(--code-fg) 30%);
 }
 .post-body .code-dots { display: inline-flex; gap: 7px; }
 .post-body .code-dots .dot { width: 9px; height: 9px; border-radius: 50%; background: color-mix(in srgb, var(--code-fg) 24%, transparent); }
@@ -206,20 +207,43 @@ pre code { display: block; background: none; border: 0; color: inherit; padding:
 /* When a code card is immediately followed by its python output, fuse the two into
    one notebook-style cell (code on top, result below). */
 .post-body .codeblock:has(+ pre.py-output) { margin-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-/* Warm token palette for Shiki's 'css-variables' theme — matches the design's code
-   colours. Code is always dark, so these apply in both page themes. */
+/* Syntax palette for Shiki's 'css-variables' theme, themed PER MODE so a code card is
+   a light card (dark ink on cream) in light mode and a warm-on-near-black slab in dark
+   mode. fg/bg follow --code-* (flipped per theme above); only the 8 token hues re-declare. */
 .astro-code {
   --astro-code-foreground: var(--code-fg);
   --astro-code-background: var(--code-bg);
-  --astro-code-token-comment: #7a6f5b;
-  --astro-code-token-keyword: #c98a63;
-  --astro-code-token-string: #9bb586;
-  --astro-code-token-string-expression: #9bb586;
-  --astro-code-token-constant: #cf8f6f;
-  --astro-code-token-function: #e0b56a;
-  --astro-code-token-parameter: #d9a06b;
-  --astro-code-token-punctuation: #c2b6a0;
   --astro-code-token-link: var(--accent-soft);
+  /* light-mode base: dark ink on cream */
+  --astro-code-token-comment: #9a8c72;
+  --astro-code-token-keyword: #9a3f28;
+  --astro-code-token-string: #5f7a3f;
+  --astro-code-token-string-expression: #5f7a3f;
+  --astro-code-token-constant: #a5541f;
+  --astro-code-token-function: #8a5a12;
+  --astro-code-token-parameter: #a05a1e;
+  --astro-code-token-punctuation: #6d6152;
+}
+/* dark-mode syntax: the original warm-on-near-black palette. */
+@media (prefers-color-scheme: dark) {
+  .astro-code {
+    --astro-code-token-comment: #7a6f5b; --astro-code-token-keyword: #c98a63;
+    --astro-code-token-string: #9bb586; --astro-code-token-string-expression: #9bb586;
+    --astro-code-token-constant: #cf8f6f; --astro-code-token-function: #e0b56a;
+    --astro-code-token-parameter: #d9a06b; --astro-code-token-punctuation: #c2b6a0;
+  }
+}
+:root[data-theme="dark"] .astro-code {
+  --astro-code-token-comment: #7a6f5b; --astro-code-token-keyword: #c98a63;
+  --astro-code-token-string: #9bb586; --astro-code-token-string-expression: #9bb586;
+  --astro-code-token-constant: #cf8f6f; --astro-code-token-function: #e0b56a;
+  --astro-code-token-parameter: #d9a06b; --astro-code-token-punctuation: #c2b6a0;
+}
+:root[data-theme="light"] .astro-code {
+  --astro-code-token-comment: #9a8c72; --astro-code-token-keyword: #9a3f28;
+  --astro-code-token-string: #5f7a3f; --astro-code-token-string-expression: #5f7a3f;
+  --astro-code-token-constant: #a5541f; --astro-code-token-function: #8a5a12;
+  --astro-code-token-parameter: #a05a1e; --astro-code-token-punctuation: #6d6152;
 }
 
 /* ---- Prose elements ---- */
@@ -358,7 +382,9 @@ li { margin: 0.35rem 0; }
    own header row is hidden because the demo-head already provides the chrome. */
 .post-body .py-plot .pane .codeblock { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
 .post-body .py-plot .pane .codeblock .code-top { display: none; }
-.post-body .py-plot .plotwrap { background: var(--code-bg); padding: 8px 8px 4px; }
+/* The plot screen stays dark in BOTH themes (its axes/font are forced light in
+   PlotlyReader), so it uses its own token, not the now-theme-flipping --code-bg. */
+.post-body .py-plot .plotwrap { background: var(--plot-mat); padding: 8px 8px 4px; }
 .post-body .py-plot .plotly-figure { width: 100%; }
 .post-body .py-plot .plotly-holder { width: 100%; height: 430px; }
 @media (max-width: 640px) { .post-body .py-plot .plotly-holder { height: 330px; } }
