@@ -1,46 +1,69 @@
 ---
 /**
- * /admin/posts — the unified Posts manager.
- * Lists every post (drafts included) from the live content collection with
- * filter/sort and per-row actions: edit, view, publish/unpublish, delete. Data
- * comes from the admin-gated GET /api/admin/posts; mutations hit /api/admin/post.
+ * /admin/posts — the unified Posts manager (Studio "Posts" view).
+ * Lists every post (drafts included) from the live content collection as a
+ * design-matched analytics table: filter tabs + search, a paywall summary panel,
+ * and a row per post showing Status / Access / Published / Reads / Completion /
+ * Upgrades / Revenue. The Access chip and a per-row ⋯ menu host every mutation
+ * (publish/unpublish, paywall + price, series, email/retry, early access, delete).
+ *
+ * Data: GET /api/admin/posts (catalog + paywall state), enriched client-side with
+ * GET /api/admin/analytics?range=all (Reads/Completion) and GET /api/admin/sales
+ * (Upgrades/Revenue). Metrics with no source render "—" — never a fabricated 0.
+ * Mutations hit /api/admin/post, /api/admin/broadcast, /api/admin/early, and a
+ * direct post_paywall upsert (price). All endpoints independently requireAdmin().
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
 
 <AdminLayout title="Posts — Studio" heading="Posts" active="posts">
-  <section>
-    <div class="page-head">
-      <div>
-        <h1>Posts</h1>
-        <p class="sub" id="posts-sub">Everything you've written.</p>
+  <div class="stack">
+    {/* Control row: filter tabs (counts filled client-side), search, New post. */}
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div class="tabs" id="tabs">
+        <button class="on" type="button" data-filter="all">All<span class="n" data-ct="all">—</span></button>
+        <button type="button" data-filter="published">Published<span class="n" data-ct="published">—</span></button>
+        <button type="button" data-filter="draft">Drafts<span class="n" data-ct="draft">—</span></button>
+        <button type="button" data-filter="scheduled">Scheduled<span class="n" data-ct="scheduled">—</span></button>
+        <button type="button" data-filter="free">Free<span class="n" data-ct="free">—</span></button>
+        <button type="button" data-filter="paid">Paywalled<span class="n" data-ct="paid">—</span></button>
       </div>
-      <div class="head-actions">
-        <a class="btn btn-primary" href="/admin/write"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> New post</a>
+      <div class="search" style="margin-left:auto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input type="search" id="q" placeholder="Search posts" aria-label="Search posts" autocomplete="off" />
+      </div>
+      <a class="btn btn-primary btn-sm" href="/admin/write">New post</a>
+    </div>
+
+    {/* Paywall summary — live counts + real (estimated) upgrades & revenue. */}
+    <div class="panel">
+      <header><h2>Paywall</h2><span class="hint">Where free readers stop, and what that earns</span></header>
+      <div class="pb flush">
+        <div class="pwgrid">
+          <div><div class="l">Free to read</div><div class="v" id="pw-free">—</div><div class="d">Public, no wall</div></div>
+          <div><div class="l">Paywalled</div><div class="v" id="pw-paid">—</div><div class="d">Readers hit the wall</div></div>
+          <div><div class="l">Upgrades</div><div class="v" id="pw-upgrades">—</div><div class="d">Unlocks to date</div></div>
+          <div><div class="l">Revenue</div><div class="v" id="pw-rev">—</div><div class="d">Estimated · price × unlocks</div></div>
+        </div>
       </div>
     </div>
 
-    <div class="toolbar">
-      <input class="input search" id="q" type="search" placeholder="Search posts…" autocomplete="off" />
-      <select class="select" id="filter">
-        <option value="all">All posts</option>
-        <option value="published">Published</option>
-        <option value="draft">Drafts</option>
-        <option value="paid">Paywalled</option>
-      </select>
-      <select class="select" id="sort">
-        <option value="new">Newest first</option>
-        <option value="old">Oldest first</option>
-        <option value="title">By title</option>
-      </select>
-      <span class="grow"></span>
-      <button class="btn btn-sm btn-ghost" id="refresh" type="button">↻ Refresh</button>
+    {/* The posts table. tbody#posts-host is filled by render(). */}
+    <div class="panel">
+      <div class="pb flush">
+        <div class="t-scroll">
+          <table class="t">
+            <thead><tr>
+              <th>Post</th><th>Status</th><th>Access</th>
+              <th class="num">Published</th><th class="num">Reads</th><th class="num">Completion</th>
+              <th class="num">Upgrades</th><th class="num">Revenue</th><th></th>
+            </tr></thead>
+            <tbody id="posts-host"><tr><td colspan="9" class="empty-cell">Loading posts…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
     </div>
-
-    <div id="posts-host">
-      <div class="table-wrap"><div class="card-pad muted">Loading posts…</div></div>
-    </div>
-  </section>
+  </div>
 
   {/* Series membership editor (R5): set a post's series name + part, or remove it.
       Writes series/seriesTitle/seriesOrder frontmatter via /api/admin/post. */}
@@ -78,7 +101,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   </div>
 </AdminLayout>
 
-<style>
+<style is:global>
+  /* is:global because render()/popovers inject DOM at runtime — Astro-scoped rules
+     only match statically-rendered elements, so these must not be scoped. This
+     stylesheet is only served on /admin/posts, so global here is page-local anyway. */
   .em-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 1rem; }
   .em-overlay[hidden] { display: none; }
   .em-card { background: var(--card); color: var(--fg); border: 1px solid var(--border-strong); border-radius: var(--admin-radius); padding: 1.5rem 1.6rem; max-width: 440px; width: 100%; box-shadow: 0 24px 64px rgba(0,0,0,0.4); }
@@ -92,6 +118,39 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .sr-field { display: flex; flex-direction: column; gap: 0.35rem; flex: 1; font-size: 0.8rem; color: var(--muted); }
   .sr-field.sr-part { flex: 0 0 84px; }
   .sr-field .input { width: 100%; }
+
+  /* The 9-column table can exceed the panel on narrow screens; scroll it inside
+     the panel (which is overflow:hidden for its rounded corners) rather than clip. */
+  .t-scroll { overflow-x: auto; }
+  /* Table title as an edit link, kept visually identical to the design's .ti span. */
+  table.t a.ti { text-decoration: none; }
+  table.t a.ti:hover { text-decoration: underline; }
+  table.t .acc { white-space: nowrap; }   /* keep "Paid · $3.00" on one line */
+  table.t td.pub-empty { color: var(--ink-faint); }
+  .empty-cell { text-align: center; color: var(--ink-faint); padding: 34px 15px !important; }
+  .empty-cell a { color: var(--accent); }
+
+  /* Per-row actions trigger (⋯). The design's only inline control is the Access
+     chip; the page owns six mutations, so they live behind this menu. */
+  .rowmenu { border: 0; background: transparent; color: var(--ink-faint); cursor: pointer; font-size: 19px; line-height: 1; padding: 2px 7px; border-radius: var(--admin-radius-sm); }
+  .rowmenu:hover { background: var(--admin-hover); color: var(--ink); }
+
+  /* Floating popovers: the Access editor + the row actions menu (fixed-positioned
+     off the trigger in JS, so table overflow never clips them). */
+  .acc-pop, .row-menu { min-width: 194px; background: var(--card); border: 1px solid var(--rule); border-radius: var(--admin-radius-sm); box-shadow: 0 16px 44px color-mix(in srgb, var(--ink) 22%, transparent); padding: 6px; }
+  .row-menu a, .row-menu button { display: flex; width: 100%; align-items: center; gap: 8px; padding: 8px 10px; border: 0; background: transparent; border-radius: 5px; font: inherit; font-size: 13px; color: var(--ink-soft); cursor: pointer; text-decoration: none; text-align: left; }
+  .row-menu a:hover, .row-menu button:hover { background: var(--admin-hover); color: var(--ink); }
+  .row-menu button:disabled { opacity: 0.5; cursor: default; }
+  .row-menu button.danger, .row-menu button.armed { color: var(--danger); }
+  .row-menu hr { border: 0; border-top: 1px solid var(--rule-soft); margin: 5px 4px; }
+  .acc-pop .pop-hd { font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-faint); padding: 4px 8px 6px; }
+  .acc-pop .pop-opt { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; font: inherit; font-size: 13px; color: var(--ink-soft); cursor: pointer; }
+  .acc-pop .pop-opt:hover { background: var(--admin-hover); }
+  .acc-pop .pop-opt.on { border-color: var(--accent); color: var(--ink); }
+  .acc-pop .pop-opt small { display: block; font-size: 11px; color: var(--ink-faint); margin-top: 1px; }
+  .acc-pop .price-row { display: flex; align-items: center; gap: 6px; padding: 8px; }
+  .acc-pop .price-row input { width: 82px; }
+  .acc-pop .pop-status { margin: 3px 8px 2px; font-size: 12px; color: var(--ink-faint); min-height: 1em; }
 </style>
 
 <script>
@@ -104,11 +163,17 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   let armTimer: number | undefined;
   let confirmedCount: number | null = null; // confirmed subscribers, for the confirm copy
   let emailTarget: any = null;               // the post being emailed via the modal
+  let currentFilter = 'all';
 
-  const host = document.getElementById('posts-host')!;
+  // Per-post analytics/sales, merged by slug after the catalog paints. Any slug
+  // absent here renders "—" (never a fabricated 0 — see loadMetrics()).
+  let metricsBySlug: Record<string, any> = {};
+  let salesTotalCents: number | null = null;
+  let upgradesTotal: number | null = null;
+
+  const host = document.getElementById('posts-host')!;   // <tbody>
   const qEl = document.getElementById('q') as HTMLInputElement;
-  const filterEl = document.getElementById('filter') as HTMLSelectElement;
-  const sortEl = document.getElementById('sort') as HTMLSelectElement;
+  const tabsEl = document.getElementById('tabs')!;
   const emModal = document.getElementById('email-modal')!;
   const emBody = document.getElementById('em-body')!;
   const emStatus = document.getElementById('em-status')!;
@@ -125,117 +190,131 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   const srRemove = document.getElementById('sr-remove') as HTMLButtonElement;
   let seriesTarget: any = null;
 
+  const chev = '<svg class="cv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m6 9 6 6 6-6"/></svg>';
+  // Scheduled = a hidden draft with a publishAt still in the future (the cron flips
+  // it live at that time). Distinct from a plain draft in the tabs + status pill.
+  const isSched = (p: any) => !!(p.draft && p.publishAt && new Date(p.publishAt).getTime() > Date.now());
+  const setText = (id: string, v: any) => { const e = document.getElementById(id); if (e) e.textContent = String(v); };
+
+  function paintCounts() {
+    const c: Record<string, number> = {
+      all: all.length,
+      published: all.filter((p) => !p.draft).length,
+      draft: all.filter((p) => p.draft && !isSched(p)).length,
+      scheduled: all.filter(isSched).length,
+      free: all.filter((p) => !p.paid).length,
+      paid: all.filter((p) => p.paid).length,
+    };
+    for (const k in c) { const el = document.querySelector(`[data-ct="${k}"]`); if (el) el.textContent = String(c[k]); }
+    setText('pw-free', c.free);
+    setText('pw-paid', c.paid);
+    if (upgradesTotal != null) setText('pw-upgrades', upgradesTotal.toLocaleString());
+    if (salesTotalCents != null) setText('pw-rev', '~$' + Math.round(salesTotalCents / 100).toLocaleString());
+  }
+
   function view() {
     const q = qEl.value.trim().toLowerCase();
-    const filter = filterEl.value;
-    const sort = sortEl.value;
     let rows = all.slice();
-    if (filter === 'published') rows = rows.filter((p) => !p.draft);
-    else if (filter === 'draft') rows = rows.filter((p) => p.draft);
-    else if (filter === 'paid') rows = rows.filter((p) => p.paid);
+    const f = currentFilter;
+    if (f === 'published') rows = rows.filter((p) => !p.draft);
+    else if (f === 'draft') rows = rows.filter((p) => p.draft && !isSched(p));
+    else if (f === 'scheduled') rows = rows.filter(isSched);
+    else if (f === 'free') rows = rows.filter((p) => !p.paid);
+    else if (f === 'paid') rows = rows.filter((p) => p.paid);
     if (q) rows = rows.filter((p) => (p.title || '').toLowerCase().includes(q) || (p.slug || '').includes(q));
-    if (sort === 'title') rows.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-    else if (sort === 'old') rows.sort((a, b) => (a.pubDate || '').localeCompare(b.pubDate || ''));
-    else rows.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+    rows.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
     render(rows);
+    paintCounts();
   }
 
-  function stateBadges(p: any) {
-    let b = p.draft ? '<span class="badge draft">Draft</span>' : '<span class="badge live">Live</span>';
-    if (p.paid) b += ' <span class="badge paid">Paid</span>';
-    return b;
+  function statusPill(p: any) {
+    if (!p.draft) return '<span class="pill live">Live</span>';
+    if (isSched(p)) return '<span class="pill sched">Scheduled</span>';
+    return '<span class="pill">Draft</span>';
   }
 
-  // The paywall cell: a visual on/off switch; the price field appears only when on.
-  // Drafts aren't public, so they can't be paywalled.
-  function pwCell(p: any) {
-    if (p.draft) return '<span class="muted" style="font-size:0.82rem">—</span>';
-    const dollars = ((p.priceCents ?? 500) / 100).toFixed(2);
-    return `<div class="pw-cell" data-gateable="${p.gateable ? '1' : '0'}">
-        <label class="pw-toggle" title="${p.paid ? 'Paywalled' : 'Free'}">
-          <input type="checkbox" data-pw ${p.paid ? 'checked' : ''} aria-label="Paywall">
-          <span class="track"><span class="knob"></span></span>
-        </label>
-        <span class="pw-price"${p.paid ? '' : ' hidden'}>$<input class="input pw-price-in" type="number" min="0" step="0.50" value="${dollars}" aria-label="Price"></span>
-      </div>`;
+  function accessChip(p: any) {
+    if (p.paid) {
+      const price = ((p.priceCents ?? 500) / 100).toFixed(2);
+      return `<button class="acc paid" data-access="${esc(p.slug)}">Paid · $${price} ${chev}</button>`;
+    }
+    return `<button class="acc" data-access="${esc(p.slug)}">Free ${chev}</button>`;
   }
 
-  // Visibility cell: an explicit Visible/Hidden switch (maps to the draft flag).
-  // On = public (draft:false); off = hidden from the public site (draft:true).
-  function visCell(p: any) {
-    return `<div class="pw-cell" title="${p.draft ? 'Hidden from the public site — flip to show' : 'Visible on the public site — flip to hide'}">
-        <label class="pw-toggle">
-          <input type="checkbox" data-vis data-slug="${esc(p.slug)}" ${p.draft ? '' : 'checked'} aria-label="Visible to the public">
-          <span class="track"><span class="knob"></span></span>
-        </label>
-        <span style="font-size:0.82rem;color:${p.draft ? 'var(--muted)' : 'var(--fg)'}">${p.draft ? 'Hidden' : 'Visible'}</span>
-        ${p.paid ? ' <span class="badge paid">Paid</span>' : ''}
-      </div>`;
+  function subline(p: any) {
+    if (p.series || p.seriesTitle) {
+      const nm = esc(p.seriesTitle || p.series);
+      return p.seriesOrder ? `${nm} · part ${p.seriesOrder}` : nm;
+    }
+    return 'No series';
+  }
+
+  function metricCells(p: any) {
+    const m = metricsBySlug[p.slug] || {};
+    const reads = typeof m.views === 'number' ? m.views.toLocaleString() : '—';
+    const comp = typeof m.pct === 'number' ? m.pct + '%' : '—';
+    const upg = typeof m.upg === 'number' ? String(m.upg) : '—';
+    const rev = typeof m.cents === 'number' ? '~$' + Math.round(m.cents / 100).toLocaleString() : '—';
+    return `<td class="num">${reads}</td><td class="num">${comp}</td><td class="num">${upg}</td><td class="num">${rev}</td>`;
   }
 
   function render(rows: any[]) {
-    document.getElementById('posts-sub')!.textContent =
-      `${all.length} post${all.length === 1 ? '' : 's'}${rows.length !== all.length ? ` · ${rows.length} shown` : ''}`;
     if (!all.length) {
-      host.innerHTML = '<div class="card"><div class="empty"><svg class="empty-icon" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><h3>No posts yet</h3><p>Start writing — your first post publishes in seconds.</p><a class="btn btn-primary" href="/admin/write">Write your first post</a></div></div>';
+      host.innerHTML = '<tr><td colspan="9" class="empty-cell">No posts yet. <a href="/admin/write">Write your first →</a></td></tr>';
       return;
     }
     if (!rows.length) {
-      host.innerHTML = '<div class="card"><div class="empty"><span class="emoji">🔍</span><h3>No matches</h3><p>Try a different search or filter.</p></div></div>';
+      host.innerHTML = '<tr><td colspan="9" class="empty-cell">No posts match this filter.</td></tr>';
       return;
     }
-    host.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>'
-      + '<th>Title</th><th>Visibility</th><th>Paywall</th><th class="num">Actions</th></tr></thead><tbody>'
-      + rows.map((p) => {
-        const tags = (p.tags || []).length ? `<span class="t-sub">${(p.tags || []).map((t: string) => '#' + esc(t)).join(' ')}</span>` : '';
-        // Series indicator (shown in the row subline) so series membership is
-        // visible at a glance in the Studio, not just in the publish form.
-        const seriesInfo = p.series
-          ? `<span style="color:var(--accent);font-weight:600">◆ ${esc(p.seriesTitle || p.series)}${p.seriesOrder ? ' · Part ' + p.seriesOrder : ''}</span>`
-          : '';
-        const armed = armedDelete === p.slug;
-        const viewBtn = p.draft ? '' : `<a class="btn btn-sm btn-ghost" href="/blog/${encodeURIComponent(p.slug)}" target="_blank" rel="noopener">View</a>`;
-        // Email-subscribers action: hidden for drafts (never announce a draft);
-        // greyed-out "Emailed" once sent for that post; otherwise a click that
-        // opens the confirm layer.
-        const emailBtn = p.draft
-          ? ''
-          : p.emailed
-            ? (p.emailedFailed > 0
-                ? `<button class="btn btn-sm" data-act="retry-email" data-slug="${esc(p.slug)}" title="${p.emailedFailed} delivery failure(s) — resend to just those">↻ Retry ${p.emailedFailed}</button>`
-                : `<button class="btn btn-sm btn-ghost" disabled title="Already emailed${p.emailedAt ? ' · ' + esc(fmtDate(p.emailedAt)) : ''}">✓ Emailed</button>`)
-            : `<button class="btn btn-sm" data-act="email" data-slug="${esc(p.slug)}">✉ Email</button>`;
-        // Early access (drafts only): email confirmed subscribers a private tokenized
-        // link to read the hidden draft before it goes public.
-        const earlyBtn = p.draft
-          ? `<button class="btn btn-sm" data-act="early" data-slug="${esc(p.slug)}" title="Email confirmed subscribers a private early-access link to this draft">◔ Early access</button>`
-          : '';
-        // Series membership editor (R5): add/update/remove this post's series.
-        const seriesBtn = `<button class="btn btn-sm btn-ghost" data-act="series" data-slug="${esc(p.slug)}" title="${p.series ? 'Edit or remove this post’s series' : 'Add this post to a series'}">${p.series ? '◆ Series' : '+ Series'}</button>`;
-        const del = `<button class="btn btn-sm ${armed ? 'btn-danger' : 'btn-ghost'}" data-act="delete" data-slug="${esc(p.slug)}">${armed ? 'Confirm delete' : 'Delete'}</button>`;
-        return `<tr data-slug="${esc(p.slug)}">
-            <td>
-              <div class="t-title"><a href="/admin/write?slug=${encodeURIComponent(p.slug)}">${esc(p.title)}</a></div>
-              <div class="t-sub">${esc(fmtDate(p.pubDate))}${tags ? ' · ' : ''}${tags}${seriesInfo ? ' · ' + seriesInfo : ''}</div>
-            </td>
-            <td>${visCell(p)}</td>
-            <td>${pwCell(p)}</td>
-            <td class="num"><div class="row-actions">
-              <a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a>
-              ${viewBtn}${seriesBtn}${emailBtn}${del}
-            </div></td>
-          </tr>`;
-      }).join('')
-      + '</tbody></table></div>';
+    host.innerHTML = rows.map((p) => {
+      const pub = !p.draft
+        ? `<td class="num">${esc(fmtDate(p.pubDate))}</td>`
+        : isSched(p)
+          ? `<td class="num">${esc(fmtDate(p.publishAt))}</td>`
+          : '<td class="num pub-empty">—</td>';
+      return `<tr data-slug="${esc(p.slug)}">
+          <td><a class="ti" href="/admin/write?slug=${encodeURIComponent(p.slug)}">${esc(p.title)}</a><span class="sub">${subline(p)}</span></td>
+          <td>${statusPill(p)}</td>
+          <td>${accessChip(p)}</td>
+          ${pub}
+          ${metricCells(p)}
+          <td class="num"><button class="rowmenu" data-menu="${esc(p.slug)}" aria-label="Actions for ${esc(p.title)}" aria-haspopup="menu">⋯</button></td>
+        </tr>`;
+    }).join('');
   }
 
   function load() {
-    // Stale-while-revalidate: paints the last-seen list instantly, then refreshes.
+    // Stale-while-revalidate: paints the last-seen catalog instantly, then refreshes.
     return swrFetch('/api/admin/posts', (d: any) => {
-      if (d && d.__error) { host.innerHTML = `<div class="card card-pad notice err">Couldn't load posts: ${esc(d.error || ('HTTP ' + d.status))}</div>`; return; }
+      if (d && d.__error) { host.innerHTML = `<tr><td colspan="9" class="empty-cell" style="color:var(--danger)">Couldn't load posts: ${esc(d.error || ('HTTP ' + d.status))}</td></tr>`; return; }
       all = d.posts || [];
-      view();
+      view();          // paint from catalog immediately (metric columns show "—")
+      loadMetrics();   // then enrich Reads/Completion/Upgrades/Revenue
     });
+  }
+
+  // Merge analytics (Reads/Completion, top-12 by views) + sales (Upgrades/Revenue).
+  // NEVER invents a value: a slug missing from either source keeps "—". Revenue is
+  // an estimate (entitlements store no per-sale amount) — always prefixed "~".
+  async function loadMetrics() {
+    const [a, s] = await Promise.all([
+      adminFetch('/api/admin/analytics?range=all').then((r) => r.json()).catch(() => null),
+      adminFetch('/api/admin/sales').then((r) => r.json()).catch(() => null),
+    ]);
+    const m: Record<string, any> = {};
+    if (a && a.configured && Array.isArray(a.topPosts)) {
+      for (const t of a.topPosts) m[t.slug] = { views: t.views, pct: typeof t.avgReadPct === 'number' ? t.avgReadPct : null };
+    }
+    if (s && Array.isArray(s.byPost)) {
+      for (const b of s.byPost) { if (!m[b.post_id]) m[b.post_id] = {}; m[b.post_id].upg = b.count; m[b.post_id].cents = b.cents; }
+    }
+    metricsBySlug = m;
+    salesTotalCents = s && typeof s.totalCents === 'number' ? s.totalCents : null;
+    upgradesTotal = a && a.conversion && typeof a.conversion.unlocks === 'number'
+      ? a.conversion.unlocks
+      : (s && Array.isArray(s.byPost) ? s.byPost.reduce((n: number, b: any) => n + (b.count || 0), 0) : null);
+    view(); // repaint with metrics
   }
 
   function disarm() {
@@ -262,27 +341,6 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     await load();
   }
 
-  host.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
-    if (!btn) return;
-    const act = btn.dataset.act!;
-    const slug = btn.dataset.slug!;
-    if (act === 'email') openEmail(slug);
-    else if (act === 'series') openSeries(slug);
-    else if (act === 'retry-email') retryEmail(slug);
-    else if (act === 'early') sendEarly(slug);
-    else if (act === 'delete') {
-      if (armedDelete === slug) {
-        del(slug);
-      } else {
-        disarm();
-        armedDelete = slug;
-        view(); // re-render so the button shows "Confirm delete"
-        armTimer = window.setTimeout(() => { armedDelete = null; view(); }, 3500);
-      }
-    }
-  });
-
   async function savePaywall(slug: string, wasGateable: boolean, on: boolean, dollars: number) {
     const price_cents = Math.max(0, Math.round((dollars || 0) * 100));
     // Two layers: frontmatter `gateable` (build-time body split, committed to git) is
@@ -303,56 +361,137 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     if (error) throw error;
   }
 
-  // Visibility toggle (Visible/Hidden = the draft flag). Event-delegated. The
-  // visibility switch shares the .pw-cell layout class, so both change handlers
-  // are scoped by the changed control's data attribute.
-  host.addEventListener('change', async (e) => {
-    const cb = e.target as HTMLInputElement;
-    if (!(cb instanceof HTMLInputElement) || !cb.hasAttribute('data-vis')) return;
-    const slug = cb.dataset.slug!;
-    const visible = cb.checked; // checked = visible on the public site = draft:false
-    cb.disabled = true;
-    await setDraft(slug, !visible); // reloads the list (badge/labels re-render from server)
-  });
+  // ---- Floating popover plumbing (one open at a time) ---------------------
+  // Fixed-positioned off the trigger so the table's overflow never clips it.
+  let floatEl: HTMLElement | null = null;
+  let floatTrigger: HTMLElement | null = null;
+  function closeFloat() {
+    if (!floatEl) return;
+    floatEl.remove();
+    floatEl = null;
+    floatTrigger = null;
+    document.removeEventListener('click', onDocClick, true);
+    document.removeEventListener('keydown', onFloatKey, true);
+    window.removeEventListener('resize', closeFloat);
+    document.querySelector('.admin-main')?.removeEventListener('scroll', closeFloat, true);
+    window.removeEventListener('scroll', closeFloat, true);
+  }
+  function onDocClick(e: Event) {
+    const t = e.target as Node;
+    if (floatEl && !floatEl.contains(t) && floatTrigger && !floatTrigger.contains(t)) closeFloat();
+  }
+  function onFloatKey(e: KeyboardEvent) { if (e.key === 'Escape') closeFloat(); }
+  function openFloat(trigger: HTMLElement, cls: string, htmlStr: string) {
+    closeFloat();
+    const el = document.createElement('div');
+    el.className = cls;
+    el.setAttribute('role', 'menu');
+    el.style.position = 'fixed';
+    el.style.zIndex = '70';
+    el.innerHTML = htmlStr;
+    document.body.appendChild(el);
+    const r = trigger.getBoundingClientRect();
+    const w = el.offsetWidth, h = el.offsetHeight;
+    let left = Math.min(r.left, window.innerWidth - 8 - w);
+    if (left < 8) left = 8;
+    let top = r.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - 6 - h); // flip up if no room
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+    floatEl = el;
+    floatTrigger = trigger;
+    // Defer listener attach so the opening click doesn't immediately close it.
+    setTimeout(() => {
+      document.addEventListener('click', onDocClick, true);
+      document.addEventListener('keydown', onFloatKey, true);
+      window.addEventListener('resize', closeFloat);
+      window.addEventListener('scroll', closeFloat, true);
+    }, 0);
+    return el;
+  }
 
-  // Paywall toggle / price edits (event-delegated on the table).
-  host.addEventListener('change', async (e) => {
-    // Only paywall controls — the visibility switch shares the .pw-cell layout class.
-    if (!(e.target as HTMLElement).matches('[data-pw], .pw-price-in')) return;
-    const cell = (e.target as HTMLElement).closest('.pw-cell') as HTMLElement | null;
-    if (!cell) return;
-    const row = cell.closest('tr') as HTMLElement;
-    const slug = row.dataset.slug!;
-    const toggle = cell.querySelector('[data-pw]') as HTMLInputElement;
-    const priceWrap = cell.querySelector('.pw-price') as HTMLElement;
-    const priceIn = cell.querySelector('.pw-price-in') as HTMLInputElement;
-    const on = toggle.checked;
-    const wasGateable = cell.dataset.gateable === '1';
-    const dollars = parseFloat(priceIn.value) || 5;
-    priceWrap.hidden = !on;
-    toggle.disabled = true;
-    priceIn.disabled = true;
-    const post = all.find((x) => x.slug === slug);
-    try {
-      await savePaywall(slug, wasGateable, on, dollars);
-      cell.dataset.gateable = on ? '1' : '0';
-      if (post) { post.paid = on; post.gateable = on; post.priceCents = Math.round(dollars * 100); }
-      const statusTd = row.children[1] as HTMLElement; // reflect the Paid badge in the visibility cell
-      if (statusTd && post) statusTd.innerHTML = visCell(post);
-    } catch (err: any) {
-      alert(err.message || 'Paywall update failed');
-      toggle.checked = !on; // revert
-      priceWrap.hidden = !toggle.checked;
-    } finally {
-      toggle.disabled = false;
-      priceIn.disabled = false;
+  // ---- Access editor popover (Free / Paid + price) ------------------------
+  function openAccess(trigger: HTMLElement, slug: string) {
+    const p = all.find((x) => x.slug === slug);
+    if (!p) return;
+    const paid = !!p.paid;
+    const dollars = ((p.priceCents ?? 500) / 100).toFixed(2);
+    const el = openFloat(trigger, 'acc-pop', `
+      <div class="pop-hd">Who can read this</div>
+      <button type="button" class="pop-opt${paid ? '' : ' on'}" data-opt="free">Free<small>Anyone, no wall</small></button>
+      <button type="button" class="pop-opt${paid ? ' on' : ''}" data-opt="paid">Paid<small>Readers pay what they want to unlock</small></button>
+      <div class="price-row"${paid ? '' : ' hidden'}><span>$</span><input class="input" type="number" min="0" step="0.50" value="${dollars}" aria-label="Suggested price"><button type="button" class="btn btn-sm btn-primary" data-save>Save</button></div>
+      <p class="pop-status" hidden></p>`);
+    const opts = el.querySelectorAll('.pop-opt');
+    const priceRow = el.querySelector('.price-row') as HTMLElement;
+    const status = el.querySelector('.pop-status') as HTMLElement;
+    const saveBtn = el.querySelector('[data-save]') as HTMLButtonElement;
+    opts.forEach((o) => o.addEventListener('click', () => {
+      opts.forEach((x) => x.classList.toggle('on', x === o));
+      priceRow.hidden = (o as HTMLElement).dataset.opt !== 'paid';
+    }));
+    saveBtn.addEventListener('click', async () => {
+      const on = (el.querySelector('.pop-opt.on') as HTMLElement | null)?.dataset.opt === 'paid';
+      const dollars2 = parseFloat((el.querySelector('.price-row input') as HTMLInputElement).value) || 5;
+      const wasGateable = !!p.gateable;
+      saveBtn.disabled = true; status.hidden = false; status.textContent = 'Saving…';
+      try {
+        await savePaywall(slug, wasGateable, on, dollars2);
+        p.paid = on; p.gateable = on; p.priceCents = Math.round(dollars2 * 100);
+        closeFloat();
+        view();
+      } catch (err: any) { status.textContent = err.message || 'Failed'; saveBtn.disabled = false; }
+    });
+  }
+
+  // ---- Per-row actions menu (⋯) -------------------------------------------
+  function openMenu(trigger: HTMLElement, slug: string) {
+    const p = all.find((x) => x.slug === slug);
+    if (!p) return;
+    const items: string[] = [];
+    items.push(`<a href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a>`);
+    if (!p.draft) items.push(`<a href="/blog/${encodeURIComponent(p.slug)}" target="_blank" rel="noopener">View live ↗</a>`);
+    items.push('<hr>');
+    items.push(`<button type="button" data-m="vis">${p.draft ? 'Publish now' : 'Unpublish (hide)'}</button>`);
+    items.push(`<button type="button" data-m="series">${p.series ? 'Edit series' : 'Add to series'}</button>`);
+    if (!p.draft) {
+      if (p.emailed) {
+        if (p.emailedFailed > 0) items.push(`<button type="button" data-m="retry">Retry ${p.emailedFailed} failed</button>`);
+        else items.push(`<button type="button" disabled title="${p.emailedAt ? 'Emailed · ' + esc(fmtDate(p.emailedAt)) : 'Already emailed'}">✓ Emailed</button>`);
+      } else items.push('<button type="button" data-m="email">Email subscribers</button>');
+    } else {
+      items.push('<button type="button" data-m="early">Email early access</button>');
     }
+    items.push('<hr>');
+    items.push('<button type="button" class="danger" data-m="delete">Delete</button>');
+    const el = openFloat(trigger, 'row-menu', items.join(''));
+    el.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('[data-m]') as HTMLElement | null;
+      if (!b) return;
+      const m = b.dataset.m!;
+      if (m === 'delete') {
+        if (b.dataset.armed === '1') { closeFloat(); del(slug); return; }
+        b.dataset.armed = '1'; b.textContent = 'Confirm delete'; b.classList.add('armed');
+        return;
+      }
+      closeFloat();
+      if (m === 'vis') setDraft(slug, !p.draft);
+      else if (m === 'series') openSeries(slug);
+      else if (m === 'email') openEmail(slug);
+      else if (m === 'retry') retryEmail(slug);
+      else if (m === 'early') sendEarly(slug);
+    });
+  }
+
+  // Row-level click delegation: Access chip + ⋯ menu are the only inline controls.
+  host.addEventListener('click', (e) => {
+    const acc = (e.target as HTMLElement).closest('[data-access]') as HTMLElement | null;
+    if (acc) { e.stopPropagation(); openAccess(acc, acc.dataset.access!); return; }
+    const menu = (e.target as HTMLElement).closest('[data-menu]') as HTMLElement | null;
+    if (menu) { e.stopPropagation(); openMenu(menu, menu.dataset.menu!); return; }
   });
 
   // --- Email a post to subscribers (confirm layer + send) ------------------
-  // Read the confirmed count once so the confirmation can name exactly who'll be
-  // reached. Best-effort: on failure we fall back to generic copy and let the
-  // server (which re-checks the real list) be the source of truth on send.
   async function loadConfirmedCount() {
     try {
       const r = await adminFetch('/api/admin/subscribers?limit=1');
@@ -400,13 +539,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       });
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.ok && (d.skipped === 'already-sent' || d.skipped === 'in-progress' || d.sent > 0)) {
-        // Reached, already reached, or a send is mid-flight — grey the action out.
         p.emailed = true;
         p.emailedAt = new Date().toISOString();
         view();
         if (d.failed > 0) {
           emStatus.textContent = `Emailed ${d.sent}, but ${d.failed} couldn’t be delivered.`;
-          emSend.hidden = true; // leave the result up; Cancel closes
+          emSend.hidden = true;
         } else {
           closeEmail();
         }
@@ -423,7 +561,6 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     }
   }
 
-  // Retry a broadcast for ONLY the recipients it previously failed to reach.
   async function retryEmail(slug: string) {
     const p = all.find((x) => x.slug === slug);
     if (!p) return;
@@ -477,9 +614,6 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !emModal.hidden) closeEmail(); });
 
   // --- Series membership (add / edit / remove) -----------------------------
-  // Distinct existing series names for the #sr-name autocomplete. De-dupe by the
-  // series SLUG (the server's grouping key) so each real series shows once; display
-  // the author-facing seriesTitle. Rebuilt on every open so it tracks `all`.
   function fillSeriesOptions() {
     const seen = new Set<string>();
     const names: string[] = [];
@@ -505,8 +639,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     srStatus.textContent = '';
     srSave.disabled = false;
     srRemove.disabled = false;
-    srRemove.hidden = !p.series; // only offer "remove" when it's in one
-    fillSeriesOptions(); // populate autocomplete from the freshest `all`
+    srRemove.hidden = !p.series;
+    fillSeriesOptions();
     srModal.hidden = false;
     srName.focus();
   }
@@ -538,7 +672,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'Save failed');
       closeSeries();
-      await load(); // reload so the row subline + button reflect the change
+      await load();
     } catch (e: any) {
       srStatus.textContent = e.message || 'Save failed';
       srSave.disabled = false;
@@ -551,10 +685,15 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   srModal.addEventListener('click', (e) => { if (e.target === srModal) closeSeries(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !srModal.hidden) closeSeries(); });
 
+  // Toolbar: search + filter tabs.
   qEl.addEventListener('input', view);
-  filterEl.addEventListener('change', view);
-  sortEl.addEventListener('change', view);
-  document.getElementById('refresh')!.addEventListener('click', load);
+  tabsEl.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('button[data-filter]') as HTMLElement | null;
+    if (!b) return;
+    currentFilter = b.dataset.filter!;
+    tabsEl.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    view();
+  });
 
   onAdminReady(() => { load(); loadConfirmedCount(); });
 </script>
