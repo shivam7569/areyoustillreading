@@ -103,7 +103,19 @@ const ogImage = new URL(image ?? '/favicon.svg', Astro.site);
     (not the resolved `ogImage`) because the browser resolves it against the
     page origin and it is always this exact asset. */}
 <link rel="canonical" href={canonical.toString()} />
+{/* Favicon. The SVG is the preferred icon and is theme-aware: it carries a
+    `prefers-color-scheme` media query, so the mark follows the OS-themed browser
+    chrome (plum ground/cream rules in light, bronze ground/dark rules in dark) —
+    the same accent↔on-accent pairing the site uses. The PNGs are the static
+    fallback for browsers without SVG-icon support; .ico serves legacy
+    /favicon.ico requests; apple-touch-icon is the iOS home-screen tile. */}
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+{/* theme-color tints the mobile browser UI to match the site's paper per scheme. */}
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf7f1" />
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#181510" />
 {/* Preload the editorial serifs used for the LCP heading + first body text, so the
     font fetch runs in parallel with CSS instead of after it (cuts the swap window). */}
 <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/SourceSerif4-Variable.woff2" />
