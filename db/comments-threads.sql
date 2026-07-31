@@ -28,3 +28,9 @@ end $$;
 drop trigger if exists trg_comment_admin on public.comments;
 create trigger trg_comment_admin before insert on public.comments
   for each row execute function public.set_comment_admin();
+
+-- 3. Delete a comment — allowed for its AUTHOR or an ADMIN only. parent_id's
+-- ON DELETE CASCADE removes any replies to a deleted comment.
+drop policy if exists "comment delete own or admin" on public.comments;
+create policy "comment delete own or admin" on public.comments
+  for delete using (auth.uid() = user_id or public.is_admin());

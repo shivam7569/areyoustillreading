@@ -57,6 +57,7 @@ const { postId } = Astro.props;
   .comment .acts { display: flex; gap: 16px; margin-top: 9px; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
   .comment .acts button { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
   .comment .acts button:hover { color: var(--accent); }
+  .comment .acts .del:hover { color: #b4453a; }
   .comment .reply { margin-top: 20px; padding-left: 22px; border-left: 1px solid var(--rule); display: flex; flex-direction: column; gap: 20px; }
   .comment .reply-slot .cbox { margin: 16px 0 0; }
   .comment .reply-slot .cbox textarea { min-height: 60px; }
@@ -127,14 +128,26 @@ const { postId } = Astro.props;
         + '<div class="avatar' + (r.author_is_admin ? '' : ' q') + '" aria-hidden="true">' + esc((who[0] || '?')) + '</div>'
         + '<div class="b"><div class="hd"><b>' + esc(who) + '</b>' + (r.author_is_admin ? '<span class="badge">Author</span>' : '') + '<span class="when">' + esc(timeAgo(r.created_at)) + '</span></div>'
         + '<p>' + md(r.body) + '</p>'
-        + '<div class="acts"><button type="button" data-reply>Reply</button><button type="button" data-link>Link</button></div>'
+        + '<div class="acts"><button type="button" data-reply>Reply</button><button type="button" data-link>Link</button>'
+        + ((currentUser && (r.user_id === currentUser.id || isAdmin)) ? '<button type="button" class="del" data-del>Delete</button>' : '')
+        + '</div>'
         + (kids ? '<div class="reply">' + kids + '</div>' : '')
         + '<div class="reply-slot"></div></div></div>';
     }
 
+    // Who's viewing — needed so Delete shows only for a comment's author or an admin.
+    let currentUser: any = null; let isAdmin = false;
+    async function resolveUser() {
+      const s = await supabase.auth.getSession();
+      currentUser = s.data.session ? s.data.session.user : null;
+      isAdmin = false;
+      if (currentUser) { try { const a = await supabase.rpc('is_admin'); isAdmin = a.data === true; } catch (e) {} }
+    }
+
     async function load() {
-      let res = await supabase.from('comments').select('id,author_name,body,created_at,parent_id,author_is_admin').eq('post_id', postId).order('created_at', { ascending: true });
-      if (res.error) { res = await supabase.from('comments').select('id,author_name,body,created_at').eq('post_id', postId).order('created_at', { ascending: true }); }
+      await resolveUser();
+      let res = await supabase.from('comments').select('id,user_id,author_name,body,created_at,parent_id,author_is_admin').eq('post_id', postId).order('created_at', { ascending: true });
+      if (res.error) { res = await supabase.from('comments').select('id,user_id,author_name,body,created_at').eq('post_id', postId).order('created_at', { ascending: true }); }
       if (res.error) { list.innerHTML = '<p class="cc-muted">Could not load comments.</p>'; return; }
       const rows = (res.data || []) as any[];
       countEl.textContent = rows.length ? rows.length + (rows.length === 1 ? ' comment' : ' comments') : 'Comments';
@@ -174,6 +187,15 @@ const { postId } = Astro.props;
     // Reply / Link delegation on the thread.
     list.addEventListener('click', async (e) => {
       const t = e.target as HTMLElement;
+      if (t.closest('[data-del]')) {
+        const c = t.closest('.comment') as HTMLElement; if (!c) return;
+        const hasReplies = !!c.querySelector(':scope > .b > .reply');
+        if (!confirm('Delete this comment' + (hasReplies ? ' and its replies' : '') + '? This can’t be undone.')) return;
+        const res = await supabase.from('comments').delete().eq('id', c.dataset.id);
+        if (res.error) { alert('Could not delete: ' + res.error.message); return; }
+        load();
+        return;
+      }
       if (t.closest('[data-link]')) {
         const c = t.closest('.comment') as HTMLElement; if (!c) return;
         const url = location.origin + location.pathname + '#comment-' + c.dataset.id;
@@ -196,7 +218,7 @@ const { postId } = Astro.props;
       }
     });
 
-    supabase.auth.onAuthStateChange(() => renderCompose());
+    supabase.auth.onAuthStateChange(() => { load(); renderCompose(); });
     load();
     renderCompose();
   }
