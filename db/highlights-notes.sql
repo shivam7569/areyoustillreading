@@ -39,3 +39,19 @@ end $$;
 drop trigger if exists trg_hc_admin on public.highlight_comments;
 create trigger trg_hc_admin before insert on public.highlight_comments
   for each row execute function public.set_highlight_comment_admin();
+
+-- 3. "Many readers marked this" (design .pop) — PRIVACY-SAFE ------------------
+-- Returns ONLY the passage TEXT of quotes highlighted by >= p_min DISTINCT readers
+-- (normalised for whitespace/case so near-identical selections cluster). No counts,
+-- no user identity — a reader still can't see WHO or HOW MANY. SECURITY DEFINER so
+-- it can aggregate across all readers (RLS otherwise scopes to own rows). Callable
+-- by anyone (the "popular" hint is public), but it never leaks individual highlights.
+create or replace function public.highlight_popular(p_post_id text, p_min int default 3)
+returns table(quote text) language sql security definer set search_path = public stable as $$
+  select (array_agg(h.quote order by length(h.quote) desc))[1] as quote
+  from public.highlights h
+  where h.post_id = p_post_id
+  group by regexp_replace(btrim(lower(h.quote)), '\s+', ' ', 'g')
+  having count(distinct h.user_id) >= p_min;
+$$;
+grant execute on function public.highlight_popular(text, int) to anon, authenticated;

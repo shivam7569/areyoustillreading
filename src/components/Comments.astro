@@ -1,242 +1,179 @@
 ---
 /**
- * Comments.astro — per-post comment thread (read + write).
- * ---------------------------------------------------------------------------
- * WHAT THIS IS
- *   A self-contained island that renders the comment section beneath a blog
- *   post. It lists existing comments and, for signed-in readers, shows a
- *   compose box to post new ones. It has NO server component of its own — all
- *   data flow goes straight from the browser to Supabase (PostgREST) using the
- *   shared Supabase JS client. There is no Pages Function in the middle.
+ * Comments.astro — per-post comment thread, built to the Claude Design's
+ * `.comments` UI (sec-head + count, a .cbox composer with an avatar, a threaded
+ * .clist with avatars / an "Author" badge / Reply + Link, nested .reply).
  *
- * SINGLE RESPONSIBILITY
- *   Own the UI + client logic for one post's comment thread. Given a `postId`
- *   prop, it (a) fetches that post's comments, (b) renders them safely, and
- *   (c) lets an authenticated user insert a new comment. Nothing else.
+ * Backend unchanged in spirit: the `comments` table over PostgREST (RLS is the
+ * only guard). db/comments-threads.sql adds `parent_id` (one-level replies) +
+ * `author_is_admin` (set server-side by trigger for the honest Author badge);
+ * flat comments still work without it. Bodies render through a SAFE tiny-Markdown
+ * (escape first, then a whitelist of bold/italic/code/links) so "Markdown works"
+ * without any XSS surface.
  *
- * HOW IT FITS THE ARCHITECTURE
- *   - Rendered at build time by Astro into static HTML on each post page; the
- *     <script> below is bundled by Astro/Vite and hydrates in the browser.
- *   - Talks directly to the `comments` table over PostgREST via the browser
- *     Supabase client (see ../lib/supabase). Reads and writes are governed
- *     entirely by Postgres Row-Level Security (RLS) — see SECURITY below.
- *   - Auth state comes from Supabase (email magic-link + GitHub OAuth). This
- *     component only READS the current session; it never signs anyone in.
- *
- * DEPENDS ON
- *   - ../lib/supabase — the singleton browser Supabase client (anon key).
- *   - CSS custom props (--border, --muted, --bg, --fg, --accent) from the
- *     global theme; this component only consumes them.
- *   - A `comments` table with columns: id, post_id, user_id, author_name,
- *     body, created_at — and RLS policies enforcing who may read/insert.
- *   - /login route for the signed-out call-to-action.
- *
- * DEPENDED ON BY
- *   - Post layout/pages that embed <Comments postId={...} />. The `postId`
- *     is the stable identity used both as the query filter and the row key.
- *
- * SECURITY ASSUMPTIONS / GOTCHAS (read before trusting this file)
- *   - RLS IS THE ONLY GATEKEEPER. This runs client-side with the public anon
- *     key, so a malicious client can call Supabase directly with any payload.
- *     Every guard here (must-be-signed-in, correct user_id, allowed columns)
- *     is UX convenience, not enforcement. The real trust boundary is the RLS
- *     policy on `comments`: SELECT must be scoped to what should be public,
- *     and INSERT must force `user_id = auth.uid()` (never trust the client's
- *     `user_id`/`author_name`). If RLS is missing or permissive, this file
- *     does NOT protect you.
- *   - XSS: all user-controlled strings (author_name, body) are written via
- *     `textContent`, never innerHTML, so comment content cannot inject markup.
- *     The only innerHTML usages here are static, developer-authored strings.
- *   - No client-side pagination/limit: this loads the full thread every time.
- *     Fine for a personal blog; revisit if a post ever gets thousands of rows.
- *   - No optimistic UI: after a successful insert we re-fetch the whole list
- *     so what the reader sees always matches what RLS actually returned.
+ * SECURITY: RLS enforces auth (user_id = auth.uid()) on insert; the client
+ * user_id/author_name are display-only. Comment text is HTML-escaped before any
+ * formatting, and links are restricted to http(s)/relative — no raw HTML runs.
  */
-interface Props {
-  // Stable identifier for the post this thread belongs to. Used both as the
-  // RLS-scoped query filter (`post_id = postId`) and the compose target.
-  postId: string;
-}
+interface Props { postId: string; }
 const { postId } = Astro.props;
 ---
 
-{/*
-  The postId is passed to the client via a data-* attribute rather than a
-  bundled JS value: the <script> below is a separate module that cannot read
-  Astro props directly, so the DOM is the handoff channel. `#comments-list`
-  and `#comment-compose` are empty mount points the script fills in — the
-  "Loading comments…" line is placeholder text replaced on first fetch.
-*/}
 <section class="comments" data-post-id={postId}>
-  <h2>Comments</h2>
-  <div id="comments-list"><p class="muted">Loading comments…</p></div>
-  <div id="comment-compose"></div>
+  <div class="sec-head"><h2 id="cc-count">Comments</h2><span class="meta-caps">Sign in to join in</span></div>
+  <div id="cc-compose"></div>
+  <div class="clist" id="cc-list"><p class="cc-muted">Loading comments…</p></div>
 </section>
 
-<style>
-  .comments { margin-top: 3rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
-  .muted { color: var(--muted); }
-  .comment { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
-  .comment-meta { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.25rem; }
-  .comment-body { margin: 0; white-space: pre-wrap; }
-  #comment-compose textarea {
-    width: 100%;
-    padding: 0.6rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg);
-    color: var(--fg);
-    font: inherit;
-    resize: vertical;
-  }
-  #comment-compose button {
-    margin-top: 0.5rem;
-    padding: 0.5rem 1rem;
-    border: 0;
-    border-radius: 6px;
-    background: var(--accent);
-    color: #fff;
-    font-weight: 600;
-    cursor: pointer;
-  }
+{/* Global because the thread is injected at runtime (scoped styles never reach
+    runtime DOM). All selectors are namespaced under .comments so nothing leaks. */}
+<style is:global>
+  .comments { margin: clamp(34px, 5vw, 52px) 0 0; padding-top: 30px; border-top: 1px solid var(--rule); }
+  .comments .cc-muted { color: var(--ink-faint); font-family: var(--sans); font-size: 14px; }
+  .comments .avatar { width: 36px; height: 36px; flex: none; border-radius: 999px; display: grid; place-items: center; font-family: var(--serif-display); font-size: 16px; line-height: 1; background: radial-gradient(120% 120% at 30% 20%, var(--accent-soft), var(--accent)); color: var(--on-accent); user-select: none; }
+  .comments .avatar.q { background: var(--paper-2); color: var(--ink-faint); border: 1px solid var(--rule); }
+
+  .cbox { display: flex; gap: 14px; margin: 22px 0 32px; }
+  .cbox .avatar { background: var(--paper-2); color: var(--ink-faint); border: 1px solid var(--rule); }
+  .cbox .f { flex: 1; min-width: 0; }
+  .cbox textarea { width: 100%; box-sizing: border-box; min-height: 82px; resize: vertical; font-family: var(--serif-body); font-size: 16px; line-height: 1.6; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 4px; background: var(--card); color: var(--ink); }
+  .cbox textarea::placeholder { color: var(--ink-faint); }
+  .cbox textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  .cbox .foot { display: flex; align-items: center; gap: 12px; margin-top: 10px; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); flex-wrap: wrap; }
+  .cbox .foot .btn { margin-left: auto; }
+  .comments .signin { font-family: var(--sans); font-size: 14px; color: var(--ink-faint); margin: 22px 0 32px; }
+  .comments .signin a { color: var(--accent); }
+
+  .clist { display: flex; flex-direction: column; gap: 26px; }
+  .comment { display: flex; gap: 14px; }
+  .comment .b { flex: 1; min-width: 0; }
+  .comment .hd { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-family: var(--sans); font-size: 13px; margin-bottom: 6px; }
+  .comment .hd b { color: var(--ink); font-weight: 600; }
+  .comment .hd .when { color: var(--ink-faint); font-size: 12px; }
+  .comment .hd .badge { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--rule)); border-radius: 2px; padding: 2px 6px; }
+  .comment > .b > p { margin: 0; font-size: 16.5px; line-height: 1.65; color: var(--ink-soft); overflow-wrap: anywhere; }
+  .comment > .b > p code.inl { font-family: var(--mono); font-size: .82em; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 4px; padding: .1em .4em; color: var(--accent); }
+  .comment > .b > p a { color: var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+  .comment .acts { display: flex; gap: 16px; margin-top: 9px; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
+  .comment .acts button { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+  .comment .acts button:hover { color: var(--accent); }
+  .comment .reply { margin-top: 20px; padding-left: 22px; border-left: 1px solid var(--rule); display: flex; flex-direction: column; gap: 20px; }
+  .comment .reply-slot .cbox { margin: 16px 0 0; }
+  .comment .reply-slot .cbox textarea { min-height: 60px; }
 </style>
 
 <script>
-  // This module is bundled by Astro/Vite and runs in the browser. It uses the
-  // shared anon-key Supabase client, so remember: nothing here is trusted by
-  // the server — the `comments` RLS policies are what actually enforce access.
   import { supabase } from '../lib/supabase';
 
-  // Bind the mount points created in the template above. `postId` is recovered
-  // from the data attribute because this script cannot see Astro props.
-  const root = document.querySelector('.comments');
-  const postId = root.getAttribute('data-post-id');
-  const list = document.getElementById('comments-list');
-  const compose = document.getElementById('comment-compose');
+  const root = document.querySelector('.comments') as HTMLElement | null;
+  if (root) initComments(root);
 
-  /**
-   * Fetch and render every comment for this post, oldest-first.
-   * We select only the columns the UI needs — never `user_id` or anything
-   * private — and rely on RLS to further restrict which rows come back.
-   */
-  async function loadComments() {
-    const { data, error } = await supabase
-      .from('comments')
-      .select('id, author_name, body, created_at')
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true });
+  function initComments(root: HTMLElement) {
+    const postId = root.getAttribute('data-post-id') || '';
+    const list = document.getElementById('cc-list')!;
+    const compose = document.getElementById('cc-compose')!;
+    const countEl = document.getElementById('cc-count')!;
 
-    // Fail closed on any PostgREST/RLS error: show a neutral message rather
-    // than leaking the raw error, and stop (don't wipe any prior content).
-    if (error) {
-      list.textContent = 'Could not load comments.';
-      return;
+    const authorNameOf = (u: any) => { const m = u.user_metadata || {}; return m.user_name || m.name || (u.email ? u.email.split('@')[0] : 'Reader'); };
+    const esc = (s: any) => String(s).replace(/[&<>]/g, (c: string) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as any)[c]);
+
+    // SAFE tiny-Markdown: escape first (so no raw HTML survives), then apply a
+    // whitelist. Links limited to http(s)/relative so no javascript: urls.
+    function md(s: string) {
+      let e = esc(s);
+      e = e.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]*)\)/g, (_m, t, u) => '<a href="' + u.replace(/"/g, '%22') + '" rel="nofollow noopener" target="_blank">' + t + '</a>');
+      e = e.replace(/`([^`]+)`/g, '<code class="inl">$1</code>');
+      e = e.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      e = e.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+      e = e.replace(/(^|[^\w])_([^_\n]+)_/g, '$1<em>$2</em>');
+      e = e.replace(/\n/g, '<br>');
+      return e;
     }
-    // Empty-state. innerHTML is safe here — the string is a static literal
-    // with no user input interpolated into it.
-    if (!data || !data.length) {
-      list.innerHTML = '<p class="muted">No comments yet. Be the first.</p>';
-      return;
+    function timeAgo(iso: string) {
+      const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+      if (s < 60) return 'just now';
+      const m = s / 60; if (m < 60) return Math.floor(m) + (m < 2 ? ' minute ago' : ' minutes ago');
+      const h = m / 60; if (h < 24) return Math.floor(h) + (h < 2 ? ' hour ago' : ' hours ago');
+      const d = h / 24; if (d < 7) return Math.floor(d) + (d < 2 ? ' day ago' : ' days ago');
+      if (d < 30) { const w = Math.floor(d / 7); return w + (w < 2 ? ' week ago' : ' weeks ago'); }
+      return new Date(iso).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
     }
-    // Clear the placeholder/previous render before repainting the full thread.
-    list.textContent = '';
-    for (const c of data) {
-      const el = document.createElement('div');
-      el.className = 'comment';
-      const meta = document.createElement('p');
-      meta.className = 'comment-meta';
-      // author_name is user-controlled, so it goes through textContent too.
-      // created_at is an ISO string from Postgres; toLocaleDateString renders
-      // it in the reader's locale.
-      meta.textContent = c.author_name + ' · ' + new Date(c.created_at).toLocaleDateString();
-      const body = document.createElement('p');
-      body.className = 'comment-body';
-      // SECURITY: textContent (not innerHTML) is the XSS guard — comment bodies
-      // are rendered as inert text, so no markup/script in a comment can run.
-      // CSS `white-space: pre-wrap` preserves the author's line breaks visually.
-      body.textContent = c.body; // textContent avoids HTML injection
-      el.appendChild(meta);
-      el.appendChild(body);
-      list.appendChild(el);
+
+    function renderComment(r: any, kidsOf: Record<string, any[]>): string {
+      const who = r.author_name || 'Reader';
+      const kids = (kidsOf[r.id] || []).map((c) => renderComment(c, kidsOf)).join('');
+      return '<div class="comment" id="comment-' + r.id + '" data-id="' + r.id + '">'
+        + '<div class="avatar' + (r.author_is_admin ? '' : ' q') + '" aria-hidden="true">' + esc((who[0] || '?')) + '</div>'
+        + '<div class="b"><div class="hd"><b>' + esc(who) + '</b>' + (r.author_is_admin ? '<span class="badge">Author</span>' : '') + '<span class="when">' + esc(timeAgo(r.created_at)) + '</span></div>'
+        + '<p>' + md(r.body) + '</p>'
+        + '<div class="acts"><button type="button" data-reply>Reply</button><button type="button" data-link>Link</button></div>'
+        + (kids ? '<div class="reply">' + kids + '</div>' : '')
+        + '<div class="reply-slot"></div></div></div>';
     }
-  }
 
-  /**
-   * Render the compose area based on auth state.
-   * Signed-out readers get a prompt to /login; signed-in readers get a
-   * textarea + post button. Re-invoked whenever auth state changes (below),
-   * so it fully rebuilds `#comment-compose` each call to stay in sync.
-   */
-  async function renderCompose() {
-    // Read the current session locally (no network round-trip). A null session
-    // means signed-out. This gate is UX only — RLS still enforces auth on insert.
-    const { data } = await supabase.auth.getSession();
-    const user = data.session ? data.session.user : null;
-    if (!user) {
-      // Static, developer-authored markup — safe to use innerHTML.
-      compose.innerHTML = '<p class="muted"><a href="/login">Sign in</a> to join the conversation.</p>';
-      return;
+    async function load() {
+      const res = await supabase.from('comments').select('id,author_name,body,created_at,parent_id,author_is_admin').eq('post_id', postId).order('created_at', { ascending: true });
+      if (res.error) { list.innerHTML = '<p class="cc-muted">Could not load comments.</p>'; return; }
+      const rows = (res.data || []) as any[];
+      countEl.textContent = rows.length ? rows.length + (rows.length === 1 ? ' comment' : ' comments') : 'Comments';
+      const kidsOf: Record<string, any[]> = {};
+      rows.forEach((r) => { if (r.parent_id) (kidsOf[r.parent_id] = kidsOf[r.parent_id] || []).push(r); });
+      const top = rows.filter((r) => !r.parent_id);
+      list.innerHTML = top.length ? top.map((r) => renderComment(r, kidsOf)).join('') : '<p class="cc-muted">No comments yet. Be the first.</p>';
     }
-    // Derive a display name best-effort from provider metadata, falling back
-    // through: OAuth username -> full name -> email local-part -> "Reader".
-    // NOTE: author_name is denormalized onto the row for cheap rendering; the
-    // authoritative identity is user_id, which RLS must pin to auth.uid().
-    const meta = user.user_metadata || {};
-    const authorName = meta.user_name || meta.name || (user.email ? user.email.split('@')[0] : 'Reader');
 
-    compose.textContent = '';
-    const ta = document.createElement('textarea');
-    ta.rows = 3;
-    ta.placeholder = 'Write a comment…';
-    const btn = document.createElement('button');
-    btn.textContent = 'Post comment';
-    const msg = document.createElement('p');
-    msg.className = 'muted';
+    async function post(ta: HTMLTextAreaElement, parentId: string | null, btn: HTMLButtonElement) {
+      const body = (ta.value || '').trim(); if (!body) { ta.focus(); return; }
+      const s = await supabase.auth.getSession(); const user = s.data.session ? s.data.session.user : null;
+      if (!user) return;
+      btn.disabled = true;
+      const res = await supabase.from('comments').insert({ post_id: postId, user_id: user.id, author_name: authorNameOf(user), body, parent_id: parentId });
+      if (res.error) { btn.disabled = false; return; }
+      ta.value = ''; load();
+    }
 
-    btn.addEventListener('click', async () => {
-      // Ignore empty/whitespace-only submissions client-side.
-      const body = ta.value.trim();
-      if (!body) return;
-      msg.textContent = 'Posting…';
-      // INSERT the comment. We send user_id/author_name from the client, but
-      // these must NOT be trusted server-side: the RLS INSERT policy is
-      // expected to require user_id = auth.uid(), so a forged user_id fails.
-      // The anon key can't bypass that — RLS is the real check here.
-      const { error } = await supabase.from('comments').insert({
-        post_id: postId,
-        user_id: user.id,
-        author_name: authorName,
-        body,
-      });
-      // Surface the raw error to the author (e.g. RLS rejection) so posting
-      // failures aren't silent. Keep the textarea contents so they can retry.
-      if (error) {
-        msg.textContent = error.message;
+    function composerHTML(name: string, small: boolean) {
+      return '<div class="cbox"><div class="avatar" aria-hidden="true">' + esc((name[0] || '?').toLowerCase()) + '</div>'
+        + '<div class="f"><textarea placeholder="' + (small ? 'Reply…' : 'Say something worth reading.') + '"></textarea>'
+        + '<div class="foot"><span>Signed in as ' + esc(name) + ' — Markdown works</span><button class="btn btn-primary btn-sm" type="button" data-post>' + (small ? 'Reply' : 'Post comment') + '</button></div></div></div>';
+    }
+
+    async function renderCompose() {
+      const s = await supabase.auth.getSession(); const user = s.data.session ? s.data.session.user : null;
+      if (!user) { compose.className = 'signin'; compose.innerHTML = '<a href="/login">Sign in</a> to join the conversation.'; return; }
+      const name = authorNameOf(user);
+      compose.className = ''; compose.innerHTML = composerHTML(name, false);
+      const btn = compose.querySelector('[data-post]') as HTMLButtonElement;
+      btn.addEventListener('click', () => post(compose.querySelector('textarea') as HTMLTextAreaElement, null, btn));
+    }
+
+    // Reply / Link delegation on the thread.
+    list.addEventListener('click', async (e) => {
+      const t = e.target as HTMLElement;
+      if (t.closest('[data-link]')) {
+        const c = t.closest('.comment') as HTMLElement; if (!c) return;
+        const url = location.origin + location.pathname + '#comment-' + c.dataset.id;
+        if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
+        const b = t.closest('[data-link]') as HTMLElement; const o = b.textContent; b.textContent = 'Copied'; setTimeout(() => { b.textContent = o; }, 1400);
         return;
       }
-      // Success: clear the box and re-fetch. We intentionally re-query instead
-      // of appending optimistically so the UI reflects exactly what RLS returns.
-      ta.value = '';
-      msg.textContent = '';
-      loadComments();
+      if (t.closest('[data-reply]')) {
+        const b = (t.closest('[data-reply]')!.closest('.acts')!.parentNode) as HTMLElement; // the .b
+        const slot = b.querySelector(':scope > .reply-slot') as HTMLElement; if (!slot) return;
+        if (slot.firstChild) { slot.innerHTML = ''; return; } // toggle off
+        const s = await supabase.auth.getSession(); const user = s.data.session ? s.data.session.user : null;
+        if (!user) { slot.innerHTML = '<p class="cc-muted" style="margin:12px 0 0"><a href="/login" style="color:var(--accent)">Sign in</a> to reply.</p>'; return; }
+        slot.innerHTML = composerHTML(authorNameOf(user), true);
+        const cid = (b.closest('.comment') as HTMLElement).dataset.id!;
+        const rbtn = slot.querySelector('[data-post]') as HTMLButtonElement;
+        const rta = slot.querySelector('textarea') as HTMLTextAreaElement;
+        rta.focus();
+        rbtn.addEventListener('click', () => post(rta, cid, rbtn));
+      }
     });
 
-    compose.appendChild(ta);
-    compose.appendChild(btn);
-    compose.appendChild(msg);
+    supabase.auth.onAuthStateChange(() => renderCompose());
+    load();
+    renderCompose();
   }
-
-  // Re-render the compose area on any auth transition (sign-in, sign-out,
-  // token refresh, or the async session becoming available after first paint)
-  // so the textarea vs. "Sign in" prompt always matches the live session.
-  // The returned subscription is intentionally discarded (never unsubscribed):
-  // this Astro island is bundled per page and never unmounts within a page's
-  // lifetime — navigation is a full document load — so there is nothing to
-  // clean up and no listener leak. Revisit only if this ever runs under a
-  // client-side router that swaps components without a full page reload.
-  supabase.auth.onAuthStateChange(() => renderCompose());
-  // Initial paint: load the thread and draw the compose area once. The
-  // onAuthStateChange handler above then keeps compose in sync thereafter.
-  loadComments();
-  renderCompose();
 </script>

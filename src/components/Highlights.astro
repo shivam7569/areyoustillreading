@@ -64,7 +64,7 @@ const { postId, author = '', title = '' } = Astro.props;
   mark.hl.note { box-shadow: inset 0 -2px 0 var(--accent); }
   mark.hl.flash { background: color-mix(in srgb, var(--accent) 38%, transparent); }
   .pop { position: relative; border-bottom: 2px dotted color-mix(in srgb, var(--accent) 50%, transparent); cursor: help; }
-  .pop::after { content: attr(data-n) " readers highlighted this"; position: absolute; left: 50%; bottom: calc(100% + 9px); transform: translateX(-50%); white-space: nowrap; font-family: var(--sans); font-size: 11px; letter-spacing: .05em; color: var(--on-accent); background: var(--accent); padding: 4px 9px; border-radius: 3px; opacity: 0; pointer-events: none; transition: opacity .18s; z-index: 5; }
+  .pop::after { content: "Many readers marked this one"; position: absolute; left: 50%; bottom: calc(100% + 9px); transform: translateX(-50%); white-space: nowrap; font-family: var(--sans); font-size: 11px; letter-spacing: .05em; color: var(--on-accent); background: var(--accent); padding: 4px 9px; border-radius: 3px; opacity: 0; pointer-events: none; transition: opacity .18s; z-index: 5; }
   .pop:hover::after { opacity: 1; }
   mark.hl.talk, .pop.talk { padding-right: 2px; }
   .pip { display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 4px; margin-left: 4px; vertical-align: .32em; border: 0; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-family: var(--sans); font-size: 10px; font-weight: 600; line-height: 1; letter-spacing: .02em; cursor: pointer; font-variant-numeric: tabular-nums; transition: transform .18s; }
@@ -172,6 +172,59 @@ const { postId, author = '', title = '' } = Astro.props;
     const authorNameOf = (u: any) => { const m = u.user_metadata || {}; return m.user_name || m.name || (u.email ? u.email.split('@')[0] : 'Reader'); };
     const esc = (s: any) => String(s).replace(/[<&]/g, (c: string) => (c === '<' ? '&lt;' : '&amp;'));
     const findHl = (id: string) => { let f: any = null; Object.keys(store).forEach((k) => (store[+k] || []).forEach((h) => { if (h.id === id) f = h; })); return f; };
+    const blockOf = (id: string) => { let bi = -1; Object.keys(store).forEach((k) => { if ((store[+k] || []).some((x) => x.id === id)) bi = +k; }); return bi; };
+
+    // Popular passages (design .pop) — a privacy-safe RPC returns ONLY the text of
+    // quotes >= N distinct readers marked (no counts, no identity). Public: shown to
+    // everyone. Best-effort wrap of the first single-text-node match into a dotted
+    // `.pop` whose hover tooltip reads "Many readers marked this one".
+    async function paintPopular() {
+      try {
+        const res = await supabase.rpc('highlight_popular', { p_post_id: postId });
+        if (res.error || !res.data) return;
+        (res.data as any[]).forEach((row) => wrapPop(row.quote));
+      } catch (e) {}
+    }
+    function wrapPop(quote: string) {
+      if (!quote || quote.length < 6) return;
+      const w = document.createTreeWalker(body!, NodeFilter.SHOW_TEXT, { acceptNode: (n) => ((n.parentNode as HTMLElement).closest('pre,.ln,mark,.pop,a,button') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) } as any);
+      let n: any;
+      while ((n = w.nextNode())) {
+        const idx = n.nodeValue.indexOf(quote);
+        if (idx !== -1) {
+          try { const range = document.createRange(); range.setStart(n, idx); range.setEnd(n, idx + quote.length); const span = document.createElement('span'); span.className = 'pop'; range.surroundContents(span); } catch (e) {}
+          return;
+        }
+      }
+    }
+
+    // A small floating action menu on a highlight mark — Discuss / Note / Remove
+    // (the direct delete affordance, alongside the drawer's Remove).
+    let markMenu: HTMLElement | null = null;
+    function onMarkAway(e: Event) { if (markMenu && !markMenu.contains(e.target as Node)) closeMarkMenu(); }
+    function closeMarkMenu() { if (markMenu) { markMenu.remove(); markMenu = null; document.removeEventListener('mousedown', onMarkAway, true); } }
+    function openMarkMenu(mark: HTMLElement, id: string) {
+      closeMarkMenu();
+      const el = document.createElement('div'); el.className = 'seltool on'; el.style.position = 'fixed'; el.style.zIndex = '82';
+      el.innerHTML =
+        '<button type="button" data-mm="discuss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-9 8.3 8.5 8.5 0 0 1-3.9-.9L3 20l1.1-5.1A8.38 8.38 0 0 1 3.7 11 8.5 8.5 0 0 1 12 3a8.38 8.38 0 0 1 8.3 8.5Z"/></svg>Discuss</button>'
+        + '<button type="button" data-mm="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v10l-4 4H4Z"/><path d="M8 9h8"/></svg>Note</button>'
+        + '<span class="sep"></span>'
+        + '<button type="button" data-mm="remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>Remove</button>';
+      document.body.appendChild(el);
+      const r = mark.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+      el.style.left = Math.min(Math.max(10, r.left + r.width / 2 - w / 2), innerWidth - w - 10) + 'px';
+      const top = r.top - h - 9; el.style.top = (top < 8 ? r.bottom + 9 : top) + 'px';
+      markMenu = el;
+      el.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest('[data-mm]') as HTMLElement | null; if (!b) return;
+        const act = b.dataset.mm; const hh = findHl(id); closeMarkMenu();
+        if (act === 'remove') { const bi = blockOf(id); if (bi >= 0) remove(bi, id); }
+        else if (act === 'discuss' && hh) openThread(id, hh.text);
+        else if (act === 'note' && hh) { open(); const it = dbody.querySelector('.hitem[data-id="' + id + '"] textarea') as HTMLElement | null; if (it) it.focus(); }
+      });
+      setTimeout(() => document.addEventListener('mousedown', onMarkAway, true), 0);
+    }
 
     // ---- design engine: block set + text walker + paint/render (pure DOM) ----
     function indexBlocks() {
@@ -365,9 +418,7 @@ const { postId, author = '', title = '' } = Astro.props;
       const pipEl = (e.target as HTMLElement).closest('.pip') as HTMLElement | null;
       if (pipEl) { const id = pipEl.dataset.id!; const h = findHl(id); if (h) openThread(id, h.text); return; }
       const m = (e.target as HTMLElement).closest('mark.hl') as HTMLElement | null; if (!m) return;
-      open(); sync();
-      const it = dbody.querySelector('.hitem[data-id="' + m.dataset.id + '"]') as HTMLElement | null;
-      if (it) dbody.scrollTop = it.offsetTop - dbody.offsetTop - 12;
+      openMarkMenu(m, m.dataset.id!);
     });
 
     // drawer delegation
@@ -431,10 +482,14 @@ const { postId, author = '', title = '' } = Astro.props;
       lastUid = uid; currentUser = u;
       if (!currentUser) { pill.classList.remove('on'); close(); store = {}; blocks.forEach((_, i) => render(i)); return; }
       try { const adm = await supabase.rpc('is_admin'); isAdmin = adm.data === true; } catch (e) { isAdmin = false; }
+      await popReady;   // ensure .pop spans exist before indexBlocks caches _orig
       indexBlocks();
       await loadStore();
       await paintPips();
     }
+    // Popular-passage marks are PUBLIC (everyone sees them) and must land before the
+    // signed-in engine caches each block's original HTML — so kick it off once here.
+    const popReady = paintPopular();
     supabase.auth.onAuthStateChange(() => refresh());
     refresh();
   }

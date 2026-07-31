@@ -459,6 +459,22 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     background: var(--paper-2); border: 1px solid var(--rule); color: var(--accent);
     border-radius: 4px; padding: 0.05em 0.35em;
   }
+  /* Prose rhythm parity with the reader's `.post-body` (global.css) so the WYSIWYG
+     surface reads like what publishes — same body size/leading, heading scale,
+     paragraph rhythm, blockquote, rule and lists. Typography only: code blocks
+     (live CodeMirror), D2 and Plotly widgets stay the editor's own live versions,
+     which can't be byte-identical to the static reader render. High-specificity
+     (#editor-wrap .milkdown .ProseMirror …) so it out-ranks Crepe's Nord defaults. */
+  #editor-wrap .milkdown .ProseMirror { font-size: 19px; line-height: 1.75; color: var(--ink); }
+  #editor-wrap .milkdown .ProseMirror p { margin: 0 0 1.35em; }
+  #editor-wrap .milkdown .ProseMirror h1 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(30px, 4.5vw, 46px); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 0.4em; }
+  #editor-wrap .milkdown .ProseMirror h2 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(25px, 3.2vw, 34px); line-height: 1.15; letter-spacing: -0.01em; margin: 2em 0 0.6em; }
+  #editor-wrap .milkdown .ProseMirror h3 { font-family: var(--serif-display); font-weight: 600; font-size: 22px; margin: 1.8em 0 0.5em; }
+  #editor-wrap .milkdown .ProseMirror blockquote { margin: 1.8em 0; padding: 6px 0 6px 26px; border-left: 2px solid var(--accent); }
+  #editor-wrap .milkdown .ProseMirror blockquote p { font-family: var(--serif-display); font-style: italic; font-size: 24px; line-height: 1.5; color: var(--ink); margin: 0; }
+  #editor-wrap .milkdown .ProseMirror hr { border: 0; height: 1px; background: var(--rule); margin: 2.4em 0; }
+  #editor-wrap .milkdown .ProseMirror ul, #editor-wrap .milkdown .ProseMirror ol { padding-left: 1.4em; margin: 0 0 1.35em; }
+  #editor-wrap .milkdown .ProseMirror li { margin: 0.4em 0; }
 </style>
 
 <script>
