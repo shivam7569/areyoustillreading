@@ -41,8 +41,11 @@ export function assemblePostHtml(shellHtml, { slug, title, description, author =
   const human = fmtDateUTC(d);
   const words = bodyMarkdown.split(/\s+/).filter(Boolean).length;
   const minutes = Math.max(1, Math.round(words / 200));
+  // A DIV (not a <p>) so it can't be picked up by the reader prose's
+  // `.post-body .measure > p:first-of-type` drop-cap rule (which must land on the
+  // body's first real paragraph, exactly as it does on the rebuilt static post).
   const tagsHtml = tags.length
-    ? `<p class="tags">${tags.map((t) => `<a class="tag" href="/blog/tags/${esc(t)}">#${esc(t)}</a>`).join('')}</p>`
+    ? `<div class="tags">${tags.map((t) => `<a class="tag" href="/blog/tags/${esc(t)}">#${esc(t)}</a>`).join('')}</div>`
     : '';
 
   return shellHtml
@@ -58,7 +61,9 @@ export function assemblePostHtml(shellHtml, { slug, title, description, author =
     .replace('1970-01-01T00:00:00.000Z', iso)
     .replace('January 1, 1970', human)
     .replace('1 min read', `${minutes} min read`)
-    // Insert the tag row (if any) before the body, and fill the body marker. Regex
-    // tolerates however Astro renders the empty marker div's attributes.
-    .replace(/<div data-shell-body[^>]*><\/div>/, `${tagsHtml}<div data-shell-body>${bodyHtml}</div>`);
+    // Insert the tag row (if any) + the body DIRECTLY into `.measure` — no wrapper.
+    // This makes Preview / instant-KV structurally identical to the rebuilt static
+    // post (`.post-body > .measure > <body>`), so `.measure > *` reader-prose rules
+    // (the drop-cap) match in all three paths. Regex tolerates Astro's marker attrs.
+    .replace(/<div data-shell-body[^>]*><\/div>/, `${tagsHtml}${bodyHtml}`);
 }
