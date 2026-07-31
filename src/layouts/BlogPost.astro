@@ -49,6 +49,9 @@ const fmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month:
 // Reading-time estimate from the raw Markdown source (200 wpm, min 1).
 const words = post.body?.split(/\s+/).filter(Boolean).length ?? 0;
 const minutes = Math.max(1, Math.round(words / 200));
+const wordCount = words.toLocaleString('en-US');
+// Avatar disc shows the author's initial (real, derived from the byline).
+const avatarInitial = (byline.trim()[0] || 'a').toLowerCase();
 
 // Series context (null unless this post is part of a multi-post series).
 const series = await getSeriesNav(post);
@@ -107,11 +110,12 @@ if (!series && here !== -1) {
         <h1 class="title">{title}</h1>
         {description && <p class="standfirst">{description}</p>}
         <div class="byline">
-          <div class="avatar" aria-hidden="true">a</div>
-          <div class="who"><b>{byline}</b> &middot; <time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time></div>
-          <span class="dot">&mdash;</span>
-          <span class="meta-caps">{minutes} min read</span>
-          {updatedDate && <span class="meta-caps">&middot; updated {fmt(updatedDate)}</span>}
+          <div class="avatar" aria-hidden="true">{avatarInitial}</div>
+          <div class="who">
+            <b>{byline}</b>
+            <small><time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time>{updatedDate && <> &middot; updated {fmt(updatedDate)}</>}</small>
+          </div>
+          <span class="nums">{wordCount} words &middot; {minutes} min read</span>
           {tags.length > 0 && (
             <div class="btags">{tags.map((t) => (<a class="tag" href={`/blog/tags/${t}`}>{t}</a>))}</div>
           )}
@@ -189,26 +193,27 @@ if (!series && here !== -1) {
   .progress { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--accent); z-index: 60; transition: width 0.1s linear; }
   @media (prefers-reduced-motion: reduce) { .progress { transition: none; } }
 
-  .art-head { padding: clamp(48px, 7vw, 88px) 0 clamp(28px, 4vw, 44px); }
-  .backlink { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); display: inline-flex; align-items: center; gap: 8px; margin-bottom: 34px; transition: color 0.2s; }
+  .art-head { padding: clamp(40px, 6vw, 76px) 0 clamp(20px, 3vw, 36px); }
+  .backlink { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); display: inline-flex; align-items: center; gap: 8px; margin-bottom: 32px; transition: color 0.2s; }
   .backlink:hover { color: var(--accent); }
   .backlink .a { transition: transform 0.2s; }
   .backlink:hover .a { transform: translateX(-4px); }
-  .art-head .kicker { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+  .art-head .kicker { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
   .art-head .kicker .line { height: 1px; width: 44px; background: var(--accent); opacity: 0.6; }
-  h1.title { font-family: var(--serif-display); font-weight: 600; font-size: clamp(36px, 6vw, 64px); line-height: 1.04; letter-spacing: -0.02em; margin: 0; max-width: 20ch; }
-  .standfirst { font-family: var(--serif-display); font-style: italic; font-size: clamp(20px, 2.5vw, 26px); line-height: 1.5; color: var(--ink-soft); max-width: 54ch; margin: 26px 0 0; }
+  h1.title { font-family: var(--serif-display); font-weight: 600; font-size: clamp(34px, 5.6vw, 60px); line-height: 1.05; letter-spacing: -0.02em; margin: 0; max-width: 22ch; text-wrap: balance; }
+  .standfirst { font-family: var(--serif-display); font-style: italic; font-size: clamp(19px, 2.4vw, 25px); line-height: 1.5; color: var(--ink-soft); max-width: 54ch; margin: 24px 0 0; text-wrap: pretty; }
 
-  .byline { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; margin-top: 34px; padding-top: 26px; border-top: 1px solid var(--rule); }
-  .avatar { width: 44px; height: 44px; border-radius: 999px; background: radial-gradient(120% 120% at 30% 20%, var(--accent-soft), var(--accent)); display: grid; place-items: center; color: var(--on-accent); font-family: var(--serif-display); font-size: 18px; flex: none; }
-  .byline .who { font-family: var(--sans); font-size: 14px; color: var(--ink); }
-  .byline .who b { font-weight: 600; }
+  .byline { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--rule); }
+  .avatar { width: 42px; height: 42px; border-radius: 999px; background: radial-gradient(120% 120% at 30% 20%, var(--accent-soft), var(--accent)); display: grid; place-items: center; color: var(--on-accent); font-family: var(--serif-display); font-size: 20px; font-weight: 600; line-height: 1; flex: none; user-select: none; }
+  .byline .who { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); line-height: 1.4; }
+  .byline .who b { color: var(--ink); font-weight: 600; }
+  .byline .who small { display: block; font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
   .byline .who time { color: inherit; }
-  .byline .dot { color: var(--rule); }
+  .byline .nums { font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
   .byline .btags { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
   .byline .tag { font-family: var(--sans); font-size: 12px; letter-spacing: 0.03em; color: var(--ink-faint); border: 1px solid var(--rule); border-radius: 999px; padding: 4px 11px; transition: border-color 0.2s, color 0.2s; }
   .byline .tag:hover { border-color: var(--accent); color: var(--accent); }
-  @media (max-width: 640px) { .byline .btags { margin-left: 0; width: 100%; } }
+  @media (max-width: 680px) { .byline .btags { margin-left: 0; width: 100%; } }
 
   .after { padding: clamp(30px, 4vw, 44px) 0 0; }
   /* End-of-post related reading (non-series posts) — editorial 2-up cards. */

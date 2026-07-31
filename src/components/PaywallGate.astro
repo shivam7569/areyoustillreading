@@ -117,26 +117,9 @@ const preview = post.data.preview ?? post.data.description;
 </div>
 
 <style>
+  /* The lock band styles live in global.css (.paywall .band …) because lockBox()
+     builds those nodes at runtime, where Astro-scoped rules can't reach them. */
   .paywall-preview { color: var(--fg); }
-  #paywall-ui .lock {
-    margin-top: 1.5rem;
-    padding: 1.5rem;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    text-align: center;
-  }
-  #paywall-ui .btn {
-    display: inline-block;
-    margin-top: 0.5rem;
-    padding: 0.55rem 1.1rem;
-    border: 0;
-    border-radius: 6px;
-    background: var(--accent);
-    color: #fff;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-  }
   .admin-bar {
     margin-top: 1rem;
     padding: 0.6rem 0.8rem;
@@ -254,27 +237,29 @@ const preview = post.data.preview ?? post.data.description;
   // Build the "you must pay to read the rest" box shown in `locked` mode.
   // Two variants: signed-out viewers get a link to /login (can't buy without an
   // account to attach the entitlement to); signed-in viewers get a buy button.
+  // The editorial lock band (design "post.html" §5). Honest copy only — the real
+  // price via price(), no fabricated "read N of M paragraphs" or membership tier.
+  // The band is built here at runtime, so its styles live in global.css (.paywall
+  // .band …), never in an Astro-scoped block (which wouldn't reach these nodes).
+  const LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="10.5" width="16" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>';
   function lockBox() {
     gated.innerHTML = ''; // Ensure no stale/paid body remains behind the lock.
-    const box = document.createElement('div');
-    box.className = 'lock';
-    const p = document.createElement('p');
-    p.innerHTML = '🔒 The rest of this post is <strong>' + price() + '</strong>.';
-    box.appendChild(p);
-    if (!user) {
-      const a = document.createElement('a');
-      a.className = 'btn';
-      a.href = '/login';
-      a.textContent = 'Sign in to unlock';
-      box.appendChild(a);
-    } else {
-      const b = document.createElement('button');
-      b.className = 'btn';
-      b.textContent = 'Unlock for ' + price();
-      b.addEventListener('click', unlock);
-      box.appendChild(b);
-    }
-    ui.appendChild(box);
+    const p = price(); // e.g. "$6.00", or '' if the row somehow lacks a price
+    const band = document.createElement('div');
+    band.className = 'band';
+    const cta = user
+      ? '<button class="btn btn-primary" type="button" data-unlock>Unlock this essay' + (p ? ' — ' + p : '') + '</button>'
+      : '<a class="btn btn-primary" href="/login">Sign in to unlock</a>';
+    band.innerHTML =
+      '<div class="lock">' + LOCK_SVG + '</div>' +
+      '<div class="status">Unlock to keep reading</div>' +
+      '<h3>The rest is for readers who unlocked it</h3>' +
+      '<p>Read the whole essay' + (p ? ' — <span class="price">' + p + ' once, yours for good.</span>' : '.') + '</p>' +
+      '<div class="row">' + cta + '<span class="secure">' + LOCK_SVG + 'One-time · secure checkout</span></div>' +
+      (user ? '' : '<p class="alt">Already unlocked it? <a href="/login">Sign in</a>.</p>');
+    const btn = band.querySelector('[data-unlock]');
+    if (btn) btn.addEventListener('click', unlock);
+    ui.appendChild(band);
   }
 
   // Inline owner-only control to flip this post's paywall on/off without leaving

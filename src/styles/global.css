@@ -236,17 +236,17 @@ li { margin: 0.35rem 0; }
    injected through the slot (Shiki code, KaTeX, D2, Plotly). Only affects the
    reader post body; the byline/head live outside .post-body.
    ============================================================================ */
-.post-body { font-size: 19px; }
+.post-body { font-size: 19px; line-height: 1.75; }
 .post-body .measure > p:first-of-type::first-letter {
   font-family: var(--serif-display); float: left; font-size: 4.6em; line-height: 0.82;
   padding: 0.06em 0.12em 0 0; color: var(--accent); font-weight: 600;
 }
-.post-body p { margin: 0 0 1.35em; color: var(--ink); }
+.post-body p { margin: 0 0 1.35em; color: var(--ink); text-wrap: pretty; }
 .post-body h2 {
-  font-family: var(--serif-display); font-weight: 600; font-size: clamp(26px, 3.4vw, 36px);
-  line-height: 1.14; letter-spacing: -0.01em; margin: 2em 0 0.6em;
+  font-family: var(--serif-display); font-weight: 600; font-size: clamp(25px, 3.2vw, 34px);
+  line-height: 1.15; letter-spacing: -0.01em; margin: 2em 0 0.6em;
 }
-.post-body h3 { font-family: var(--serif-display); font-weight: 600; font-size: 23px; margin: 1.8em 0 0.5em; }
+.post-body h3 { font-family: var(--serif-display); font-weight: 600; font-size: 22px; margin: 1.8em 0 0.5em; }
 .post-body :where(p, li, td, blockquote) a {
   color: var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   text-decoration: none; transition: border-color var(--dur) var(--ease);
@@ -259,6 +259,40 @@ li { margin: 0.35rem 0; }
 .post-body ul, .post-body ol { padding-left: 1.4em; margin: 0 0 1.35em; }
 .post-body li { margin: 0.4em 0; }
 .post-body img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--rule); }
+
+/* Code-block filename chip (shown when an author writes ```lang title="foo.py").
+   Additive: absent when no filename, so the current dots+lang look is unchanged. */
+.post-body .code-top .code-file { font-family: var(--mono); font-size: 12px; color: color-mix(in srgb, var(--code-fg) 60%, transparent); }
+
+/* Margin notes: author writes <aside class="mnote"><b>Label</b>…</aside> in Markdown. */
+.post-body .mnote { font-family: var(--sans); font-size: 14px; line-height: 1.6; color: var(--ink-soft); border-left: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); padding: 2px 0 2px 16px; margin: 1.6em 0; }
+.post-body .mnote b { display: block; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); margin-bottom: 5px; }
+
+/* Display math (KaTeX) gets the design's ruled "math block" frame. */
+.post-body .katex-display { margin: 1.9em 0; padding: 18px 22px; border-top: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft); overflow-x: auto; overflow-y: hidden; }
+
+/* Figures with captions (raw <figure> in Markdown, or once rehype-figure lands). */
+.post-body figure { margin: 2.2em 0; }
+.post-body figure > img { display: block; width: 100%; margin: 0; }
+.post-body figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); margin-top: 13px; letter-spacing: 0.01em; text-wrap: pretty; }
+.post-body figcaption b { color: var(--accent); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; font-size: 10.5px; margin-right: 8px; }
+
+/* Paywall lock band — built at RUNTIME by PaywallGate.lockBox(), so it MUST be global
+   (Astro-scoped styles never reach JS-created nodes). Honest copy + real price; no
+   fabricated paragraph counts or membership tier we don't have. */
+.paywall .band { margin: 8px 0 clamp(28px, 4vw, 44px); border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--rule)); border-radius: 6px; overflow: hidden; text-align: center; background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, var(--card)), var(--card)); padding: clamp(28px, 4vw, 44px); }
+.paywall .band .lock { width: 44px; height: 44px; border-radius: 999px; display: grid; place-items: center; margin: 0 auto 16px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.paywall .band .lock svg { width: 19px; height: 19px; }
+.paywall .band .status { font-family: var(--sans); font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); margin-bottom: 11px; }
+.paywall .band h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(23px, 3vw, 31px); margin: 0 auto 10px; line-height: 1.18; letter-spacing: -0.01em; max-width: 22ch; }
+.paywall .band p { color: var(--ink-soft); margin: 0 auto 22px; max-width: 44ch; font-size: 17px; line-height: 1.6; text-wrap: pretty; }
+.paywall .band .price { font-family: var(--serif-display); color: var(--accent); font-style: italic; }
+.paywall .band .row { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.paywall .band .secure { font-family: var(--sans); font-size: 12px; color: var(--ink-faint); display: inline-flex; align-items: center; gap: 7px; }
+.paywall .band .secure svg { width: 14px; height: 14px; }
+.paywall .band .alt { font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); margin: 16px 0 0; }
+.paywall .band .alt a { color: var(--accent); }
+.paywall .band .alt a:hover { text-decoration: underline; }
 /* Build-time D2 diagrams get the editorial framed-figure treatment (R11). The
    diagram itself is neutral grey ink (D2 theme 1), sitting on a WARM light canvas
    that stays consistent in both themes — a "printed figure" that never clashes
