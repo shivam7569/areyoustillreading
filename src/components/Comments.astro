@@ -1,19 +1,16 @@
 ---
 /**
  * Comments.astro — per-post comment thread, built to the Claude Design's
- * `.comments` UI (sec-head + count, a .cbox composer with an avatar, a threaded
- * .clist with avatars / an "Author" badge / Reply + Link, nested .reply).
+ * `.comments` UI (sec-head + count, a .cbox composer, a threaded .clist with
+ * avatars / an "Author" badge / Reply, nested .reply). Persisted to the
+ * `comments` table over PostgREST (RLS is the only guard). Adds upvotes (`votes`
+ * table), owner/admin delete, auto-growing textareas, safe tiny-Markdown + math,
+ * and a persistent draft that survives tab-switches (only cleared on sign-out /
+ * successful post).
  *
- * Backend unchanged in spirit: the `comments` table over PostgREST (RLS is the
- * only guard). db/comments-threads.sql adds `parent_id` (one-level replies) +
- * `author_is_admin` (set server-side by trigger for the honest Author badge);
- * flat comments still work without it. Bodies render through a SAFE tiny-Markdown
- * (escape first, then a whitelist of bold/italic/code/links) so "Markdown works"
- * without any XSS surface.
- *
- * SECURITY: RLS enforces auth (user_id = auth.uid()) on insert; the client
- * user_id/author_name are display-only. Comment text is HTML-escaped before any
- * formatting, and links are restricted to http(s)/relative — no raw HTML runs.
+ * SECURITY: RLS enforces auth on insert/delete/vote (user_id = auth.uid()).
+ * Comment text is HTML-escaped before any formatting; links restricted to
+ * http(s)/relative; math rendered by KaTeX with trust:false. No raw HTML runs.
  */
 interface Props { postId: string; }
 const { postId } = Astro.props;
@@ -26,7 +23,7 @@ const { postId } = Astro.props;
 </section>
 
 {/* Global because the thread is injected at runtime (scoped styles never reach
-    runtime DOM). All selectors are namespaced under .comments so nothing leaks. */}
+    runtime DOM). All selectors namespaced under .comments so nothing leaks. */}
 <style is:global>
   .comments { margin: clamp(34px, 5vw, 52px) 0 0; padding-top: 30px; border-top: 1px solid var(--rule); }
   .comments .cc-muted { color: var(--ink-faint); font-family: var(--sans); font-size: 14px; }
@@ -36,7 +33,7 @@ const { postId } = Astro.props;
   .cbox { display: flex; gap: 14px; margin: 22px 0 32px; }
   .cbox .avatar { background: var(--paper-2); color: var(--ink-faint); border: 1px solid var(--rule); }
   .cbox .f { flex: 1; min-width: 0; }
-  .cbox textarea { width: 100%; box-sizing: border-box; min-height: 82px; resize: vertical; font-family: var(--serif-body); font-size: 16px; line-height: 1.6; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 4px; background: var(--card); color: var(--ink); }
+  .cbox textarea { width: 100%; box-sizing: border-box; min-height: 82px; overflow: hidden; resize: none; font-family: var(--serif-body); font-size: 16px; line-height: 1.6; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 4px; background: var(--card); color: var(--ink); }
   .cbox textarea::placeholder { color: var(--ink-faint); }
   .cbox textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
   .cbox .foot { display: flex; align-items: center; gap: 12px; margin-top: 10px; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); flex-wrap: wrap; }
@@ -54,10 +51,13 @@ const { postId } = Astro.props;
   .comment > .b > p { margin: 0; font-size: 16.5px; line-height: 1.65; color: var(--ink-soft); overflow-wrap: anywhere; }
   .comment > .b > p code.inl { font-family: var(--mono); font-size: .82em; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 4px; padding: .1em .4em; color: var(--accent); }
   .comment > .b > p a { color: var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
-  .comment .acts { display: flex; gap: 16px; margin-top: 9px; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
+  .comment .acts { display: flex; align-items: center; gap: 16px; margin-top: 9px; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
   .comment .acts button { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
   .comment .acts button:hover { color: var(--accent); }
   .comment .acts .del:hover { color: #b4453a; }
+  .comment .acts .up { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+  .comment .acts .up .uparrow { font-size: 10px; line-height: 1; }
+  .comment .acts .up.on { color: var(--accent); }
   .comment .reply { margin-top: 20px; padding-left: 22px; border-left: 1px solid var(--rule); display: flex; flex-direction: column; gap: 20px; }
   .comment .reply-slot .cbox { margin: 16px 0 0; }
   .comment .reply-slot .cbox textarea { min-height: 60px; }
@@ -74,17 +74,21 @@ const { postId } = Astro.props;
     const list = document.getElementById('cc-list')!;
     const compose = document.getElementById('cc-compose')!;
     const countEl = document.getElementById('cc-count')!;
+    const DRAFT_KEY = 'aysr:cdraft:' + postId;
+
+    let currentUser: any = null, isAdmin = false;
+    let lastUid: string | null | undefined = undefined;
+    let votes: Record<string, { n: number; mine: boolean }> = {};
 
     const authorNameOf = (u: any) => { const m = u.user_metadata || {}; return m.user_name || m.name || (u.email ? u.email.split('@')[0] : 'Reader'); };
     const esc = (s: any) => String(s).replace(/[&<>]/g, (c: string) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as any)[c]);
+    const getDraft = () => { try { return localStorage.getItem(DRAFT_KEY) || ''; } catch (e) { return ''; } };
+    const setDraft = (v: string) => { try { v ? localStorage.setItem(DRAFT_KEY, v) : localStorage.removeItem(DRAFT_KEY); } catch (e) {} };
+    // Grow a textarea to fit its content (design ask: expand, don't scroll).
+    const grow = (ta: HTMLTextAreaElement) => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
 
-    // SAFE tiny-Markdown: escape first (so no raw HTML survives), then apply a
-    // whitelist. Links limited to http(s)/relative so no javascript: urls.
     function md(s: string) {
       let e = esc(s);
-      // Protect math ($$…$$ display, $…$ inline) from the Markdown pass so _ ^ * { }
-      // inside equations are never mangled into <em>/<strong>; KaTeX renders them
-      // after (renderMath). Stash the ESCAPED spans, restore verbatim.
       const math: string[] = [];
       const stash = (m: string) => { math.push(m); return '@@KMATH' + (math.length - 1) + 'X@@'; };
       e = e.replace(/\$\$([\s\S]+?)\$\$/g, (m) => stash(m));
@@ -95,13 +99,9 @@ const { postId } = Astro.props;
       e = e.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
       e = e.replace(/(^|[^\w])_([^_\n]+)_/g, '$1<em>$2</em>');
       e = e.replace(/\n/g, '<br>');
-      e = e.replace(/@@KMATH([0-9]+)X@@/g, (_m, i) => math[+i]); // restore raw math for KaTeX
+      e = e.replace(/@@KMATH([0-9]+)X@@/g, (_m, i) => math[+i]);
       return e;
     }
-
-    // Lazy KaTeX: render $…$ / $$…$$ in each comment body. The KaTeX CSS already
-    // ships on post pages (BlogPost imports it); the JS loads only when comments do.
-    // throwOnError:false + default trust:false keep author LaTeX inert + safe.
     let renderMathInElement: any = null;
     async function renderMath() {
       const nodes = list.querySelectorAll('.comment > .b > p');
@@ -123,29 +123,38 @@ const { postId } = Astro.props;
 
     function renderComment(r: any, kidsOf: Record<string, any[]>): string {
       const who = r.author_name || 'Reader';
+      const v = votes[r.id] || { n: 0, mine: false };
+      const canDel = currentUser && (r.user_id === currentUser.id || isAdmin);
       const kids = (kidsOf[r.id] || []).map((c) => renderComment(c, kidsOf)).join('');
       return '<div class="comment" id="comment-' + r.id + '" data-id="' + r.id + '">'
         + '<div class="avatar' + (r.author_is_admin ? '' : ' q') + '" aria-hidden="true">' + esc((who[0] || '?')) + '</div>'
         + '<div class="b"><div class="hd"><b>' + esc(who) + '</b>' + (r.author_is_admin ? '<span class="badge">Author</span>' : '') + '<span class="when">' + esc(timeAgo(r.created_at)) + '</span></div>'
         + '<p>' + md(r.body) + '</p>'
-        + '<div class="acts"><button type="button" data-reply>Reply</button><button type="button" data-link>Link</button>'
-        + ((currentUser && (r.user_id === currentUser.id || isAdmin)) ? '<button type="button" class="del" data-del>Delete</button>' : '')
+        + '<div class="acts">'
+        + '<button type="button" class="up' + (v.mine ? ' on' : '') + '" data-up aria-label="Upvote"><span class="uparrow">▲</span> <span class="upn">' + v.n + '</span></button>'
+        + '<button type="button" data-reply>Reply</button>'
+        + (canDel ? '<button type="button" class="del" data-del>Delete</button>' : '')
         + '</div>'
         + (kids ? '<div class="reply">' + kids + '</div>' : '')
         + '<div class="reply-slot"></div></div></div>';
     }
 
-    // Who's viewing — needed so Delete shows only for a comment's author or an admin.
-    let currentUser: any = null; let isAdmin = false;
-    async function resolveUser() {
-      const s = await supabase.auth.getSession();
-      currentUser = s.data.session ? s.data.session.user : null;
-      isAdmin = false;
-      if (currentUser) { try { const a = await supabase.rpc('is_admin'); isAdmin = a.data === true; } catch (e) {} }
+    async function loadVotes() {
+      const ids: string[] = [];
+      list.querySelectorAll('.comment').forEach((c) => ids.push((c as HTMLElement).dataset.id!));
+      if (!ids.length) return;
+      const res = await supabase.from('votes').select('target_id,user_id').eq('kind', 'comment').in('target_id', ids);
+      if (res.error) return;
+      votes = {};
+      (res.data || []).forEach((row: any) => { const t = (votes[row.target_id] = votes[row.target_id] || { n: 0, mine: false }); t.n++; if (currentUser && row.user_id === currentUser.id) t.mine = true; });
+      list.querySelectorAll('.comment').forEach((c) => {
+        const up = (c as HTMLElement).querySelector(':scope > .b > .acts > .up') as HTMLElement | null; if (!up) return;
+        const v = votes[(c as HTMLElement).dataset.id!] || { n: 0, mine: false };
+        (up.querySelector('.upn') as HTMLElement).textContent = String(v.n); up.classList.toggle('on', v.mine);
+      });
     }
 
     async function load() {
-      await resolveUser();
       let res = await supabase.from('comments').select('id,user_id,author_name,body,created_at,parent_id,author_is_admin').eq('post_id', postId).order('created_at', { ascending: true });
       if (res.error) { res = await supabase.from('comments').select('id,user_id,author_name,body,created_at').eq('post_id', postId).order('created_at', { ascending: true }); }
       if (res.error) { list.innerHTML = '<p class="cc-muted">Could not load comments.</p>'; return; }
@@ -156,60 +165,73 @@ const { postId } = Astro.props;
       const top = rows.filter((r) => !r.parent_id);
       list.innerHTML = top.length ? top.map((r) => renderComment(r, kidsOf)).join('') : '<p class="cc-muted">No comments yet. Be the first.</p>';
       renderMath();
+      loadVotes();
+    }
+
+    async function toggleVote(id: string, btn: HTMLElement) {
+      if (!currentUser) { location.href = '/login'; return; }
+      const on = btn.classList.contains('on');
+      const upn = btn.querySelector('.upn') as HTMLElement; const n = parseInt(upn.textContent || '0', 10) || 0;
+      btn.classList.toggle('on', !on); upn.textContent = String(on ? Math.max(0, n - 1) : n + 1);
+      const res = on
+        ? await supabase.from('votes').delete().eq('user_id', currentUser.id).eq('kind', 'comment').eq('target_id', id)
+        : await supabase.from('votes').insert({ user_id: currentUser.id, kind: 'comment', target_id: id });
+      if (res.error) { btn.classList.toggle('on', on); upn.textContent = String(n); }
     }
 
     async function post(ta: HTMLTextAreaElement, parentId: string | null, btn: HTMLButtonElement) {
       const body = (ta.value || '').trim(); if (!body) { ta.focus(); return; }
-      const s = await supabase.auth.getSession(); const user = s.data.session ? s.data.session.user : null;
-      if (!user) return;
+      if (!currentUser) return;
       btn.disabled = true;
-      const payload: any = { post_id: postId, user_id: user.id, author_name: authorNameOf(user), body }; if (parentId) payload.parent_id = parentId;
+      const payload: any = { post_id: postId, user_id: currentUser.id, author_name: authorNameOf(currentUser), body }; if (parentId) payload.parent_id = parentId;
       const res = await supabase.from('comments').insert(payload);
       if (res.error) { btn.disabled = false; const foot = btn.closest('.foot'); if (foot) { let em = foot.querySelector('.cc-err') as HTMLElement | null; if (!em) { em = document.createElement('span'); em.className = 'cc-err'; em.style.color = '#b4453a'; foot.insertBefore(em, btn); } em.textContent = res.error.message || 'Could not post.'; } return; }
-      ta.value = ''; load();
+      ta.value = ''; if (!parentId) setDraft(''); load();
     }
 
     function composerHTML(name: string, small: boolean) {
       return '<div class="cbox"><div class="avatar" aria-hidden="true">' + esc((name[0] || '?').toLowerCase()) + '</div>'
         + '<div class="f"><textarea placeholder="' + (small ? 'Reply…' : 'Say something worth reading.') + '"></textarea>'
-        + '<div class="foot"><span>Signed in as ' + esc(name) + ' — Markdown works</span><button class="btn btn-primary btn-sm" type="button" data-post>' + (small ? 'Reply' : 'Post comment') + '</button></div></div></div>';
+        + '<div class="foot"><span>Signed in as ' + esc(name) + ' — Markdown + math work</span><button class="btn btn-primary btn-sm" type="button" data-post>' + (small ? 'Reply' : 'Post comment') + '</button></div></div></div>';
     }
 
-    async function renderCompose() {
-      const s = await supabase.auth.getSession(); const user = s.data.session ? s.data.session.user : null;
-      if (!user) { compose.className = 'signin'; compose.innerHTML = '<a href="/login">Sign in</a> to join the conversation.'; return; }
-      const name = authorNameOf(user);
+    function renderCompose() {
+      if (!currentUser) { compose.className = 'signin'; compose.innerHTML = '<a href="/login">Sign in</a> to join the conversation.'; return; }
+      const name = authorNameOf(currentUser);
       compose.className = ''; compose.innerHTML = composerHTML(name, false);
+      const ta = compose.querySelector('textarea') as HTMLTextAreaElement;
+      ta.value = getDraft(); grow(ta);
       const btn = compose.querySelector('[data-post]') as HTMLButtonElement;
-      btn.addEventListener('click', () => post(compose.querySelector('textarea') as HTMLTextAreaElement, null, btn));
+      btn.addEventListener('click', () => post(ta, null, btn));
     }
 
-    // Reply / Link delegation on the thread.
+    // Auto-grow + persist the main composer draft on input.
+    compose.addEventListener('input', (e) => {
+      const ta = e.target as HTMLTextAreaElement; if (ta.tagName !== 'TEXTAREA') return;
+      grow(ta); setDraft(ta.value);
+    });
+    // Auto-grow reply composers (drafts there are transient).
+    list.addEventListener('input', (e) => { const ta = e.target as HTMLTextAreaElement; if (ta.tagName === 'TEXTAREA') grow(ta); });
+
+    // Upvote / Reply / Delete delegation.
     list.addEventListener('click', async (e) => {
       const t = e.target as HTMLElement;
+      const upBtn = t.closest('[data-up]') as HTMLElement | null;
+      if (upBtn) { const c = upBtn.closest('.comment') as HTMLElement; return toggleVote(c.dataset.id!, upBtn); }
       if (t.closest('[data-del]')) {
         const c = t.closest('.comment') as HTMLElement; if (!c) return;
         const hasReplies = !!c.querySelector(':scope > .b > .reply');
         if (!confirm('Delete this comment' + (hasReplies ? ' and its replies' : '') + '? This can’t be undone.')) return;
         const res = await supabase.from('comments').delete().eq('id', c.dataset.id);
         if (res.error) { alert('Could not delete: ' + res.error.message); return; }
-        load();
-        return;
-      }
-      if (t.closest('[data-link]')) {
-        const c = t.closest('.comment') as HTMLElement; if (!c) return;
-        const url = location.origin + location.pathname + '#comment-' + c.dataset.id;
-        if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
-        const b = t.closest('[data-link]') as HTMLElement; const o = b.textContent; b.textContent = 'Copied'; setTimeout(() => { b.textContent = o; }, 1400);
-        return;
+        load(); return;
       }
       if (t.closest('[data-reply]')) {
         const b = (t.closest('[data-reply]')!.closest('.acts')!.parentNode) as HTMLElement; // the .b
         const slot = b.querySelector(':scope > .reply-slot') as HTMLElement; if (!slot) return;
         if (slot.firstChild) { slot.innerHTML = ''; return; } // toggle off
-        const s = await supabase.auth.getSession(); const user = s.data.session ? s.data.session.user : null;
-        if (!user) { slot.innerHTML = '<p class="cc-muted" style="margin:12px 0 0"><a href="/login" style="color:var(--accent)">Sign in</a> to reply.</p>'; return; }
-        slot.innerHTML = composerHTML(authorNameOf(user), true);
+        if (!currentUser) { slot.innerHTML = '<p class="cc-muted" style="margin:12px 0 0"><a href="/login" style="color:var(--accent)">Sign in</a> to reply.</p>'; return; }
+        slot.innerHTML = composerHTML(authorNameOf(currentUser), true);
         const cid = (b.closest('.comment') as HTMLElement).dataset.id!;
         const rbtn = slot.querySelector('[data-post]') as HTMLButtonElement;
         const rta = slot.querySelector('textarea') as HTMLTextAreaElement;
@@ -218,8 +240,21 @@ const { postId } = Astro.props;
       }
     });
 
-    supabase.auth.onAuthStateChange(() => { load(); renderCompose(); });
-    load();
-    renderCompose();
+    // Auth-change guard: Supabase fires SIGNED_IN on every tab refocus, so only
+    // act on an ACTUAL user change — otherwise re-rendering the composer would
+    // wipe the draft the reader is mid-way through. On real sign-out, clear it.
+    async function refresh() {
+      const s = await supabase.auth.getSession();
+      const uid = s.data.session ? s.data.session.user.id : null;
+      if (uid === lastUid) return;
+      lastUid = uid;
+      currentUser = s.data.session ? s.data.session.user : null;
+      isAdmin = false;
+      if (!currentUser) setDraft('');
+      if (currentUser) { try { const a = await supabase.rpc('is_admin'); isAdmin = a.data === true; } catch (e) {} }
+      load(); renderCompose();
+    }
+    supabase.auth.onAuthStateChange(() => refresh());
+    refresh();
   }
 </script>
