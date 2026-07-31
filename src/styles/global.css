@@ -260,6 +260,13 @@ li { margin: 0.35rem 0; }
 .post-body li { margin: 0.4em 0; }
 .post-body img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--rule); }
 
+/* Prose tables — clean editorial rules (right-aligned cells come from Markdown `--:`). */
+.post-body table { width: 100%; border-collapse: collapse; margin: 2em 0; font-size: 15.5px; display: block; overflow-x: auto; }
+.post-body thead th { text-align: left; font-family: var(--sans); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); padding: 9px 14px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.post-body tbody td { padding: 10px 14px; border-bottom: 1px solid var(--rule-soft); color: var(--ink-soft); vertical-align: top; }
+.post-body tbody tr:last-child td { border-bottom: 0; }
+.post-body tbody tr:hover td { background: color-mix(in srgb, var(--ink) 2.5%, transparent); }
+
 /* Code-block filename chip (shown when an author writes ```lang title="foo.py").
    Additive: absent when no filename, so the current dots+lang look is unchanged. */
 .post-body .code-top .code-file { font-family: var(--mono); font-size: 12px; color: color-mix(in srgb, var(--code-fg) 60%, transparent); }
@@ -298,10 +305,27 @@ li { margin: 0.35rem 0; }
    that stays consistent in both themes — a "printed figure" that never clashes
    with the page. In dark mode the canvas is a lit inset framed by the rule. */
 .post-body .d2-diagram {
-  margin: 2.4em 0; border: 1px solid var(--rule); border-radius: 8px;
-  background: #f6f2ea; box-shadow: var(--shadow); padding: clamp(16px, 3vw, 26px); overflow-x: auto;
+  margin: 2.2em 0; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--card); box-shadow: var(--shadow); overflow-x: auto;
 }
-:root[data-theme="dark"] .post-body .d2-diagram { border-color: #2c2519; box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+.post-body .d2-diagram svg { display: block; height: auto; margin: 0 auto; padding: clamp(18px, 3vw, 26px); box-sizing: border-box; }
+/* Re-paint D2's theme-1 colour classes to the PAGE tokens so the diagram reads on a
+   theme-following card in BOTH modes (design .fig look): text→ink, box fills→a faint
+   accent tint, box borders→rule, connectors + arrowheads→accent. Uses D2's stable
+   class names; all token-based, so it follows light/dark automatically. */
+.post-body .d2-diagram svg .text,
+.post-body .d2-diagram svg .text-bold,
+.post-body .d2-diagram svg .text-italic { fill: var(--ink); }
+.post-body .d2-diagram svg .fill-N7 { fill: transparent; }
+.post-body .d2-diagram svg .fill-N2 { fill: var(--ink-soft); }
+/* Box fills → a faint accent tint; B1 is D2's darkest (arrowheads) → solid accent. */
+.post-body .d2-diagram svg [class*="fill-B"]:not(.fill-B1) { fill: color-mix(in srgb, var(--accent) 8%, var(--paper-2)); }
+.post-body .d2-diagram svg .fill-B1 { fill: var(--accent); }
+/* Shape borders → rule; connectors (arrows) → accent. */
+.post-body .d2-diagram svg rect[class*="stroke-"],
+.post-body .d2-diagram svg .shape[class*="stroke-"] { stroke: var(--rule); }
+.post-body .d2-diagram svg .connection[class*="stroke-"],
+.post-body .d2-diagram svg path.connection { stroke: var(--accent); }
 
 /* D2 diagrams — inline SVG at build + publish time. Centered, scale to column,
    scroll if wider. `.d2-error` is the bad-diagram fallback box. */
@@ -317,27 +341,28 @@ li { margin: 0.35rem 0; }
    a warm #f6f2ea "printed figure" canvas consistent in BOTH themes, the plot drawn
    straight onto it (Plotly's own bg is forced transparent in PlotlyReader). Stays a
    BLOCK box (never flex) so .plotly-holder keeps a real full width for autosize. */
-.post-body .py-plot {
-  margin: 2.4em 0; border: 1px solid var(--rule); border-radius: 8px;
-  background: #f6f2ea; box-shadow: var(--shadow);
-  padding: clamp(16px, 3vw, 26px); overflow: hidden;
-}
-:root[data-theme="dark"] .post-body .py-plot { border-color: #2c2519; box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
-/* The code toggle sits on the warm canvas, so its always-visible parts use FIXED
-   warm ink (token colours would flip light and vanish on the cream mat). The revealed
-   source stays the dark .codeblock card (code is dark in both themes by design). */
-.py-code { margin: 0 0 0.85rem; }
-.py-code > summary {
-  cursor: pointer; padding: 0.3rem 0.5rem; font-size: var(--fs-sm); font-weight: 600;
-  color: #6b5f4a; list-style: none; user-select: none; border-radius: 6px;
-}
-.py-code > summary::-webkit-details-marker { display: none; }
-.py-code > summary::before { content: '▸'; display: inline-block; margin-right: 0.4rem; transition: transform var(--dur) var(--ease); }
-.py-code[open] > summary::before { transform: rotate(90deg); }
-.py-code > summary:hover { color: #33291b; }
-.py-code .codeblock { margin: 0.5rem 0 0; box-shadow: none; }
-.plotly-figure { width: 100%; }
-.plotly-holder { width: 100%; min-height: 300px; }
+.post-body .py-plot { margin: 2.2em 0; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; box-shadow: var(--shadow); }
+.post-body .py-plot .demo-head { display: flex; align-items: center; gap: 10px; background: var(--paper-2); padding: 9px 14px; border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+.post-body .py-plot .dots { display: flex; gap: 6px; }
+.post-body .py-plot .dots i { width: 9px; height: 9px; border-radius: 999px; background: var(--rule); display: block; }
+.post-body .py-plot .fname { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
+.post-body .py-plot .seg { display: flex; margin-left: auto; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.post-body .py-plot .seg button { background: none; border: 0; font-family: var(--sans); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); padding: 5px 11px; cursor: pointer; }
+.post-body .py-plot .seg button + button { border-left: 1px solid var(--rule); }
+.post-body .py-plot .seg button.on { background: var(--accent); color: var(--on-accent); }
+.post-body .py-plot .cpy { background: none; border: 1px solid var(--rule); border-radius: 3px; font-family: var(--sans); font-size: 11px; letter-spacing: 0.06em; color: var(--ink-faint); padding: 5px 9px; cursor: pointer; }
+.post-body .py-plot .cpy:hover { border-color: var(--accent); color: var(--accent); }
+.post-body .py-plot .pane { display: none; }
+.post-body .py-plot .pane.on { display: block; }
+/* The code pane reuses the dark .codeblock card, flush inside the demo frame; its
+   own header row is hidden because the demo-head already provides the chrome. */
+.post-body .py-plot .pane .codeblock { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+.post-body .py-plot .pane .codeblock .code-top { display: none; }
+.post-body .py-plot .plotwrap { background: var(--code-bg); padding: 8px 8px 4px; }
+.post-body .py-plot .plotly-figure { width: 100%; }
+.post-body .py-plot .plotly-holder { width: 100%; height: 430px; }
+@media (max-width: 640px) { .post-body .py-plot .plotly-holder { height: 330px; } }
+.post-body .py-plot .demo-foot { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-top: 1px solid var(--rule); background: var(--paper-2); font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); flex-wrap: wrap; }
 /* Notebook-style stdout from a non-plotting python cell, embedded at publish as raw
    <pre class="py-output"> (R12). Deliberately NOT another dark slab — it's a warm
    "result" panel with an Output label + accent edge, so code and its output read as

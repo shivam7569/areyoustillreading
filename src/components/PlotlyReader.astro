@@ -11,6 +11,32 @@
 ---
 <script is:inline>
   (function () {
+    // Demo chrome: the Code/Output segmented toggle + Copy button (design .fig.demo).
+    // Wired independently of the plot so it works even before/without a live figure.
+    document.querySelectorAll('.py-plot').forEach(function (demo) {
+      var segs = demo.querySelectorAll('.seg button');
+      var panes = demo.querySelectorAll('.pane');
+      segs.forEach(function (b) {
+        b.addEventListener('click', function () {
+          var want = b.getAttribute('data-pane'); // 'code' | 'out'
+          segs.forEach(function (x) { x.classList.toggle('on', x === b); });
+          panes.forEach(function (p) {
+            var isOut = p.classList.contains('py-pane-out');
+            p.classList.toggle('on', want === 'out' ? isOut : !isOut);
+          });
+          // The output pane was display:none, so Plotly must re-measure on reveal.
+          if (want === 'out') { var h = demo.querySelector('.plotly-holder'); if (h && window.Plotly) window.Plotly.Plots.resize(h); }
+        });
+      });
+      var cpy = demo.querySelector('[data-cpy]');
+      if (cpy) cpy.addEventListener('click', function () {
+        var code = demo.querySelector('.py-pane-code code') || demo.querySelector('.py-pane-code pre');
+        var text = code ? code.innerText.replace(/^\s*\d+\t?/gm, '') : '';
+        if (navigator.clipboard && text) navigator.clipboard.writeText(text).catch(function () {});
+        cpy.textContent = 'Copied'; setTimeout(function () { cpy.textContent = 'Copy'; }, 1600);
+      });
+    });
+
     var figs = document.querySelectorAll('.plotly-figure');
     if (!figs.length) return;
     var PLOTLY_JS = 'https://cdn.plot.ly/plotly-2.35.2.min.js';
@@ -43,12 +69,25 @@
       delete layout.width;
       delete layout.height;
       layout.autosize = true;
-      // Draw the plot on the frame's warm editorial canvas (global.css .py-plot),
-      // consistent in both themes — force Plotly's own backgrounds transparent. Cover
-      // the 2D figure (paper/plot) AND the 3D scene cube (separate bg key).
+      // The plot now sits on the always-dark .plotwrap (design .fig.demo), so force
+      // Plotly's backgrounds transparent AND paint the axes/font in light-on-dark
+      // values — the figure's own colours may be tuned for a light mat and would
+      // otherwise vanish on the dark surface. Consistent in both page themes.
       layout.paper_bgcolor = 'rgba(0,0,0,0)';
       layout.plot_bgcolor = 'rgba(0,0,0,0)';
-      if (layout.scene) layout.scene = Object.assign({}, layout.scene, { bgcolor: 'rgba(0,0,0,0)' });
+      var AX = { gridcolor: '#3b3327', zerolinecolor: '#4b4133', linecolor: '#4b4133', color: '#b3a793' };
+      layout.font = Object.assign({}, layout.font || {}, { color: '#b3a793' });
+      if (layout.scene) {
+        layout.scene = Object.assign({}, layout.scene, {
+          bgcolor: 'rgba(0,0,0,0)',
+          xaxis: Object.assign({}, layout.scene.xaxis || {}, AX),
+          yaxis: Object.assign({}, layout.scene.yaxis || {}, AX),
+          zaxis: Object.assign({}, layout.scene.zaxis || {}, AX),
+        });
+      } else {
+        layout.xaxis = Object.assign({}, layout.xaxis || {}, AX);
+        layout.yaxis = Object.assign({}, layout.yaxis || {}, AX);
+      }
       loadPlotly().then(function (P) {
         P.newPlot(holder, figure.data || [], layout, { responsive: true, displaylogo: false });
       }).catch(function () {

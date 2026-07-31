@@ -86,30 +86,44 @@ export default function rehypePlotly() {
         children: valid ? [dataScript] : [],
       };
 
-      // Fold the immediately-preceding code block (the python source) into a
-      // collapsible <details>. Never pair with another plotly fence.
+      // Rebuild to the design's runnable-demo frame: a window head (dots + filename
+      // + a Code/Output segmented toggle + Copy), a code pane (the python source, which
+      // rehype-code-chrome wraps into a .codeblock afterwards), and an output pane with
+      // the plot on the dark code surface + a rotate/zoom foot. When there is no
+      // preceding code block, only the output pane is shown (no toggle/copy).
       let codeIdx = prevElementIndex(parent.children, index);
       if (codeIdx >= 0) {
         const prev = parent.children[codeIdx];
         if (!(prev.type === 'element' && prev.tagName === 'pre' && plotlyJsonOf(prev) === null)) codeIdx = -1;
       }
+      const hasCode = codeIdx >= 0;
+      const el = (tagName, className, children = [], props = {}) => ({ type: 'element', tagName, properties: { className, ...props }, children });
+      const txt = (value) => ({ type: 'text', value });
 
-      const figureChildren = [];
-      if (codeIdx >= 0) {
-        figureChildren.push({
-          type: 'element',
-          tagName: 'details',
-          properties: { className: ['py-code'] },
-          children: [
-            { type: 'element', tagName: 'summary', properties: {}, children: [{ type: 'text', value: 'Show code' }] },
-            parent.children[codeIdx],
-          ],
-        });
+      const headChildren = [
+        el('span', ['dots'], [el('i', []), el('i', []), el('i', [])]),
+        el('span', ['fname'], [txt('python')]),
+      ];
+      if (hasCode) {
+        headChildren.push(el('span', ['seg'], [
+          el('button', [], [txt('Code')], { type: 'button', dataPane: 'code' }),
+          el('button', ['on'], [txt('Output')], { type: 'button', dataPane: 'out' }),
+        ]));
+        headChildren.push(el('button', ['cpy'], [txt('Copy')], { type: 'button', dataCpy: true }));
       }
-      figureChildren.push(plotDiv);
-      const figure = { type: 'element', tagName: 'figure', properties: { className: ['py-plot'] }, children: figureChildren };
+      const demoHead = el('div', ['demo-head'], headChildren);
 
-      if (codeIdx >= 0) {
+      const panes = [];
+      if (hasCode) panes.push(el('div', ['pane', 'py-pane-code'], [parent.children[codeIdx]]));
+      const outPane = el('div', ['pane', 'on', 'py-pane-out'], [
+        el('div', ['plotwrap'], [plotDiv]),
+        el('div', ['demo-foot'], [el('span', [], [txt('Drag to explore · scroll to zoom')])]),
+      ]);
+      panes.push(outPane);
+
+      const figure = el('figure', ['py-plot'], [demoHead, ...panes]);
+
+      if (hasCode) {
         parent.children.splice(index, 1); // remove the plotly <pre>
         parent.children.splice(codeIdx, 1); // remove the code <pre>
         parent.children.splice(codeIdx, 0, figure); // insert the combined figure
