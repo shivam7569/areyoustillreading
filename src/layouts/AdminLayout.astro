@@ -54,23 +54,33 @@ const icon = {
   revenue: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>',
   settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
   exit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>',
+  viewsite: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M9 7h8v8"/></svg>',
 };
-// FLAT nav, matching the Claude Design studio pane: a single ordered list (no
-// group captions) — writing (Posts→Series), then readers, then the numbers, read
-// by proximity rather than labels — with a divider before Back to site / Settings.
-// `count` names the data key the client fills into the item's .ct badge.
-const navItems = [
-  { key: 'home', href: '/admin', label: 'Home', icon: icon.home },
-  { key: 'posts', href: '/admin/posts', label: 'Posts', icon: icon.posts, count: 'posts' },
-  { key: 'drafts', href: '/admin/drafts', label: 'Drafts', icon: icon.drafts, count: 'drafts' },
-  { key: 'projects', href: '/admin/projects', label: 'Projects', icon: icon.projects, count: 'projects' },
-  { key: 'resume', href: '/admin/resume', label: 'Resume', icon: icon.resume },
-  { key: 'write', href: '/admin/write', label: 'Write', icon: icon.write },
-  { key: 'series', href: '/admin/series', label: 'Series', icon: icon.series },
-  { key: 'audience', href: '/admin/audience', label: 'Audience', icon: icon.audience },
-  { key: 'engagement', href: '/admin/engagement', label: 'Engagement', icon: icon.engagement },
-  { key: 'analytics', href: '/admin/analytics', label: 'Analytics', icon: icon.analytics },
-  { key: 'revenue', href: '/admin/revenue', label: 'Revenue', icon: icon.revenue },
+// Grouped nav, matching the Claude Design studio pane: Home on its own, then
+// WRITING (Posts, Drafts), PAGES (Projects, Resume), READERS (Audience, Engagement),
+// INSIGHT (Analytics, Revenue). Write is the primary button above the nav; Settings
+// + View the site sit at the bottom. `count` names the data key filled into the .ct
+// badge; `countAccent` renders that count in the accent colour (Drafts).
+const navGroups = [
+  { label: null, items: [
+    { key: 'home', href: '/admin', label: 'Home', icon: icon.home },
+  ] },
+  { label: 'Writing', items: [
+    { key: 'posts', href: '/admin/posts', label: 'Posts', icon: icon.posts, count: 'posts' },
+    { key: 'drafts', href: '/admin/drafts', label: 'Drafts', icon: icon.drafts, count: 'drafts', countAccent: true },
+  ] },
+  { label: 'Pages', items: [
+    { key: 'projects', href: '/admin/projects', label: 'Projects', icon: icon.projects, count: 'projects' },
+    { key: 'resume', href: '/admin/resume', label: 'Resume', icon: icon.resume },
+  ] },
+  { label: 'Readers', items: [
+    { key: 'audience', href: '/admin/audience', label: 'Audience', icon: icon.audience },
+    { key: 'engagement', href: '/admin/engagement', label: 'Engagement', icon: icon.engagement },
+  ] },
+  { label: 'Insight', items: [
+    { key: 'analytics', href: '/admin/analytics', label: 'Analytics', icon: icon.analytics },
+    { key: 'revenue', href: '/admin/revenue', label: 'Revenue', icon: icon.revenue },
+  ] },
 ];
 ---
 
@@ -155,29 +165,54 @@ const navItems = [
       <aside class="admin-sidebar">
         <a class="admin-brand" href="/" title="Back to the site">
           <span class="wm"><span class="are">are</span>youstillreading</span>
-          <span class="admin-brand-tag"><span class="brand-dot" aria-hidden="true"></span>Studio · all synced</span>
         </a>
+        <div class="admin-status">
+          <span class="studio-label">Studio</span>
+          <span class="sync"><span class="dot" aria-hidden="true"></span>All synced</span>
+        </div>
+
+        <a class="admin-write" href="/admin/write">
+          <Fragment set:html={icon.write} />
+          <span>Write</span>
+        </a>
+
         <nav class="admin-nav">
-          {navItems.map((item) => (
-            <a href={item.href} class={active === item.key ? 'is-active' : undefined} aria-current={active === item.key ? 'page' : undefined}>
-              <Fragment set:html={item.icon} />
-              <span class="lbl">{item.label}</span>
-              {(item as any).count && <span class="ct" data-ct={(item as any).count} hidden></span>}
-            </a>
+          {navGroups.map((group) => (
+            <Fragment>
+              {group.label && <div class="nav-label-sm">{group.label}</div>}
+              {group.items.map((item) => (
+                <a href={item.href} class={active === item.key ? 'is-active' : undefined} aria-current={active === item.key ? 'page' : undefined}>
+                  <Fragment set:html={item.icon} />
+                  <span class="lbl">{item.label}</span>
+                  {(item as any).count && <span class={`ct${(item as any).countAccent ? ' accent' : ''}`} data-ct={(item as any).count} hidden></span>}
+                </a>
+              ))}
+            </Fragment>
           ))}
-          <div class="nav-div"></div>
-          <a href="/">
-            <Fragment set:html={icon.exit} />
-            <span class="lbl">Back to site</span>
-          </a>
+        </nav>
+
+        <div class="admin-exits">
           <a href="/admin/settings" class={active === 'settings' ? 'is-active' : undefined} aria-current={active === 'settings' ? 'page' : undefined}>
             <Fragment set:html={icon.settings} />
             <span class="lbl">Settings</span>
           </a>
-        </nav>
+          <a href="/" target="_blank" rel="noopener">
+            <Fragment set:html={icon.viewsite} />
+            <span class="lbl">View the site</span>
+          </a>
+        </div>
+
         <div class="admin-side-foot">
-          <div class="who" id="admin-who"></div>
-          <button class="btn btn-ghost btn-sm" id="admin-signout" type="button" style="width:100%">Sign out</button>
+          <div class="acct-row">
+            <span class="avatar" id="admin-avatar" aria-hidden="true"></span>
+            <div class="acct-id">
+              <div class="who" id="admin-who">Signed in</div>
+              <div class="role">Author</div>
+            </div>
+            <button class="signout-ic" id="admin-signout" type="button" title="Sign out" aria-label="Sign out">
+              <Fragment set:html={icon.exit} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -251,6 +286,8 @@ const navItems = [
       function paintWho(email?: string) {
         const who = document.getElementById('admin-who');
         if (who && email) who.textContent = email;
+        const av = document.getElementById('admin-avatar');
+        if (av && email) av.textContent = email.trim().charAt(0).toUpperCase();
       }
 
       async function run() {

@@ -124,44 +124,59 @@
 /* The Studio brand echoes the public wordmark exactly — serif, with the plum "are" —
    then names the room ("Studio") in a quiet caption, so the dashboard reads as the
    same masthead, not a separate product. */
-.admin-brand {
-  display: flex; flex-direction: column; gap: 0.16rem;
-  padding: 0.45rem 0.65rem 0.95rem; margin-bottom: 0.4rem;
-  text-decoration: none; /* it's a link back to the site */
-}
+.admin-brand { display: block; padding: 0 8px; text-decoration: none; }
 .admin-brand:hover { text-decoration: none; }
-.admin-brand .wm { font-family: var(--serif-display); font-weight: 600; font-size: 1.2rem; letter-spacing: -0.01em; color: var(--fg); line-height: 1; }
+.admin-brand .wm { font-family: var(--serif-display); font-weight: 600; font-size: 1.3rem; letter-spacing: -0.01em; color: var(--fg); line-height: 1; }
 .admin-brand .wm .are { color: var(--accent); }
-.admin-brand:hover .wm { opacity: 0.82; }
-.admin-brand-tag { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-sans); font-size: 10px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-faint); }
-.admin-brand-tag .brand-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); flex: none; }
+.admin-brand:hover .wm { opacity: 0.85; }
+/* STUDIO ··· All synced status row, split to the edges. */
+.admin-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 8px 0; }
+.admin-status .studio-label { font-family: var(--font-sans); font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-faint); }
+.admin-status .sync { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-faint); }
+.admin-status .sync .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); flex: none; }
+/* Primary Write button — the one filled/accent element in the pane. */
+.admin-write { display: flex; align-items: center; gap: 10px; margin: 16px 4px 4px; padding: 11px 14px; border-radius: 7px; background: var(--accent); color: var(--on-accent); font-family: var(--font-sans); font-weight: 600; font-size: 15px; text-decoration: none; transition: filter 0.18s ease, transform 0.18s ease; }
+.admin-write:hover { filter: brightness(1.06); color: var(--on-accent); text-decoration: none; transform: translateY(-1px); }
+.admin-write svg { width: 17px; height: 17px; flex: none; }
 
-.admin-nav { display: flex; flex-direction: column; gap: 1px; margin-top: 24px; }
+/* Grouped nav with small caption labels (WRITING / PAGES / READERS / INSIGHT). */
+.admin-nav { display: flex; flex-direction: column; gap: 1px; margin-top: 12px; }
 .admin-nav a {
-  display: flex; align-items: center; gap: 11px;
-  padding: 9px 11px; border-radius: var(--admin-radius-nav);
-  color: var(--ink-soft); font-weight: 500; font-size: 14px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 12px; border-radius: 5px;
+  color: var(--ink-soft); font-weight: 500; font-size: 15px;
   text-decoration: none; transition: background 0.18s ease, color 0.18s ease;
 }
-.admin-nav a:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); text-decoration: none; }
-/* Active section: a flat accent tint (matches the design's .snav a.on). */
-.admin-nav a.is-active { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); }
-.admin-nav a svg { width: 16px; height: 16px; flex: none; opacity: 0.9; }
-/* Per-section count pushed to the right edge (matches the design's .snav .ct).
-   Filled client-side from real data (/api/admin/overview); hidden until loaded so
-   no fake zero ever shows. */
-.admin-nav a .ct { margin-left: auto; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
-.admin-nav a.is-active .ct { color: var(--accent); }
-/* Divider before Back to site / Settings (the design's .snav .div) — the nav is a
-   flat list now, so a hairline separates the app sections from the exits. */
-.admin-nav .nav-div { height: 1px; background: var(--rule); margin: 14px 6px; }
-.admin-nav .nav-label-sm { margin: 0.95rem 0.65rem 0.3rem; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
-.admin-nav-spacer { flex: 1 1 auto; }
+.admin-nav a:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--ink); text-decoration: none; }
+/* Active item: a NEUTRAL highlight — the design reserves the accent for the Write
+   button and the Drafts count, not for the current nav row. */
+.admin-nav a.is-active { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+.admin-nav a svg { width: 17px; height: 17px; flex: none; opacity: 0.85; }
+.admin-nav .nav-label-sm { margin: 16px 12px 6px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+.admin-nav .nav-label-sm:first-child { margin-top: 4px; }
+/* Per-section count, right-aligned; the Drafts count carries `.accent`. Filled
+   client-side from real data; hidden until loaded so no fake zero ever shows. */
+.admin-nav a .ct { margin-left: auto; font-size: 12.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.admin-nav a .ct.accent { color: var(--accent); }
+.admin-nav a.is-active .ct { color: var(--ink-soft); }
 
-/* margin-top:auto pushes the account block to the very bottom now that the nav no
-   longer carries a flex spacer (the design's .acct{margin-top:auto}). */
-.admin-side-foot { border-top: 1px solid var(--rule); margin-top: auto; padding-top: 14px; }
-.admin-side-foot .who { padding: 0 8px 0.5rem; font-size: 12.5px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Exits (Settings, View the site) pinned to the bottom above the account row. */
+.admin-exits { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--rule); display: flex; flex-direction: column; gap: 1px; }
+.admin-exits a { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 5px; color: var(--ink-faint); font-size: 14.5px; text-decoration: none; transition: background 0.18s ease, color 0.18s ease; }
+.admin-exits a:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--ink); text-decoration: none; }
+.admin-exits a.is-active { color: var(--accent); }
+.admin-exits a svg { width: 17px; height: 17px; flex: none; opacity: 0.85; }
+
+/* Account row: avatar initial + email/role + a sign-out icon button. */
+.admin-side-foot { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.admin-side-foot .acct-row { display: flex; align-items: center; gap: 11px; padding: 2px 6px; }
+.admin-side-foot .avatar { width: 32px; height: 32px; border-radius: 999px; flex: none; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 24%, var(--card)); color: var(--accent); font-weight: 700; font-size: 14px; text-transform: uppercase; }
+.admin-side-foot .acct-id { min-width: 0; flex: 1; }
+.admin-side-foot .who { font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-side-foot .role { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); margin-top: 2px; }
+.admin-side-foot .signout-ic { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border: 0; background: none; color: var(--ink-faint); border-radius: 5px; cursor: pointer; }
+.admin-side-foot .signout-ic:hover { color: var(--accent); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.admin-side-foot .signout-ic svg { width: 17px; height: 17px; }
 
 /* ---- Content column ----------------------------------------------------- */
 .admin-content { display: flex; flex-direction: column; min-width: 0; }
@@ -336,13 +351,17 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
     gap: 0.15rem; border-right: 0; border-bottom: 1px solid var(--border); padding: 0.6rem 0.75rem;
   }
   .admin-brand { padding: 0.35rem 0.5rem; margin: 0 0.5rem 0 0; }
-  .admin-brand-tag { display: none; }
-  .admin-nav { flex-direction: row; flex-wrap: wrap; }
+  .admin-status { display: none; }
+  .admin-write { margin: 0 0.35rem 0 0; padding: 0.45rem; border-radius: 6px; }
+  .admin-write span { display: none; }
+  .admin-nav { flex-direction: row; flex-wrap: wrap; margin-top: 0; }
   .admin-nav a { padding: 0.45rem 0.6rem; font-size: 0.9rem; }
   .admin-nav a span.lbl { display: none; }
-  .admin-nav .nav-label-sm, .admin-nav-spacer { display: none; }
-  .admin-side-foot { border-top: 0; margin: 0 0 0 auto; padding: 0; }
-  .admin-side-foot .who { display: none; }
+  .admin-nav .nav-label-sm { display: none; }
+  .admin-exits { flex-direction: row; margin: 0 0 0 auto; padding: 0; border-top: 0; }
+  .admin-exits a span.lbl { display: none; }
+  .admin-side-foot { border-top: 0; margin: 0; padding: 0; }
+  .admin-side-foot .acct-id { display: none; }
   .admin-main { padding: 1.1rem 1rem 3rem; }
 }
 
