@@ -232,14 +232,16 @@ const mark = (s: string) => s.split(/\*\*(.+?)\*\*/g).map((t, i) => ({ t, b: i %
       </div>
     </section>
 
-    {/* Closing band: a plain note, a subtle redirect to /projects, and the
-        primary contact action (real mailto). */}
+    {/* Closing band: on the left, the note with a quiet underlined redirect to
+        /projects stacked beneath it; on the right, the primary contact action.
+        The redirect is a plain text link (no directional arrow) so it never
+        reads as pointing at the adjacent "Get in touch" button. */}
     <div class="cv-close">
-      <span>References available on request. Email is the fastest way to reach me.</span>
-      <div class="close-actions">
-        <a class="proj-link" href="/projects">See selected projects <span aria-hidden="true">→</span></a>
-        <a class="btn btn-primary btn-sm" href="mailto:shivam.iitmandi@gmail.com">Get in touch</a>
+      <div class="cv-close-l">
+        <span>References available on request. Email is the fastest way to reach me.</span>
+        <a class="proj-link" href="/projects">See selected projects</a>
       </div>
+      <a class="btn btn-primary btn-sm" href="mailto:shivam.iitmandi@gmail.com">Get in touch</a>
     </div>
   </div>
 </BaseLayout>
@@ -307,13 +309,12 @@ const mark = (s: string) => s.split(/\*\*(.+?)\*\*/g).map((t, i) => ({ t, b: i %
   .edu .t small{display:block;font-family:var(--sans);font-size:13.5px;font-weight:400;color:var(--ink-faint);margin-top:5px}
   .edu .y{font-family:var(--sans);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);white-space:nowrap;padding-top:6px}
 
-  .cv-close{margin-top:clamp(38px,5vw,60px);padding-top:28px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;font-family:var(--sans);font-size:14px;color:var(--ink-faint)}
-  .close-actions{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
-  /* a quiet, editorial redirect to the work behind the numbers */
-  .proj-link{font-family:var(--sans);font-size:14px;color:var(--ink-soft);display:inline-flex;align-items:center;gap:7px;transition:color .2s}
-  .proj-link span{transition:transform .2s}
-  .proj-link:hover{color:var(--accent)}
-  .proj-link:hover span{transform:translateX(4px)}
+  .cv-close{margin-top:clamp(38px,5vw,60px);padding-top:28px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;gap:18px 28px;flex-wrap:wrap;font-family:var(--sans);font-size:14px;color:var(--ink-faint)}
+  .cv-close-l{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+  /* a quiet, editorial redirect to the work — a plain underline link, no arrow,
+     so it can't be misread as pointing at the adjacent "Get in touch" button */
+  .proj-link{font-family:var(--sans);font-size:14px;color:var(--ink-soft);border-bottom:1px solid var(--rule);transition:color .2s,border-color .2s}
+  .proj-link:hover{color:var(--accent);border-color:var(--accent)}
 </style>
 
 {/*
