@@ -142,6 +142,7 @@ const { postId } = Astro.props;
       rows.forEach((r) => { if (r.parent_id) (kidsOf[r.parent_id] = kidsOf[r.parent_id] || []).push(r); });
       const top = rows.filter((r) => !r.parent_id);
       list.innerHTML = top.length ? top.map((r) => renderComment(r, kidsOf)).join('') : '<p class="cc-muted">No comments yet. Be the first.</p>';
+      renderMath();
     }
 
     async function post(ta: HTMLTextAreaElement, parentId: string | null, btn: HTMLButtonElement) {
