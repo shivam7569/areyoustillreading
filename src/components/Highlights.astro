@@ -103,6 +103,8 @@ const { postId, author = '', title = '' } = Astro.props;
   .rep .rep-acts .up { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); cursor: pointer; font-variant-numeric: tabular-nums; }
   .rep .rep-acts .up .uparrow { font-size: 10px; line-height: 1; }
   .rep .rep-acts .up:hover, .rep .rep-acts .up.on { color: var(--accent); }
+  .rep .rep-acts .repdel { margin-left: 14px; background: none; border: 0; padding: 0; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); cursor: pointer; }
+  .rep .rep-acts .repdel:hover { color: #b4453a; }
   .repbox textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
   .repbox .r { display: flex; align-items: center; gap: 10px; margin-top: 9px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); flex-wrap: wrap; }
   .repbox .r .btn { margin-left: auto; }
@@ -385,7 +387,7 @@ const { postId, author = '', title = '' } = Astro.props;
         + '<div class="repbox"><textarea placeholder="Add to the discussion…"></textarea>'
         + '<div class="r"><span>Private — between you and the author</span><button class="btn btn-primary btn-sm" type="button" data-reply>Post reply</button></div></div></div>';
       const listEl = dbody.querySelector('.rep-list') as HTMLElement;
-      const res = await supabase.from('highlight_comments').select('id,author_name,body,created_at,author_is_admin').eq('highlight_id', hid).order('created_at', { ascending: true });
+      const res = await supabase.from('highlight_comments').select('id,user_id,author_name,body,created_at,author_is_admin').eq('highlight_id', hid).order('created_at', { ascending: true });
       if (res.error) { listEl.textContent = 'Could not load the discussion.'; return; }
       const rows = (res.data || []) as any[];
       if (rows.length) {
@@ -396,7 +398,9 @@ const { postId, author = '', title = '' } = Astro.props;
           return '<div class="rep' + (r.author_is_admin ? ' auth' : '') + '" data-cid="' + r.id + '"><div class="av">' + esc((who[0] || '?')) + '</div>'
             + '<div><div class="hd"><b>' + esc(who) + '</b>' + (r.author_is_admin ? '<span class="bg">Author</span>' : '')
             + '<span class="w">' + esc(when) + '</span></div><p>' + esc(r.body) + '</p>'
-            + '<div class="rep-acts"><button type="button" class="up" data-up aria-label="Upvote"><span class="uparrow">▲</span> <span class="upn">0</span></button></div></div></div>';
+            + '<div class="rep-acts"><button type="button" class="up" data-up aria-label="Upvote"><span class="uparrow">▲</span> <span class="upn">0</span></button>'
+            + ((currentUser && (r.user_id === currentUser.id || isAdmin)) ? '<button type="button" class="repdel" data-repdel>Delete</button>' : '')
+            + '</div></div></div>';
         }).join('');
         paintReplyVotes(rows.map((r) => r.id));
         addPip(hid, rows.length);
@@ -456,6 +460,17 @@ const { postId, author = '', title = '' } = Astro.props;
       const t = e.target as HTMLElement;
       const upEl = t.closest('[data-up]') as HTMLElement | null;
       if (upEl) { const rep = upEl.closest('.rep') as HTMLElement | null; if (rep && rep.dataset.cid) toggleHlVote(rep.dataset.cid, upEl); return; }
+      const repdel = t.closest('[data-repdel]') as HTMLElement | null;
+      if (repdel) {
+        const rep = repdel.closest('.rep') as HTMLElement | null; if (!rep || !rep.dataset.cid) return;
+        if (!confirm('Delete this reply? This can’t be undone.')) return;
+        const hid = dbody.dataset.hid || ''; const qel = dbody.querySelector('.thv > q'); const q = qel ? qel.textContent! : '';
+        supabase.from('highlight_comments').delete().eq('id', rep.dataset.cid).then((r) => {
+          if (r.error) { alert('Could not delete: ' + r.error.message); return; }
+          openThread(hid, q); // reload the thread (also re-counts the mark's pip)
+        });
+        return;
+      }
       if (t.closest('[data-back]')) return sync();
       if (t.closest('[data-reply]')) {
         const hid = dbody.dataset.hid || ''; const ta = dbody.querySelector('.repbox textarea') as HTMLTextAreaElement | null;

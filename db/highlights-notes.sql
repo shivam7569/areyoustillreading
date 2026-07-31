@@ -55,3 +55,8 @@ returns table(quote text) language sql security definer set search_path = public
   having count(distinct h.user_id) >= p_min;
 $$;
 grant execute on function public.highlight_popular(text, int) to anon, authenticated;
+
+-- 4. Delete a discussion reply — allowed for its AUTHOR or an ADMIN only.
+drop policy if exists "hc delete own or admin" on public.highlight_comments;
+create policy "hc delete own or admin" on public.highlight_comments
+  for delete using (auth.uid() = user_id or public.is_admin());
