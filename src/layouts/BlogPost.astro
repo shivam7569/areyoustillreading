@@ -178,7 +178,7 @@ if (!series && here !== -1) {
         <div class="all-link"><a href="/blog">Browse all {allPosts.length} {allPosts.length === 1 ? 'essay' : 'essays'} &rarr;</a></div>
 
         {/* Interactive per-post islands (Supabase + RLS; keyed by post.id). */}
-        <Highlights postId={post.id} />
+        <Highlights postId={post.id} author={byline} title={title} />
         <Notes postId={post.id} />
         <Comments postId={post.id} />
       </div>

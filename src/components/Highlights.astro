@@ -1,437 +1,441 @@
 ---
 /**
- * ============================================================================
- * Highlights.astro — per-post reader highlights + threaded discussion widget
- * ============================================================================
+ * Highlights.astro — reader highlights + per-passage discussion, built to the
+ * Claude Design's highlight system (selection toolbar, mark.hl variants, the
+ * floating count pill, the slide-in drawer, discussion threads) but persisted to
+ * SUPABASE, not the design mock's localStorage.
  *
- * WHAT THIS IS
- * ------------
- * A self-contained UI island rendered at the bottom of a blog post. Signed-in
- * readers can select text in the article, save it as a "highlight" (a quoted
- * excerpt), and hold a threaded discussion attached to that highlight. Each
- * saved highlight is visually re-applied as a <mark> over the matching text in
- * the article body, and clicking a mark jumps to its discussion thread.
+ * Bridge: the design engine anchors on {blockIndex, s, e}; the backend stores the
+ * `quote` TEXT (durable across re-render/theme/reflow). On load we re-anchor each
+ * saved quote to its block + char offsets, then the design's split-and-wrap
+ * paint()/render() engine runs verbatim. `mark.hl[data-id]` = the Supabase row id.
  *
- * SINGLE RESPONSIBILITY
- * ---------------------
- * Own the entire client-side lifecycle of highlights + their comment threads
- * for ONE post: auth-gating the feature, reading/writing the `highlights` and
- * `highlight_comments` tables, and keeping the article's inline <mark>s in sync
- * with the list. It does not handle post rendering, auth UI, or payments.
+ * Tables (unchanged): `highlights` (id, post_id, user_id, author_name, quote,
+ * note?, created_at) + `highlight_comments` (id, highlight_id, user_id,
+ * author_name, body, author_is_admin?, created_at); `is_admin()` RPC. The `note`
+ * column + `author_is_admin` + owner-UPDATE policy come from db/highlights-notes.sql
+ * (basic highlighting works without it; notes + the Author badge need it applied).
  *
- * HOW IT FITS THE ARCHITECTURE
- * ----------------------------
- * - Astro component. The frontmatter (this block) runs at BUILD time and only
- *   emits static markup + a hydrated <script>. All dynamic behaviour lives in
- *   the client <script> below, which talks directly to Supabase from the
- *   browser using the shared Supabase JS client (`../lib/supabase`). There is
- *   NO Pages Function in the read/write path here — it is pure client ⇄
- *   PostgREST over the anon key.
- * - Because writes go straight from the browser, ALL authorization is enforced
- *   by Supabase Row-Level Security (RLS) on `highlights` and
- *   `highlight_comments`, plus the `is_admin()` SQL function. See SECURITY.
- *
- * PROPS / INPUTS
- * --------------
- * - `postId: string` — the post this widget is bound to. Written to the
- *   section's `data-post-id` attribute so the client script can read it back
- *   (the frontmatter value is not otherwise visible to the runtime script).
- *
- * DEPENDS ON (imports / runtime assumptions)
- * ------------------------------------------
- * - `../lib/supabase` — pre-configured Supabase browser client (anon key +
- *   persisted session). Provides `auth`, `.from(...)` PostgREST queries, and
- *   `.rpc('is_admin')`.
- * - A single `<article>` element on the page = the post body it highlights.
- * - CSS custom props from the global theme: --accent, --fg, --muted, --border,
- *   --bg.
- * - Supabase tables `highlights` (id, post_id, user_id, author_name, quote,
- *   created_at) and `highlight_comments` (id, highlight_id, user_id,
- *   author_name, body, created_at), and the `is_admin()` RPC.
- *
- * DEPENDED ON BY
- * --------------
- * - The post layout/page template embeds <Highlights postId={...} /> beneath
- *   the article. Nothing imports its internals; it is a leaf UI component.
- *
- * SECURITY ASSUMPTIONS & GOTCHAS  (READ BEFORE CHANGING)
- * ------------------------------------------------------
- * - RLS IS THE ONLY GUARD. This code runs in the untrusted browser; a user can
- *   forge any insert/delete/select payload. The client-side checks here
- *   (hiding the "Remove" button unless owner/admin, gating the section behind a
- *   session) are UX conveniences ONLY. Real enforcement MUST live in RLS
- *   policies: e.g. inserts require auth.uid() == user_id; deletes require
- *   owner-or-is_admin(); selects scoped as intended. Never rely on this file
- *   to keep anyone out.
- * - `author_name` and `user_id` are supplied by the client on insert (see the
- *   insert calls). RLS must verify user_id == auth.uid() so a user cannot
- *   attribute content to someone else; author_name is display-only and
- *   spoofable — treat it as untrusted when rendering elsewhere.
- * - XSS SAFETY: all user-generated content (quote, comment body, author_name)
- *   is injected via `.textContent` / DOM node creation, never innerHTML, so it
- *   cannot execute markup. Preserve that — do not switch to innerHTML.
- * - `is_admin()` RPC result only toggles UI (shows author names + lets admin
- *   remove others' highlights). The privileged DELETE it enables is still
- *   RLS-checked server-side; a spoofed `isAdmin = true` in the browser buys
- *   nothing without a matching admins-table row.
- * - MARK RE-APPLICATION (applyMark) mutates the live article DOM by wrapping
- *   the first text-node match of the quote in a <mark>. It is best-effort:
- *   quotes that span element boundaries are silently skipped (Range
- *   .surroundContents throws), and only the FIRST occurrence is marked. This
- *   is cosmetic and must never be load-bearing.
+ * SECURITY: RLS is the only guard (browser is untrusted). All user text is written
+ * via textContent / esc()-then-DOM, never raw innerHTML of user content.
  */
 interface Props {
   postId: string;
+  author?: string;
+  title?: string;
 }
-const { postId } = Astro.props;
+const { postId, author = '', title = '' } = Astro.props;
 ---
 
-{/* Widget shell. Starts `hidden` and is revealed by init() ONLY for a signed-in
-    user; anonymous readers never see it. postId is passed through the DOM via
-    data-post-id because the client script (a separate bundle) cannot read Astro
-    frontmatter variables. The <ul> and .hl-status are empty placeholders that
-    the script populates at runtime. */}
-<section class="highlights" data-post-id={postId} hidden>
-  <h2>Highlights &amp; discussion</h2>
-  <p class="hl-status muted"></p>
-  <ul id="highlights-list"></ul>
-</section>
+{/* Selection toolbar — appears above a text selection inside the article. Also
+    carries postId/author/title to the client script via data-attrs. */}
+<div class="seltool" id="seltool" role="toolbar" aria-label="Selection actions" data-post-id={postId} data-author={author} data-title={title}>
+  <button data-act="hl" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16Z"></path><path d="M14 6l4 4"></path></svg>Highlight</button>
+  <button data-act="note" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v10l-4 4H4Z"></path><path d="M8 9h8M8 13h5"></path></svg>Note</button>
+  <span class="sep"></span>
+  <button data-act="copy" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>Copy</button>
+  <button data-act="quote" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h4v5a4 4 0 0 1-4 4"></path><path d="M15 7h4v5a4 4 0 0 1-4 4"></path></svg>Quote</button>
+</div>
 
-{/* Floating "Highlight" action button. Lives outside .highlights so it can be
-    position:fixed near the current text selection. Hidden until a valid
-    in-article selection exists (see onSelection). */}
-<button id="hl-save-btn" type="button" hidden>Highlight</button>
+{/* Floating count pill — opens the drawer. Shown only once a signed-in reader's
+    highlights are loaded (init reveals it). */}
+<button class="hlpill" id="hlpill" type="button" aria-label="Open your highlights">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16Z"></path><path d="M14 6l4 4"></path></svg>
+  <span id="hllabel"><b id="hlcount">0</b> highlights</span>
+</button>
 
-<style>
-  .highlights { margin-top: 2rem; }
-  .highlights .muted { color: var(--muted); }
-  #highlights-list { list-style: none; padding: 0; margin: 0.5rem 0 0; }
-  #highlights-list > li { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
-  .hl-top { display: flex; gap: 0.75rem; justify-content: space-between; align-items: start; }
-  .hl-top blockquote {
-    margin: 0;
-    padding-left: 0.75rem;
-    border-left: 3px solid var(--accent);
-    color: var(--fg);
-  }
-  .hl-who { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
-  .hl-actions { display: flex; gap: 0.75rem; margin-top: 0.4rem; }
-  .hl-actions button { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: 0.9rem; padding: 0; }
-  .hl-actions .hl-del { color: var(--muted); }
-  .hl-thread { margin: 0.6rem 0 0 0.75rem; padding-left: 0.75rem; border-left: 2px solid var(--border); }
-  .hl-msg { margin-bottom: 0.5rem; }
-  .hl-msg-meta { color: var(--muted); font-size: 0.85rem; }
-  .hl-msg p { margin: 0.1rem 0 0; white-space: pre-wrap; }
-  .hl-composer { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
-  .hl-composer textarea {
-    flex: 1 1 240px; padding: 0.45rem; border: 1px solid var(--border);
-    border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; resize: vertical;
-  }
-  .hl-composer button {
-    padding: 0.35rem 0.8rem; border: 0; border-radius: 6px;
-    background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
-  }
-  mark.user-highlight { background: #ffe27a; color: #000; padding: 0 0.1em; border-radius: 2px; cursor: pointer; }
-  @media (prefers-color-scheme: dark) { mark.user-highlight { background: #c8a02a; color: #000; } }
-  #hl-save-btn {
-    position: fixed; z-index: 50; padding: 0.3rem 0.65rem; border: 0; border-radius: 6px;
-    background: var(--accent); color: #fff; font-size: 0.85rem; font-weight: 600;
-    cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-  }
+{/* Scrim + slide-in drawer. #hldbody is filled by the client script. */}
+<div class="hlscrim" id="hlscrim"></div>
+<aside class="hldraw" id="hldraw" aria-label="Your highlights">
+  <div class="hld-top">
+    <h3>Your highlights</h3><span class="n" id="hldn">none yet</span>
+    <button class="x" id="hlx" type="button" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
+  </div>
+  <div class="hld-body" id="hldbody"></div>
+  <div class="hld-foot"><button id="hlcopyall" type="button">Copy all</button><span>Saved to your account — on every device.</span></div>
+</aside>
+
+{/* Global because mark.hl / .pip are injected at runtime (scoped styles wouldn't
+    reach them), and the drawer/toolbar names are all hl/hld/sel/rep-prefixed so
+    there is no collision with site CSS. Verbatim from the design. */}
+<style is:global>
+  mark.hl { background: color-mix(in srgb, var(--accent) 17%, transparent); color: inherit; padding: .06em 0; border-radius: 1px; box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 45%, transparent); cursor: pointer; transition: background .18s; }
+  mark.hl:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+  mark.hl.note { box-shadow: inset 0 -2px 0 var(--accent); }
+  mark.hl.flash { background: color-mix(in srgb, var(--accent) 38%, transparent); }
+  .pop { position: relative; border-bottom: 2px dotted color-mix(in srgb, var(--accent) 50%, transparent); cursor: help; }
+  .pop::after { content: attr(data-n) " readers highlighted this"; position: absolute; left: 50%; bottom: calc(100% + 9px); transform: translateX(-50%); white-space: nowrap; font-family: var(--sans); font-size: 11px; letter-spacing: .05em; color: var(--on-accent); background: var(--accent); padding: 4px 9px; border-radius: 3px; opacity: 0; pointer-events: none; transition: opacity .18s; z-index: 5; }
+  .pop:hover::after { opacity: 1; }
+  mark.hl.talk, .pop.talk { padding-right: 2px; }
+  .pip { display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 4px; margin-left: 4px; vertical-align: .32em; border: 0; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-family: var(--sans); font-size: 10px; font-weight: 600; line-height: 1; letter-spacing: .02em; cursor: pointer; font-variant-numeric: tabular-nums; transition: transform .18s; }
+  .pip:hover { transform: scale(1.14); }
+
+  /* the key / legend inside the drawer */
+  .hlkey { margin: 6px 0 4px; border: 1px solid var(--rule); border-radius: 5px; background: var(--card); overflow: hidden; }
+  .hlkey > summary { list-style: none; cursor: pointer; padding: 11px 14px; font-family: var(--sans); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); display: flex; align-items: center; gap: 9px; }
+  .hlkey > summary::-webkit-details-marker { display: none; }
+  .hlkey > summary:hover { color: var(--accent); }
+  .hlkey > summary .cv { width: 11px; height: 11px; transition: transform .2s; color: var(--accent); }
+  .hlkey[open] > summary .cv { transform: rotate(90deg); }
+  .krow { display: flex; align-items: baseline; gap: 12px; padding: 9px 14px; border-top: 1px solid var(--rule-soft); font-family: var(--sans); font-size: 12.5px; color: var(--ink-soft); }
+  .krow .s { flex: none; width: 74px; font-family: var(--serif-body); font-size: 14.5px; color: var(--ink); text-align: center; }
+  .krow .s.w { background: color-mix(in srgb, var(--accent) 17%, transparent); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 1px; }
+  .krow .s.n { background: color-mix(in srgb, var(--accent) 17%, transparent); box-shadow: inset 0 -2px 0 var(--accent); border-radius: 1px; }
+  .krow .s.d { border-bottom: 2px dotted color-mix(in srgb, var(--accent) 50%, transparent); }
+  .krow .s.t { background: color-mix(in srgb, var(--accent) 17%, transparent); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 1px; }
+  .krow .s.t i { display: inline-flex; align-items: center; justify-content: center; min-width: 15px; height: 15px; margin-left: 3px; vertical-align: .3em; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-family: var(--sans); font-style: normal; font-size: 9px; font-weight: 600; }
+
+  /* discussion thread inside the drawer */
+  .thv .back { background: none; border: 0; padding: 0; margin: 14px 0 16px; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); cursor: pointer; }
+  .thv .back:hover { color: var(--accent); }
+  .thv > q { display: block; font-family: var(--serif-display); font-size: 16.5px; line-height: 1.5; color: var(--ink); quotes: none; border-left: 2px solid var(--accent); padding-left: 13px; margin-bottom: 20px; }
+  .rep { display: flex; gap: 11px; padding: 14px 0; border-top: 1px solid var(--rule-soft); }
+  .rep .av { width: 29px; height: 29px; flex: none; border-radius: 999px; background: var(--paper-2); border: 1px solid var(--rule); display: grid; place-items: center; font-family: var(--serif-display); font-size: 13px; color: var(--ink-soft); }
+  .rep.auth .av { background: radial-gradient(120% 120% at 30% 20%, var(--accent-soft), var(--accent)); border-color: transparent; color: var(--on-accent); }
+  .rep .hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-family: var(--sans); font-size: 12px; margin-bottom: 4px; }
+  .rep .hd b { color: var(--ink); font-weight: 600; }
+  .rep .hd .w { color: var(--ink-faint); font-size: 11px; }
+  .rep .hd .bg { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--rule)); border-radius: 2px; padding: 1px 5px; }
+  .rep p { margin: 0; font-family: var(--serif-body); font-size: 14.5px; line-height: 1.6; color: var(--ink-soft); }
+  .repbox { margin-top: 16px; }
+  .repbox textarea { width: 100%; min-height: 66px; resize: vertical; font-family: var(--serif-body); font-size: 14.5px; line-height: 1.6; color: var(--ink); background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 10px 12px; box-sizing: border-box; }
+  .repbox textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  .repbox .r { display: flex; align-items: center; gap: 10px; margin-top: 9px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); flex-wrap: wrap; }
+  .repbox .r .btn { margin-left: auto; }
+
+  /* the selection toolbar */
+  .seltool { position: fixed; z-index: 80; display: none; align-items: center; gap: 1px; background: var(--ink); border-radius: 5px; padding: 4px; box-shadow: 0 10px 28px rgba(0, 0, 0, .3); }
+  .seltool.on { display: flex; }
+  .seltool button { background: none; border: 0; color: var(--paper); font-family: var(--sans); font-size: 12px; display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border-radius: 3px; cursor: pointer; opacity: .82; white-space: nowrap; }
+  .seltool button:hover { background: color-mix(in srgb, var(--paper) 15%, transparent); opacity: 1; }
+  .seltool svg { width: 14px; height: 14px; flex: none; }
+  .seltool .sep { width: 1px; height: 20px; background: color-mix(in srgb, var(--paper) 20%, transparent); margin: 0 4px; }
+
+  /* count pill + drawer */
+  .hlpill { position: fixed; right: 20px; bottom: 20px; z-index: 70; display: none; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--rule); border-radius: 999px; padding: 10px 16px; box-shadow: var(--shadow); font-family: var(--sans); font-size: 12.5px; color: var(--ink); cursor: pointer; }
+  .hlpill.on { display: flex; }
+  .hlpill svg { width: 14px; height: 14px; color: var(--accent); }
+  .hlpill b { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hlscrim { position: fixed; inset: 0; z-index: 85; background: rgba(0, 0, 0, .28); opacity: 0; pointer-events: none; transition: opacity .28s; }
+  .hlscrim.on { opacity: 1; pointer-events: auto; }
+  .hldraw { position: fixed; top: 0; right: 0; bottom: 0; width: min(390px, 92vw); z-index: 90; background: var(--paper); border-left: 1px solid var(--rule); box-shadow: -20px 0 44px rgba(0, 0, 0, .2); transform: translateX(101%); transition: transform .28s cubic-bezier(.4, 0, .2, 1); display: flex; flex-direction: column; }
+  .hldraw.on { transform: none; }
+  .hld-top { display: flex; align-items: baseline; gap: 12px; padding: 20px 22px 16px; border-bottom: 1px solid var(--rule); }
+  .hld-top h3 { font-family: var(--serif-display); font-weight: 600; font-size: 21px; margin: 0; letter-spacing: -.01em; }
+  .hld-top .n { font-family: var(--sans); font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .hld-top .x { margin-left: auto; background: none; border: 0; color: var(--ink-faint); cursor: pointer; padding: 2px; line-height: 1; }
+  .hld-top .x:hover { color: var(--accent); }
+  .hld-body { flex: 1; overflow-y: auto; padding: 4px 22px 22px; }
+  .hld-empty { font-family: var(--sans); font-size: 13.5px; line-height: 1.6; color: var(--ink-faint); padding: 28px 0; }
+  .hitem { padding: 18px 0; border-bottom: 1px solid var(--rule-soft); }
+  .hitem q { display: block; font-family: var(--serif-display); font-size: 16.5px; line-height: 1.5; color: var(--ink); quotes: none; border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); padding-left: 13px; cursor: pointer; }
+  .hitem q:hover { color: var(--accent); }
+  .hitem textarea { width: 100%; margin-top: 11px; min-height: 38px; resize: vertical; font-family: var(--sans); font-size: 13px; line-height: 1.55; color: var(--ink-soft); background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px; box-sizing: border-box; }
+  .hitem textarea::placeholder { color: var(--ink-faint); }
+  .hitem textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  .hitem .acts { display: flex; gap: 15px; margin-top: 10px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); flex-wrap: wrap; }
+  .hitem .acts button { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+  .hitem .acts button:hover { color: var(--accent); }
+  .hitem .acts .del:hover { color: #b4453a; }
+  .hld-foot { padding: 14px 22px; border-top: 1px solid var(--rule); display: flex; align-items: center; gap: 12px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); flex-wrap: wrap; }
+  .hld-foot button { background: none; border: 1px solid var(--rule); border-radius: 3px; font: inherit; color: var(--ink-soft); padding: 6px 11px; cursor: pointer; flex: none; white-space: nowrap; }
+  .hld-foot button:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 
 <script>
-  // Shared Supabase browser client (anon key + persisted session). Every DB
-  // call below is subject to RLS as the currently-authenticated user.
   import { supabase } from '../lib/supabase';
 
-  // Cache the DOM handles once. `section` is the widget shell; `article` is the
-  // post body we highlight over (may be null on pages without an <article>,
-  // which is guarded throughout).
-  const section = document.querySelector('.highlights');
-  const postId = section.getAttribute('data-post-id'); // read back from data-attr
-  const article = document.querySelector('article');
-  const listEl = document.getElementById('highlights-list');
-  const statusEl = section.querySelector('.hl-status');
-  const saveBtn = document.getElementById('hl-save-btn');
+  const tool = document.getElementById('seltool');
+  if (tool) initHighlights(tool as HTMLElement);
 
-  // Runtime state. currentUser gates all write UI; isAdmin only unlocks extra UI
-  // (author names + removing others' highlights) and is re-derived on every auth
-  // change — never trusted for actual authorization (RLS does that).
-  let currentUser = null;
-  let isAdmin = false;
-  let pendingQuote = ''; // the selected text captured for the floating save button
+  function initHighlights(tool: HTMLElement) {
+    const postId = tool.getAttribute('data-post-id') || '';
+    const AUTHOR = tool.getAttribute('data-author') || 'the author';
+    const TITLE = tool.getAttribute('data-title') || document.title;
+    const body = (document.querySelector('article.post-body') || document.querySelector('article')) as HTMLElement | null;
+    const pill = document.getElementById('hlpill')!;
+    const draw = document.getElementById('hldraw')!;
+    const scrim = document.getElementById('hlscrim')!;
+    const dbody = document.getElementById('hldbody')!;
+    const dn = document.getElementById('hldn')!;
+    const cnt = document.getElementById('hlcount')!;
+    const plabel = document.getElementById('hllabel')!;
+    if (!body) return;
 
-  const setStatus = (m) => { statusEl.textContent = m || ''; };
+    let currentUser: any = null;
+    let isAdmin = false;
+    let lastUid: string | null | undefined = undefined;
+    let blocks: HTMLElement[] = [];
+    let store: Record<number, any[]> = {};
+    let noteTimer: number | undefined;
 
-  // Derive a human-friendly display name from the auth user, preferring OAuth
-  // handles (GitHub user_name), then a full name, then the email local-part,
-  // finally a generic fallback. This is display-only and gets stored as
-  // author_name on inserts; it is spoofable and must not be used for auth.
-  const authorNameOf = (u) => {
-    const m = u.user_metadata || {};
-    return m.user_name || m.name || (u.email ? u.email.split('@')[0] : 'Reader');
-  };
+    const authorNameOf = (u: any) => { const m = u.user_metadata || {}; return m.user_name || m.name || (u.email ? u.email.split('@')[0] : 'Reader'); };
+    const esc = (s: any) => String(s).replace(/[<&]/g, (c: string) => (c === '<' ? '&lt;' : '&amp;'));
+    const findHl = (id: string) => { let f: any = null; Object.keys(store).forEach((k) => (store[+k] || []).forEach((h) => { if (h.id === id) f = h; })); return f; };
 
-  // Best-effort visual re-application of a saved highlight onto the live article.
-  // WHY a TreeWalker + indexOf instead of storing DOM offsets: quotes are stored
-  // as plain text, so on each load we re-locate the text in whatever DOM the post
-  // currently renders. This is resilient to markup changes but only finds the
-  // FIRST text-node containing the exact quote.
-  function applyMark(h) {
-    if (!article) return;
-    // Idempotent: never double-wrap the same highlight id (load() can re-run).
-    if (article.querySelector('mark.user-highlight[data-hid="' + h.id + '"]')) return;
-    const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walker.nextNode())) {
-      const idx = node.nodeValue.indexOf(h.quote);
-      // Skip matches already inside a <mark> to avoid nesting marks.
-      if (idx !== -1 && node.parentElement && node.parentElement.tagName !== 'MARK') {
-        try {
-          const range = document.createRange();
-          range.setStart(node, idx);
-          range.setEnd(node, idx + h.quote.length);
-          const mark = document.createElement('mark');
-          mark.className = 'user-highlight';
-          mark.dataset.hid = h.id;
-          mark.title = 'Open discussion';
-          // Clicking an inline mark jumps to + opens its discussion thread.
-          mark.addEventListener('click', () => openThread(h.id, true));
-          range.surroundContents(mark);
-        } catch (e) {
-          // surroundContents throws when the range crosses element boundaries
-          // (e.g. quote spans a <em> or paragraph break). Cosmetic only — we
-          // simply skip the visual mark; the highlight still shows in the list.
-        }
-        return; // one text node handled per highlight; stop after first match
-      }
+    // ---- design engine: block set + text walker + paint/render (pure DOM) ----
+    function indexBlocks() {
+      blocks = ([].slice.call(body!.querySelectorAll('p,h2,h3,.mnote,li')) as HTMLElement[]).filter(
+        (b) => !b.closest('.paywall,figure,pre') && b.textContent!.trim().length > 40,
+      );
+      blocks.forEach((b: any, i) => { b.dataset.hb = i; if (b._orig == null) b._orig = b.innerHTML; });
     }
-  }
-
-  // Unwrap a highlight's <mark>, restoring the raw text node. Called after a
-  // successful delete so the article no longer shows a stale highlight.
-  function removeMark(hid) {
-    const mark = article && article.querySelector('mark.user-highlight[data-hid="' + hid + '"]');
-    if (mark) mark.replaceWith(document.createTextNode(mark.textContent));
-  }
-
-  // (Re)render the comment thread for one highlight inside its .hl-thread box,
-  // then append a reply composer. Called both to open a thread and to refresh it
-  // after a successful reply. Fully rebuilds the box each time (textContent = '')
-  // so there is no incremental-append drift.
-  async function renderThread(hid, thread) {
-    thread.textContent = 'Loading…';
-    const { data, error } = await supabase
-      .from('highlight_comments')
-      .select('id, author_name, body, created_at')
-      .eq('highlight_id', hid)
-      .order('created_at', { ascending: true }); // oldest-first, conversational order
-    thread.textContent = '';
-    if (error) { thread.textContent = 'Could not load discussion: ' + error.message; return; }
-    // Render each message. All user text goes through textContent (never
-    // innerHTML) — this is the XSS boundary; do not weaken it.
-    for (const c of data || []) {
-      const el = document.createElement('div');
-      el.className = 'hl-msg';
-      const meta = document.createElement('div');
-      meta.className = 'hl-msg-meta';
-      meta.textContent = c.author_name + ' · ' + new Date(c.created_at).toLocaleDateString();
-      const body = document.createElement('p');
-      body.textContent = c.body;
-      el.appendChild(meta); el.appendChild(body);
-      thread.appendChild(el);
+    function walker(b: Node) {
+      return document.createTreeWalker(b, NodeFilter.SHOW_TEXT, {
+        acceptNode: (n) => ((n.parentNode as HTMLElement).closest('pre,.ln') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+      } as any);
     }
-    if (!data || !data.length) {
-      const none = document.createElement('p');
-      none.className = 'muted';
-      none.textContent = 'No messages yet.';
-      thread.appendChild(none);
+    function all() {
+      const out: any[] = [];
+      Object.keys(store).forEach((k) => (store[+k] || []).forEach((h) => out.push([+k, h])));
+      return out.sort((a, b) => a[0] - b[0] || a[1].s - b[1].s);
     }
-    // Reply composer. currentUser is guaranteed non-null here because the whole
-    // widget is hidden for anonymous users, but the insert's authorization still
-    // rests on RLS (user_id must match auth.uid()).
-    const composer = document.createElement('div');
-    composer.className = 'hl-composer';
-    const ta = document.createElement('textarea');
-    ta.rows = 2; ta.placeholder = 'Reply…';
-    const send = document.createElement('button');
-    send.textContent = 'Send';
-    const msg = document.createElement('span'); msg.className = 'muted';
-    send.addEventListener('click', async () => {
-      const body = ta.value.trim();
-      if (!body) return; // ignore empty/whitespace-only replies
-      msg.textContent = 'Sending…';
-      const { error } = await supabase.from('highlight_comments').insert({
-        highlight_id: hid, user_id: currentUser.id, author_name: authorNameOf(currentUser), body,
+    function paint(b: HTMLElement, h: any) {
+      let t = 0; const hits: any[] = []; const w = walker(b); let n: any;
+      while ((n = w.nextNode())) { const len = n.nodeValue.length, s = Math.max(h.s, t), e = Math.min(h.e, t + len); if (e > s) hits.push([n, s - t, e - t]); t += len; }
+      hits.reverse().forEach((p) => {
+        let node = p[0]; const a = p[1], z = p[2];
+        if (z < node.nodeValue.length) node.splitText(z);
+        if (a > 0) node = node.splitText(a);
+        const m = document.createElement('mark'); m.className = 'hl' + (h.note ? ' note' : ''); m.dataset.id = h.id;
+        node.parentNode.insertBefore(m, node); m.appendChild(node);
       });
-      if (error) { msg.textContent = error.message; return; }
-      renderThread(hid, thread); // refresh to show the just-sent reply + clear input
-    });
-    composer.appendChild(ta); composer.appendChild(send); composer.appendChild(msg);
-    thread.appendChild(composer);
-  }
-
-  // Reveal and populate a highlight's thread. `scroll` centers the list item in
-  // view (used when arriving via an inline mark click, not via the Discuss btn).
-  async function openThread(hid, scroll) {
-    const li = listEl.querySelector('li[data-hid="' + hid + '"]');
-    if (!li) return; // thread's list item may not exist yet if list not loaded
-    if (scroll) li.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    const thread = li.querySelector('.hl-thread');
-    thread.hidden = false;
-    await renderThread(hid, thread);
-  }
-
-  // Render the full highlights list for the post. Rebuilds from scratch on each
-  // call. Also (re)applies the inline article marks as a side effect via
-  // applyMark so the list and the body stay in sync.
-  function renderList(rows) {
-    listEl.textContent = '';
-    if (!rows.length) {
-      // Empty state doubles as the how-to hint for a signed-in reader.
-      const p = document.createElement('p');
-      p.className = 'muted';
-      p.textContent = 'Select text in the post to save a highlight.';
-      listEl.appendChild(p);
-      return;
     }
-    for (const h of rows) {
-      applyMark(h); // paint the inline <mark> in the article for this row
-      const li = document.createElement('li');
-      li.dataset.hid = h.id; // links list item ⇄ inline mark ⇄ openThread
+    function render(i: number) {
+      const b: any = blocks[i]; if (!b) return; b.innerHTML = b._orig;
+      (store[i] || []).slice().sort((a, c) => c.s - a.s).forEach((h) => paint(b, h));
+    }
+    function offsets(b: HTMLElement, range: Range) {
+      let t = 0, s: number | null = null, e: number | null = null; const w = walker(b); let n: any;
+      while ((n = w.nextNode())) { if (n === range.startContainer) s = t + range.startOffset; if (n === range.endContainer) e = t + range.endOffset; t += n.nodeValue.length; }
+      if (s === null) s = 0; if (e === null) e = t;
+      return [Math.max(0, Math.min(s, e)), Math.min(t, Math.max(s, e))];
+    }
+    function trim(b: HTMLElement, r: number[]) { const txt = b.textContent!; let s = r[0], e = r[1]; while (s < e && /\s/.test(txt[s])) s++; while (e > s && /\s/.test(txt[e - 1])) e--; return [s, e]; }
 
-      const top = document.createElement('div');
-      top.className = 'hl-top';
-      const bq = document.createElement('blockquote');
-      bq.textContent = h.quote; // textContent = XSS-safe rendering of the quote
-      top.appendChild(bq);
-      // Author attribution is shown to admins only (privacy: readers don't see
-      // who highlighted what). This is a display choice, not a security control.
-      if (isAdmin) {
-        const who = document.createElement('span');
-        who.className = 'hl-who';
-        who.textContent = h.author_name;
-        top.appendChild(who);
+    // ---- Supabase data layer (replaces the design's localStorage) ----
+    async function loadStore() {
+      store = {};
+      const res = await supabase.from('highlights').select('id,quote,note,user_id,created_at').eq('post_id', postId).order('created_at', { ascending: true });
+      if (res.error) return;
+      (res.data || []).forEach((row: any) => {
+        for (let i = 0; i < blocks.length; i++) {
+          const idx = blocks[i].textContent!.indexOf(row.quote);
+          if (idx !== -1) { (store[i] = store[i] || []).push({ id: row.id, s: idx, e: idx + row.quote.length, text: row.quote, note: row.note || '' }); break; }
+        }
+      });
+      Object.keys(store).forEach((k) => render(+k));
+      sync();
+    }
+    async function paintPips() {
+      const ids: string[] = []; Object.keys(store).forEach((k) => store[+k].forEach((h) => ids.push(h.id)));
+      if (!ids.length) return;
+      const res = await supabase.from('highlight_comments').select('highlight_id').in('highlight_id', ids);
+      if (res.error) return;
+      const counts: Record<string, number> = {};
+      (res.data || []).forEach((r: any) => { counts[r.highlight_id] = (counts[r.highlight_id] || 0) + 1; });
+      Object.keys(counts).forEach((hid) => addPip(hid, counts[hid]));
+    }
+    function addPip(hid: string, n?: number) {
+      const m = body!.querySelector('mark.hl[data-id="' + hid + '"]') as HTMLElement | null; if (!m) return;
+      const next = m.nextElementSibling as HTMLElement | null;
+      if (next && next.classList.contains('pip')) { if (n != null) next.textContent = String(n); return; }
+      m.classList.add('talk');
+      const pip = document.createElement('button'); pip.className = 'pip'; pip.type = 'button'; pip.dataset.id = hid; pip.textContent = n != null ? String(n) : '…';
+      m.parentNode!.insertBefore(pip, m.nextSibling);
+    }
+
+    async function add(withNote: boolean) {
+      const sel = getSelection(); if (!sel || !sel.rangeCount || sel.isCollapsed || !currentUser) return;
+      const range = sel.getRangeAt(0); const ops: number[][] = [];
+      blocks.forEach((b, i) => { if (!range.intersectsNode(b)) return; const r = trim(b, offsets(b, range)); if (r[1] - r[0] < 3) return; ops.push([i, r[0], r[1]]); });
+      if (!ops.length) return;
+      sel.removeAllRanges(); hide();
+      const touched: number[] = []; let last: string | null = null;
+      for (let k = 0; k < ops.length; k++) {
+        const i = ops[k][0], b = blocks[i]; let s = ops[k][1], e = ops[k][2], note = ''; const mergedIds: string[] = [];
+        const arr = (store[i] || []).filter((h) => { if (h.e < s || h.s > e) return true; s = Math.min(s, h.s); e = Math.max(e, h.e); if (h.note) note = h.note; mergedIds.push(h.id); return false; });
+        const text = b.textContent!.slice(s, e);
+        for (let mi = 0; mi < mergedIds.length; mi++) await supabase.from('highlights').delete().eq('id', mergedIds[mi]);
+        const ins = await supabase.from('highlights').insert({ post_id: postId, user_id: currentUser.id, author_name: authorNameOf(currentUser), quote: text }).select('id').single();
+        if (ins.error || !ins.data) continue;
+        const id = (ins.data as any).id;
+        if (note) { try { await supabase.from('highlights').update({ note }).eq('id', id); } catch (e) {} }
+        arr.push({ id, s, e, text, note }); store[i] = arr; touched.push(i); last = id;
       }
+      touched.forEach(render); sync();
+      if (withNote && last) { open(); const it = dbody.querySelector('.hitem[data-id="' + last + '"] textarea') as HTMLElement | null; if (it) it.focus(); }
+    }
+    async function remove(i: number, id: string) {
+      const res = await supabase.from('highlights').delete().eq('id', id);
+      if (res.error) return;
+      store[i] = (store[i] || []).filter((h) => h.id !== id); if (!store[i].length) delete store[i];
+      render(i); sync();
+    }
 
-      const actions = document.createElement('div');
-      actions.className = 'hl-actions';
-      const discuss = document.createElement('button');
-      discuss.textContent = 'Discuss';
-      discuss.addEventListener('click', () => openThread(h.id, false)); // no scroll; already in list
-      actions.appendChild(discuss);
-      // Show "Remove" only to the highlight's owner or an admin. This merely
-      // hides the button — the DELETE below is still authorized server-side by
-      // RLS, so a crafted request from a non-owner is rejected regardless.
-      if (h.user_id === currentUser.id || isAdmin) {
-        const del = document.createElement('button');
-        del.className = 'hl-del';
-        del.textContent = 'Remove';
-        del.addEventListener('click', async () => {
-          const { error } = await supabase.from('highlights').delete().eq('id', h.id);
-          if (error) { setStatus('Delete failed: ' + error.message); return; }
-          removeMark(h.id); // drop the inline mark immediately
-          load();           // then reload the list to reflect the deletion
+    // ---- drawer list (design sync(), minus the localStorage-only bits) ----
+    const KEYHTML = '<details class="hlkey" open><summary><svg class="cv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>What the marks mean</summary>'
+      + '<div class="krow"><span class="s w">passage</span><span>Yours — highlighted by you</span></div>'
+      + '<div class="krow"><span class="s n">passage</span><span>Carries a private note</span></div>'
+      + '<div class="krow"><span class="s t">passage<i>3</i></span><span>Open discussion — tap the number</span></div></details>';
+    function sync() {
+      const list = all(); cnt.textContent = String(list.length); pill.classList.add('on');
+      plabel.innerHTML = list.length ? '<b>' + list.length + '</b> highlighted' : 'Highlights';
+      dn.textContent = list.length ? list.length + (list.length === 1 ? ' passage' : ' passages') : 'none yet';
+      dbody.innerHTML = KEYHTML + (list.length
+        ? list.map((p) => {
+            const h = p[1];
+            return '<div class="hitem" data-b="' + p[0] + '" data-id="' + h.id + '">'
+              + '<q>' + esc(h.text) + '</q>'
+              + '<textarea placeholder="Add a note…">' + esc(h.note || '') + '</textarea>'
+              + '<div class="acts"><button data-go type="button">Jump to it</button><button data-cp type="button">Copy</button>'
+              + '<button data-dis type="button">Discussion</button>'
+              + '<button class="del" data-rm type="button">Remove</button></div></div>';
+          }).join('')
+        : '<div class="hld-empty">Select any passage in the essay to highlight it. Add a note and it stays attached to the sentence that prompted it — or open it up and discuss it with the author.</div>');
+    }
+
+    // ---- discussion thread (design .thv view, wired to highlight_comments) ----
+    async function openThread(hid: string, quote: string) {
+      open();
+      dbody.dataset.hid = hid;
+      dbody.innerHTML = '<div class="thv"><button class="back" data-back type="button">← All highlights</button><q>' + esc(quote) + '</q>'
+        + '<div class="rep-list hld-empty" style="padding:14px 0">Loading…</div>'
+        + '<div class="repbox"><textarea placeholder="Add to the discussion…"></textarea>'
+        + '<div class="r"><span>Private — between you and the author</span><button class="btn btn-primary btn-sm" type="button" data-reply>Post reply</button></div></div></div>';
+      const listEl = dbody.querySelector('.rep-list') as HTMLElement;
+      const res = await supabase.from('highlight_comments').select('id,author_name,body,created_at,author_is_admin').eq('highlight_id', hid).order('created_at', { ascending: true });
+      if (res.error) { listEl.textContent = 'Could not load the discussion.'; return; }
+      const rows = (res.data || []) as any[];
+      if (rows.length) {
+        listEl.className = 'rep-list';
+        listEl.innerHTML = rows.map((r) => {
+          const who = r.author_name || 'Reader';
+          const when = new Date(r.created_at).toLocaleDateString();
+          return '<div class="rep' + (r.author_is_admin ? ' auth' : '') + '"><div class="av">' + esc((who[0] || '?')) + '</div>'
+            + '<div><div class="hd"><b>' + esc(who) + '</b>' + (r.author_is_admin ? '<span class="bg">Author</span>' : '')
+            + '<span class="w">' + esc(when) + '</span></div><p>' + esc(r.body) + '</p></div></div>';
+        }).join('');
+        addPip(hid, rows.length);
+      } else {
+        listEl.textContent = 'No replies yet. Say the first thing.';
+      }
+    }
+
+    // ---- toolbar positioning + drawer open/close (design, verbatim) ----
+    function place() {
+      const sel = getSelection(); if (!currentUser || !sel || !sel.rangeCount || sel.isCollapsed) return hide();
+      const r = sel.getRangeAt(0); if (!body!.contains(r.commonAncestorContainer)) return hide();
+      if (r.toString().trim().length < 3) return hide();
+      tool.classList.add('on');
+      const box = r.getBoundingClientRect(), w = tool.offsetWidth, h = tool.offsetHeight;
+      tool.style.left = Math.min(Math.max(10, box.left + box.width / 2 - w / 2), innerWidth - w - 10) + 'px';
+      const top = box.top - h - 9; tool.style.top = (top < 8 ? box.bottom + 9 : top) + 'px';
+    }
+    function hide() {
+      tool.classList.remove('on');
+      [].forEach.call(tool.querySelectorAll('button'), (b: any) => { if (b._t) { b.innerHTML = b._t; b._t = null; } });
+    }
+    function open() { draw.classList.add('on'); scrim.classList.add('on'); }
+    function close() { draw.classList.remove('on'); scrim.classList.remove('on'); }
+
+    // ---- listeners ----
+    document.addEventListener('mouseup', (e) => { if ((e.target as HTMLElement).closest('.seltool')) return; setTimeout(place, 10); });
+    document.addEventListener('mousedown', (e) => { if (!(e.target as HTMLElement).closest('.seltool')) hide(); });
+    addEventListener('scroll', hide, { passive: true });
+    addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { hide(); close(); return; }
+      if ((e.key === 'h' || e.key === 'H') && !e.metaKey && !e.ctrlKey && !/input|textarea/i.test(document.activeElement!.tagName)) {
+        const s = getSelection(); if (s && !s.isCollapsed) { e.preventDefault(); add(false); }
+      }
+    });
+
+    tool.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('button') as any; if (!b) return; const act = b.dataset.act;
+      const sel = getSelection(), txt = sel ? sel.toString().trim() : '';
+      if (act === 'hl') return add(false);
+      if (act === 'note') return add(true);
+      const out = act === 'quote' ? '“' + txt + '” — ' + AUTHOR + (TITLE ? ', ' + TITLE : '') + '\n' + location.href : txt;
+      if (navigator.clipboard) navigator.clipboard.writeText(out);
+      b._t = b.innerHTML; b.innerHTML = 'Copied'; setTimeout(hide, 800);
+    });
+
+    // clicks on inline marks / pips in the article body
+    body.addEventListener('click', (e) => {
+      const pipEl = (e.target as HTMLElement).closest('.pip') as HTMLElement | null;
+      if (pipEl) { const id = pipEl.dataset.id!; const h = findHl(id); if (h) openThread(id, h.text); return; }
+      const m = (e.target as HTMLElement).closest('mark.hl') as HTMLElement | null; if (!m) return;
+      open(); sync();
+      const it = dbody.querySelector('.hitem[data-id="' + m.dataset.id + '"]') as HTMLElement | null;
+      if (it) dbody.scrollTop = it.offsetTop - dbody.offsetTop - 12;
+    });
+
+    // drawer delegation
+    dbody.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement;
+      if (t.closest('[data-back]')) return sync();
+      if (t.closest('[data-reply]')) {
+        const hid = dbody.dataset.hid || ''; const ta = dbody.querySelector('.repbox textarea') as HTMLTextAreaElement | null;
+        const txt = ta ? (ta.value || '').trim() : '';
+        if (!hid || !txt || !currentUser) { if (ta) ta.focus(); return; }
+        const qel = dbody.querySelector('.thv > q'); const q = qel ? qel.textContent! : '';
+        const btn = t.closest('[data-reply]') as HTMLButtonElement; btn.disabled = true;
+        supabase.from('highlight_comments').insert({ highlight_id: hid, user_id: currentUser.id, author_name: authorNameOf(currentUser), body: txt }).then((r) => {
+          if (r.error) { btn.disabled = false; return; }
+          openThread(hid, q);
         });
-        actions.appendChild(del);
+        return;
       }
-
-      // Per-highlight discussion container, collapsed until Discuss/mark click.
-      const thread = document.createElement('div');
-      thread.className = 'hl-thread';
-      thread.hidden = true;
-
-      li.appendChild(top);
-      li.appendChild(actions);
-      li.appendChild(thread);
-      listEl.appendChild(li);
-    }
-  }
-
-  // Fetch all highlights for this post (oldest first) and render them. RLS
-  // decides which rows are visible; this select trusts the DB to scope results.
-  async function load() {
-    const { data, error } = await supabase
-      .from('highlights')
-      .select('id, quote, author_name, user_id, created_at')
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true });
-    if (error) { setStatus('Could not load highlights: ' + error.message); return; }
-    setStatus('');
-    renderList(data || []);
-  }
-
-  // Decide whether to show the floating "Highlight" button for the current text
-  // selection, and position it just above the selection. Runs after every
-  // mouseup. Guards, in order: must be signed in + have an article; must have a
-  // non-collapsed selection; the trimmed text must be non-empty, <= 2000 chars
-  // (matches the DB/quote size limit and blocks giant paste-bombs), and the
-  // selection must originate INSIDE the article (anchorNode) so UI/nav text
-  // can't be highlighted.
-  function onSelection() {
-    if (!currentUser || !article) { saveBtn.hidden = true; return; }
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) { saveBtn.hidden = true; return; }
-    const text = sel.toString().trim();
-    if (!text || text.length > 2000 || !article.contains(sel.anchorNode)) { saveBtn.hidden = true; return; }
-    pendingQuote = text; // stash for the button's click handler
-    // Position the fixed button above the selection; clamp to 8px from the top
-    // so it never renders off-screen for selections near the viewport top.
-    const rect = sel.getRangeAt(0).getBoundingClientRect();
-    saveBtn.style.top = Math.max(8, rect.top - 42) + 'px';
-    saveBtn.style.left = rect.left + 'px';
-    saveBtn.hidden = false;
-  }
-
-  // Persist the pending selection as a highlight. user_id/author_name are sent
-  // from the client but RLS must enforce user_id == auth.uid() on insert.
-  saveBtn.addEventListener('click', async () => {
-    if (!pendingQuote || !currentUser) return;
-    const quote = pendingQuote;
-    saveBtn.hidden = true;
-    setStatus('Saving…');
-    const { error } = await supabase.from('highlights').insert({
-      post_id: postId, user_id: currentUser.id, author_name: authorNameOf(currentUser), quote,
+      const it = t.closest('.hitem') as HTMLElement | null; if (!it) return;
+      const i = +it.dataset.b!, id = it.dataset.id!;
+      if (t.closest('[data-rm]')) return remove(i, id);
+      if (t.closest('[data-dis]')) { const h = findHl(id); if (h) openThread(id, h.text); return; }
+      const cp = t.closest('[data-cp]') as HTMLElement | null;
+      if (cp) { if (navigator.clipboard) navigator.clipboard.writeText(it.querySelector('q')!.textContent!); cp.textContent = 'Copied'; setTimeout(() => { cp.textContent = 'Copy'; }, 1400); return; }
+      if (t.closest('[data-go]') || t.closest('q')) {
+        const mk = body!.querySelector('mark.hl[data-id="' + id + '"]') as HTMLElement | null; if (!mk) return; close();
+        scrollTo({ top: mk.getBoundingClientRect().top + scrollY - 140, behavior: 'smooth' });
+        mk.classList.add('flash'); setTimeout(() => mk.classList.remove('flash'), 1500);
+      }
     });
-    if (error) { setStatus('Save failed: ' + error.message); return; }
-    setStatus('');
-    const s = window.getSelection(); if (s) s.removeAllRanges(); // clear the selection
-    load(); // reload so the new highlight appears in the list + gets marked
-  });
 
-  // Recompute the save button on selection changes. Ignore mouseup ON the button
-  // itself (that's the save click, not a new selection). setTimeout(...,0) defers
-  // to the next tick so window.getSelection() reflects the final selection state.
-  document.addEventListener('mouseup', (e) => {
-    if (e.target === saveBtn) return;
-    setTimeout(onSelection, 0);
-  });
-  // Hide the button on scroll — its fixed position would otherwise detach from
-  // the (now-moved) selection.
-  document.addEventListener('scroll', () => { saveBtn.hidden = true; });
+    // live note editing (debounced write; needs the note column migration)
+    dbody.addEventListener('input', (e) => {
+      const ta = e.target as HTMLElement; if (ta.tagName !== 'TEXTAREA') return;
+      const it = ta.closest('.hitem') as HTMLElement | null; if (!it) return;
+      const i = +it.dataset.b!, id = it.dataset.id!, val = (ta as HTMLTextAreaElement).value;
+      (store[i] || []).forEach((h) => { if (h.id === id) h.note = val; });
+      const m = body!.querySelector('mark.hl[data-id="' + id + '"]') as HTMLElement | null; if (m) m.classList.toggle('note', !!val);
+      clearTimeout(noteTimer);
+      noteTimer = window.setTimeout(() => { supabase.from('highlights').update({ note: val || null }).eq('id', id).then(() => {}); }, 500);
+    });
 
-  // Entry point / auth-state sync. Determines the signed-in user, gates the
-  // widget, resolves admin status, and loads highlights. Re-run on every auth
-  // change so signing in/out live-updates the widget without a page reload.
-  async function init() {
-    const { data } = await supabase.auth.getSession();
-    currentUser = data.session ? data.session.user : null;
-    // No session → hide the whole feature. This is the reader-facing gate; it is
-    // convenience only, since RLS independently blocks anonymous writes.
-    if (!currentUser) { section.hidden = true; saveBtn.hidden = true; return; }
-    section.hidden = false;
-    // Ask the DB whether this user is an admin. Failure defaults to non-admin
-    // (fail-closed): a broken RPC must never grant elevated UI. Even when true,
-    // this only unlocks UI — the privileged deletes remain RLS-checked.
-    try {
-      const { data: adm } = await supabase.rpc('is_admin');
-      isAdmin = adm === true;
-    } catch (e) { isAdmin = false; }
-    load();
+    // pill + drawer chrome
+    pill.addEventListener('click', open);
+    document.getElementById('hlx')!.addEventListener('click', close);
+    scrim.addEventListener('click', close);
+    document.getElementById('hlcopyall')!.addEventListener('click', function (this: HTMLButtonElement) {
+      const b = this;
+      const txt = all().map((p) => '“' + p[1].text + '”' + (p[1].note ? '\n  — ' + p[1].note : '')).join('\n\n');
+      if (navigator.clipboard) navigator.clipboard.writeText(txt);
+      b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy all'; }, 1500);
+    });
+
+    // ---- auth gate + load. onAuthStateChange fires often (refocus) — only act on
+    // an actual user change (never a page reload). ----
+    async function refresh() {
+      const s = await supabase.auth.getSession();
+      const u = s.data.session ? s.data.session.user : null;
+      const uid = u ? u.id : null;
+      if (uid === lastUid) return;
+      lastUid = uid; currentUser = u;
+      if (!currentUser) { pill.classList.remove('on'); close(); store = {}; blocks.forEach((_, i) => render(i)); return; }
+      try { const adm = await supabase.rpc('is_admin'); isAdmin = adm.data === true; } catch (e) { isAdmin = false; }
+      indexBlocks();
+      await loadStore();
+      await paintPips();
+    }
+    supabase.auth.onAuthStateChange(() => refresh());
+    refresh();
   }
-
-  // Wire the auth listener first, then kick off the initial load.
-  supabase.auth.onAuthStateChange(() => init());
-  init();
 </script>
