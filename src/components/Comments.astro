@@ -81,13 +81,34 @@ const { postId } = Astro.props;
     // whitelist. Links limited to http(s)/relative so no javascript: urls.
     function md(s: string) {
       let e = esc(s);
+      // Protect math ($$…$$ display, $…$ inline) from the Markdown pass so _ ^ * { }
+      // inside equations are never mangled into <em>/<strong>; KaTeX renders them
+      // after (renderMath). Stash the ESCAPED spans, restore verbatim.
+      const math: string[] = [];
+      const stash = (m: string) => { math.push(m); return '@@KMATH' + (math.length - 1) + 'X@@'; };
+      e = e.replace(/\$\$([\s\S]+?)\$\$/g, (m) => stash(m));
+      e = e.replace(/\$([^$\n]+?)\$/g, (m) => stash(m));
       e = e.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]*)\)/g, (_m, t, u) => '<a href="' + u.replace(/"/g, '%22') + '" rel="nofollow noopener" target="_blank">' + t + '</a>');
       e = e.replace(/`([^`]+)`/g, '<code class="inl">$1</code>');
       e = e.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
       e = e.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
       e = e.replace(/(^|[^\w])_([^_\n]+)_/g, '$1<em>$2</em>');
       e = e.replace(/\n/g, '<br>');
+      e = e.replace(/@@KMATH([0-9]+)X@@/g, (_m, i) => math[+i]); // restore raw math for KaTeX
       return e;
+    }
+
+    // Lazy KaTeX: render $…$ / $$…$$ in each comment body. The KaTeX CSS already
+    // ships on post pages (BlogPost imports it); the JS loads only when comments do.
+    // throwOnError:false + default trust:false keep author LaTeX inert + safe.
+    let renderMathInElement: any = null;
+    async function renderMath() {
+      const nodes = list.querySelectorAll('.comment > .b > p');
+      if (!nodes.length) return;
+      try {
+        if (!renderMathInElement) { const mod: any = await import('katex/contrib/auto-render'); renderMathInElement = mod.default || mod; }
+        nodes.forEach((n) => renderMathInElement(n, { delimiters: [{ left: '$$', right: '$$', display: true }, { left: '$', right: '$', display: false }], throwOnError: false }));
+      } catch (e) {}
     }
     function timeAgo(iso: string) {
       const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -112,7 +133,8 @@ const { postId } = Astro.props;
     }
 
     async function load() {
-      const res = await supabase.from('comments').select('id,author_name,body,created_at,parent_id,author_is_admin').eq('post_id', postId).order('created_at', { ascending: true });
+      let res = await supabase.from('comments').select('id,author_name,body,created_at,parent_id,author_is_admin').eq('post_id', postId).order('created_at', { ascending: true });
+      if (res.error) { res = await supabase.from('comments').select('id,author_name,body,created_at').eq('post_id', postId).order('created_at', { ascending: true }); }
       if (res.error) { list.innerHTML = '<p class="cc-muted">Could not load comments.</p>'; return; }
       const rows = (res.data || []) as any[];
       countEl.textContent = rows.length ? rows.length + (rows.length === 1 ? ' comment' : ' comments') : 'Comments';
@@ -127,8 +149,9 @@ const { postId } = Astro.props;
       const s = await supabase.auth.getSession(); const user = s.data.session ? s.data.session.user : null;
       if (!user) return;
       btn.disabled = true;
-      const res = await supabase.from('comments').insert({ post_id: postId, user_id: user.id, author_name: authorNameOf(user), body, parent_id: parentId });
-      if (res.error) { btn.disabled = false; return; }
+      const payload: any = { post_id: postId, user_id: user.id, author_name: authorNameOf(user), body }; if (parentId) payload.parent_id = parentId;
+      const res = await supabase.from('comments').insert(payload);
+      if (res.error) { btn.disabled = false; const foot = btn.closest('.foot'); if (foot) { let em = foot.querySelector('.cc-err') as HTMLElement | null; if (!em) { em = document.createElement('span'); em.className = 'cc-err'; em.style.color = '#b4453a'; foot.insertBefore(em, btn); } em.textContent = res.error.message || 'Could not post.'; } return; }
       ta.value = ''; load();
     }
 
