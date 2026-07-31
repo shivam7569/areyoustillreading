@@ -210,14 +210,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
                 <div class="rr"><span class="k">Tags</span><span class="v"><div class="pm-tags chips" id="pm-tags"><input id="pm-tag-input" class="recin" placeholder="Add a tag…" style="width:auto;flex:1;min-width:80px" /></div></span></div>
                 <div class="rr"><span class="k">Series</span><span class="v">
                   <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                    <select id="pm-series-pick" class="sel" style="flex:1;min-width:130px" aria-label="Series">
-                      <option value="">No series</option>
-                      <option value="__new__">＋ New series…</option>
-                    </select>
-                    <input id="pm-series-order" class="recin" type="number" min="1" placeholder="Part" style="width:50px;text-align:right" aria-label="Part number" />
+                    <span id="pm-series-pick" style="flex:1;min-width:150px"></span>
+                    <input id="pm-series-order" class="recin" type="text" inputmode="numeric" maxlength="3" placeholder="Part" style="width:54px;text-align:center" aria-label="Part number" />
                     <button type="button" class="specsbtn off" id="pm-series-more" aria-expanded="false" title="Series details for the plate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
                   </span>
-                  <input id="pm-series" class="recin" placeholder="Name your new series" style="display:none;margin-top:7px" />
+                  <input type="hidden" id="pm-series" />
                 </span></div>
                 <div class="rr"><span class="k">Address</span><span class="v slug"><i>areyoustillreading.dev/blog/</i><span id="pm-slug" class="pm-slug" contenteditable="true" spellcheck="false"></span></span></div>
               </div>
@@ -478,6 +475,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state';
   import { Decoration, DecorationSet } from '@milkdown/kit/prose/view';
   import { renderPlotlyFigure, loadPlotlyJs, makeRotatingGif } from '../../lib/plotly';
+  import { mountSeriesPicker } from '../../lib/series-picker';
   // NOTE: the render-at-publish modules (render-post-browser → @astrojs/markdown-remark
   // + Shiki + browser-D2, and assemble-post) are heavy and only needed at publish, so
   // they are DYNAMICALLY imported in the publish handler — not here — to keep the
@@ -1487,38 +1485,27 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // --- Series: a dropdown of the site's existing series (+ "New series…"), a chevron
     // that expands the plate specs, and the name input revealed only when creating one.
     // #pm-series stays the value the publish handler reads — the dropdown just drives it.
-    const seriesPick = $('pm-series-pick') as HTMLSelectElement;
-    const seriesInput = $('pm-series') as HTMLInputElement;
+    const seriesInput = $('pm-series') as HTMLInputElement; // hidden value store the handler reads
     const specsBtn = $('pm-series-more');
     function syncSeriesUI() {
       const has = !!seriesInput.value.trim();
       specsBtn.classList.toggle('off', !has);
       if (!has) { $('seriesknobs').classList.add('off'); specsBtn.setAttribute('aria-expanded', 'false'); }
     }
-    function loadSeriesOptions() {
-      supabase.auth.getSession().then(({ data }) => {
+    // The series field is now a custom on-brand combobox (matches the schedule pickers):
+    // a searchable list of the site's existing series + a "Create …" row for a new one.
+    const seriesPicker = mountSeriesPicker($('pm-series-pick'), {
+      loadNames: async () => {
+        const { data } = await supabase.auth.getSession();
         const token = data.session && data.session.access_token;
-        if (!token) return;
-        fetch('/api/admin/posts', { headers: { Authorization: 'Bearer ' + token } })
-          .then((r) => r.json()).then((d) => {
-            const names = [...new Set((d.posts || []).map((p: any) => String(p.seriesTitle || p.series || '').trim()).filter(Boolean))].sort() as string[];
-            const cur = seriesInput.value.trim();
-            if (cur && !names.includes(cur)) names.unshift(cur); // editing a not-yet-listed series
-            seriesPick.innerHTML = ['<option value="">No series</option>']
-              .concat(names.map((n) => `<option value="${escHtml(n)}"${n === cur ? ' selected' : ''}>${escHtml(n)}</option>`))
-              .concat(['<option value="__new__">＋ New series…</option>']).join('');
-            seriesInput.style.display = 'none';
-            syncSeriesUI();
-          }).catch(() => {});
-      }).catch(() => {});
-    }
-    seriesPick.addEventListener('change', () => {
-      const v = seriesPick.value;
-      if (v === '__new__') { seriesInput.value = ''; seriesInput.style.display = ''; seriesInput.focus(); }
-      else { seriesInput.value = v; seriesInput.style.display = 'none'; }
-      syncSeriesUI(); refreshSheet();
+        if (!token) return [];
+        const r = await fetch('/api/admin/posts', { headers: { Authorization: 'Bearer ' + token } });
+        const d = await r.json();
+        return [...new Set((d.posts || []).map((p: any) => String(p.seriesTitle || p.series || '').trim()).filter(Boolean))].sort() as string[];
+      },
+      onChange: (name) => { seriesInput.value = name; syncSeriesUI(); refreshSheet(); },
     });
-    seriesInput.addEventListener('input', () => { syncSeriesUI(); refreshSheet(); });
+    function loadSeriesOptions() { seriesPicker.refresh(); }
     specsBtn.addEventListener('click', () => {
       const open = $('seriesknobs').classList.toggle('off') === false;
       specsBtn.setAttribute('aria-expanded', String(open));
@@ -1606,6 +1593,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         // from emailing by the handler's `!draft` guard regardless).
         $('pm-draft').checked = false;
         $('pm-series').value = editing.series || '';
+        seriesPicker.setValue(editing.series || '');
         $('pm-series-order').value = editing.seriesOrder || '';
         $('pm-series-total').value = editing.seriesTotal || '';
         $('pm-series-status').value = editing.seriesStatus || '';

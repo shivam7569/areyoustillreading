@@ -72,8 +72,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       <h2 class="em-title">Series</h2>
       <p class="em-body" id="sr-body"></p>
       <div class="sr-fields">
-        <label class="sr-field"><span>Series name</span><input class="input" id="sr-name" type="text" placeholder="e.g. LLMs from scratch" autocomplete="off" list="sr-name-options" /><datalist id="sr-name-options"></datalist></label>
-        <label class="sr-field sr-part"><span>Part</span><input class="input" id="sr-order" type="number" min="1" step="1" placeholder="1" /></label>
+        <div class="sr-field"><span>Series name</span><div id="sr-name-host"></div><input type="hidden" id="sr-name" /></div>
+        <label class="sr-field sr-part"><span>Part</span><input class="input" id="sr-order" type="text" inputmode="numeric" maxlength="3" placeholder="1" /></label>
       </div>
       <div class="em-actions">
         <button class="btn btn-ghost" id="sr-remove" type="button">Remove from series</button>
@@ -157,6 +157,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   import { supabase } from '../../lib/supabase';
   import { onAdminReady, adminFetch, swrFetch } from '../../lib/admin-gate';
   import { fmtDate, esc } from '../../lib/admin-format';
+  import { mountSeriesPicker } from '../../lib/series-picker';
 
   let all: any[] = [];
   let armedDelete: string | null = null;
@@ -182,8 +183,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   // Series membership editor (R5).
   const srModal = document.getElementById('series-modal')!;
   const srBody = document.getElementById('sr-body')!;
-  const srName = document.getElementById('sr-name') as HTMLInputElement;
-  const srNameList = document.getElementById('sr-name-options') as HTMLDataListElement;
+  const srName = document.getElementById('sr-name') as HTMLInputElement; // hidden value store
   const srOrder = document.getElementById('sr-order') as HTMLInputElement;
   const srStatus = document.getElementById('sr-status')!;
   const srSave = document.getElementById('sr-save') as HTMLButtonElement;
@@ -614,7 +614,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !emModal.hidden) closeEmail(); });
 
   // --- Series membership (add / edit / remove) -----------------------------
-  function fillSeriesOptions() {
+  // Distinct existing series names (de-duped by series slug) for the picker list.
+  function distinctSeries(): string[] {
     const seen = new Set<string>();
     const names: string[] = [];
     for (const p of all) {
@@ -626,23 +627,30 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       names.push(name);
     }
     names.sort((a, b) => a.localeCompare(b));
-    srNameList.innerHTML = names.map((n) => `<option value="${esc(n)}"></option>`).join('');
+    return names;
   }
+
+  // The Series name field is the same on-brand combobox as the publish sheet.
+  const seriesNamePicker = mountSeriesPicker(document.getElementById('sr-name-host')!, {
+    loadNames: async () => distinctSeries(),
+    onChange: (name) => { srName.value = name; },
+  });
 
   function openSeries(slug: string) {
     const p = all.find((x) => x.slug === slug);
     if (!p) return;
     seriesTarget = p;
     srBody.innerHTML = `Group <strong>${esc(p.title)}</strong> into a series. Posts that share a series appear together on the Series page, ordered by part.`;
-    srName.value = p.seriesTitle || p.series || '';
+    const cur = p.seriesTitle || p.series || '';
+    srName.value = cur;
+    seriesNamePicker.setNames(distinctSeries());
+    seriesNamePicker.setValue(cur);
     srOrder.value = p.seriesOrder ? String(p.seriesOrder) : '';
     srStatus.textContent = '';
     srSave.disabled = false;
     srRemove.disabled = false;
     srRemove.hidden = !p.series;
-    fillSeriesOptions();
     srModal.hidden = false;
-    srName.focus();
   }
   function closeSeries() {
     srModal.hidden = true;

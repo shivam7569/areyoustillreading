@@ -621,6 +621,15 @@ table.t th.num { text-align: right; }
 .tz-i:hover { background: var(--paper-2); }
 .tz-i.sel { background: color-mix(in srgb, var(--accent) 15%, transparent); }
 .tz-i b { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12px; color: var(--accent); flex: none; width: 82px; }
+
+/* Series combobox (mountSeriesPicker) — reuses the schedule picker's trigger + popover
+   shell, so the Series field matches the Schedule date/time/zone dropdowns. */
+.sepick { position: relative; }
+.sepick .spick { width: 100%; height: 38px; justify-content: space-between; font-size: 13px; }
+.sepick .spick-v { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-variant-numeric: normal; }
+.sepick .spick-v.is-empty { color: var(--ink-faint); font-weight: 400; }
+.sepick .spop { left: 0; right: auto; min-width: 260px; max-width: 340px; }
+.tz-i.se-new { color: var(--accent); font-weight: 600; }
 .chk { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule-soft); }
 .chk li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--rule-soft); font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
 .chk svg { flex: none; width: 13px; height: 13px; margin-top: 3px; color: color-mix(in srgb, var(--ink) 34%, transparent); }
