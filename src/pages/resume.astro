@@ -162,8 +162,8 @@ const pdfReady = download.mode === 'file' && !!download.pdfName;
           <div class="cv-close">
             <span>{closeText}</span>
             <div class="close-actions">
-              <a class="btn btn-ghost btn-sm" href="/projects">See selected projects</a>
-              <a class="btn btn-primary btn-sm" href={emailHref}>Get in touch</a>
+              <a class="btn btn-ghost btn-sm" href={emailHref}>Get in touch</a>
+              <a class="btn btn-primary btn-sm proj-cta" href="/projects">See selected projects <span class="arrow" aria-hidden="true">→</span></a>
             </div>
           </div>
         )}
@@ -237,6 +237,11 @@ const pdfReady = download.mode === 'file' && !!download.pdfName;
 
   .cv-close{margin-top:clamp(38px,5vw,60px);padding-top:28px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;gap:18px 28px;flex-wrap:wrap;font-family:var(--sans);font-size:14px;color:var(--ink-faint)}
   .close-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  /* Projects is the emphasised CTA — filled accent + a forward arrow that nudges on
+     hover. It sits last (nothing to its right) so the arrow can't read as pointing
+     at the adjacent button. */
+  .proj-cta .arrow{display:inline-block;margin-left:3px;transition:transform .2s var(--ease)}
+  .proj-cta:hover .arrow{transform:translateX(3px)}
 </style>
 
 {/* Print styles live GLOBAL: they hide BaseLayout-owned chrome and reset :root
