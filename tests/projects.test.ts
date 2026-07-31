@@ -87,5 +87,12 @@ describe('projects page', () => {
     // ever renamed or removed from the source, update this expectation to match
     // the new canonical project rather than deleting the assertion.
     expect(html).toContain('Deep-Learning Architectures from Scratch');
+    // Case-study redesign markers. Assert on data-attributes/text, NOT class
+    // names — Astro appends a scoped-style hash to class lists (class="proj astro-…"),
+    // so a `class="proj"` substring would never match.
+    expect(html).toContain('data-layout="case"'); // the case-study article
+    expect(html).toContain('Architecture families');
+    expect(html).toContain('Modular, packaged codebase'); // a "how it's built" item
+    expect(html).toContain('<svg'); // inlined generated plate artwork
   });
 });

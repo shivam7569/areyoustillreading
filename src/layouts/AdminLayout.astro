@@ -33,7 +33,7 @@ import BaseHead from '../components/BaseHead.astro';
 interface Props {
   title: string;
   heading?: string;
-  active?: 'home' | 'posts' | 'drafts' | 'write' | 'series' | 'resume' | 'audience' | 'engagement' | 'analytics' | 'revenue' | 'settings';
+  active?: 'home' | 'posts' | 'drafts' | 'write' | 'series' | 'resume' | 'projects' | 'audience' | 'engagement' | 'analytics' | 'revenue' | 'settings';
 }
 const { title, heading, active } = Astro.props;
 
@@ -47,6 +47,7 @@ const icon = {
   write: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
   series: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>',
   resume: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6Z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>',
+  projects: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m6 16 4-4 3 3 2-2 3 3"/><circle cx="9" cy="9.5" r="1.2"/></svg>',
   audience: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg>',
   engagement: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-9 8.3 8.5 8.5 0 0 1-3.9-.9L3 20l1.1-5.1A8.38 8.38 0 0 1 3.7 11 8.5 8.5 0 0 1 12 3a8.38 8.38 0 0 1 8.3 8.5Z"/></svg>',
   analytics: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="0.5"/><rect x="12" y="8" width="3" height="10" rx="0.5"/><rect x="17" y="5" width="3" height="13" rx="0.5"/></svg>',
@@ -64,6 +65,7 @@ const navGroups = [
   { label: 'Writing', items: [
     { key: 'posts', href: '/admin/posts', label: 'Posts', icon: icon.posts, count: 'posts' },
     { key: 'drafts', href: '/admin/drafts', label: 'Drafts', icon: icon.drafts, count: 'drafts' },
+    { key: 'projects', href: '/admin/projects', label: 'Projects', icon: icon.projects, count: 'projects' },
     { key: 'resume', href: '/admin/resume', label: 'Resume', icon: icon.resume },
     { key: 'write', href: '/admin/write', label: 'Write', icon: icon.write },
     { key: 'series', href: '/admin/series', label: 'Series', icon: icon.series },
@@ -225,6 +227,13 @@ const navGroups = [
           };
           set('posts', d.posts.published);
           set('drafts', d.posts.drafts);
+        });
+        // Projects count comes from its own endpoint (not in overview).
+        swrFetch('/api/admin/projects', (d: any) => {
+          if (!d || d.__error || !d.content || !Array.isArray(d.content.projects)) return;
+          const n = d.content.projects.filter((p: any) => p && p.show !== false).length;
+          const el = document.querySelector('.admin-nav .ct[data-ct="projects"]') as HTMLElement | null;
+          if (el) { el.textContent = String(n); el.hidden = false; }
         });
       });
 

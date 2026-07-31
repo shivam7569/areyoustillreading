@@ -1,142 +1,240 @@
 ---
 /*
  * ============================================================================
- * FILE: src/pages/projects.astro
- * ROUTE: /projects  (Astro file-based routing — this file's path IS the URL)
+ * FILE: src/pages/projects.astro   ·   ROUTE: /projects  (static, prerendered)
  * ============================================================================
+ * The public Projects page in the Claude Design "case study" layout: one project
+ * gets the whole page (split hero + generated plate artwork + an "inside" section
+ * of architecture families and build practices) rather than a grid with a hole
+ * in it. Every project after the first renders as a compact row.
  *
- * WHAT THIS IS
- *   The static "Projects" portfolio page, Phase-5 EDITORIAL skin. It renders a
- *   hard-coded list of featured projects as a responsive card grid, plus a
- *   trailing "More on GitHub" note. That's the whole job.
+ * DATA-DRIVEN: content + per-project layout live in src/data/projects.json and are
+ * edited from Studio → Projects (/admin/projects), which commits the JSON → CF
+ * rebuild. This page just renders that data at build time. Artwork is a generated
+ * "plate" (src/lib/plates.mjs, inlined as SVG — theme-aware, no client JS) unless
+ * a real screenshot has been uploaded (art.type === 'shot').
  *
- * SINGLE RESPONSIBILITY
- *   Present a curated, author-maintained list of portfolio projects. Nothing
- *   more. This page is 100% static content: it fetches nothing at runtime,
- *   reads no database, requires no auth, and ships zero client-side JS of its
- *   own. It is fully rendered to HTML at build time.
+ * Layout is entirely driven by data attributes on the .proj article (data-hero /
+ * -aspect / -cols / -families / -build / -fam-style / -build-marker / -layout),
+ * each honoured by the CSS below — the author changes layout in Studio without
+ * anyone touching this file.
  *
- * DESIGN
- *   Editorial reskin only — no behavior change. Header/footer/nav/theme come
- *   from BaseLayout; the shared editorial utility classes (.wrap .page-head
- *   .eyebrow .meta-caps .sec-head .card .ph .tag .tags) live in global.css.
- *   Only the page-specific classes (.grid .proj .status .note) are scoped
- *   below, copied verbatim from the editorial template.
- *
- * DEPENDENCIES (what it imports)
- *   - ../layouts/BaseLayout.astro : the shared site shell. Owns <html>, <head>
- *     (meta/OG/canonical), global CSS variables + editorial utilities,
- *     header/nav, footer, and Pagefind indexing. `wide` opts this page out of
- *     the constrained reading column so the editorial grid can breathe.
- *
- * SECURITY / GOTCHAS
- *   - No secrets, no tokens, no entitlement checks — there is no data source to
- *     protect. `href` values are author-controlled constants, so the bare
- *     <a href={p.href}> is safe. Keep this page static.
- * ============================================================================
+ * OWNER BAR: when the signed-in owner views the page, a subtle "Manage in Studio"
+ * bar appears (revealed by a tiny inline check of the admin localStorage flag —
+ * no Supabase import on this public page). Editing itself happens in Studio; this
+ * page is reader-only.
  */
-
-// The shared page shell. Owns <head>, nav, footer, and the editorial tokens
-// (--paper/--ink/--rule/--accent/--serif-*) this page's <style> consumes.
 import BaseLayout from '../layouts/BaseLayout.astro';
+import data from '../data/projects.json';
+import { plate } from '../lib/plates.mjs';
 
-// Shape of a single portfolio entry. Compile-time only (TS interface erased at
-// build); exists to keep the hand-authored `projects` array below honest.
-interface Project {
-  name: string;        // Card heading.
-  description: string; // One-paragraph blurb rendered as the card body.
-  href: string;        // Primary outbound URL (author-set).
-  tags: string[];      // Short pill labels (tech/keywords).
-  status: string;      // Editorial status pill (e.g. "Maintained").
-  meta: string;        // Small-caps meta shown next to the status pill.
-  shot: string;        // Mono label naming the screenshot placeholder.
-}
-
-// The curated, hand-maintained source of truth for this page. Static array
-// (not a CMS/DB query): the list is tiny, author-owned, and rarely changes, so
-// build-time constants keep the page fully static. To feature a new project,
-// add an object here — that is the ONLY edit required.
-const projects: Project[] = [
-  {
-    name: 'Deep-Learning Architectures from Scratch',
-    description:
-      'Open-source PyTorch library implementing 25+ computer-vision architectures — CNNs (ResNet, ConvNeXt), Vision Transformers (DeiT, Swin), and segmentation networks — reimplemented from their original papers. Modular, packaged codebase with unit tests, GitHub Actions CI/CD, config-driven training, experiment logging, and hosted docs.',
-    href: 'https://shivam7569.github.io/cv/',
-    tags: ['pytorch', 'computer-vision', 'open-source'],
-    status: 'Maintained',
-    meta: 'Open source',
-    shot: 'Screenshot — architecture library docs',
-  },
-];
-
+const projects = (data.projects || []).filter((p) => p.show !== false);
 const GITHUB = 'https://github.com/shivam7569';
+const plateSvg = (p) => plate(p.art?.plateId || '01').svg;
 ---
 
-{/*
-  BaseLayout wraps this page in the site shell. `title` becomes the <title>/OG
-  title and `description` the meta/OG description. `wide` gives the editorial
-  grid a full-bleed main. Everything below is projected into the layout's slot.
-*/}
 <BaseLayout title="Projects — areyoustillreading" description="Selected engineering and research projects by Shivam Chaudhary." wide>
   <div class="wrap">
     <header class="page-head">
       <div class="kicker"><span class="line"></span><span class="eyebrow">Things I built</span></div>
       <h1>Work that <em>earned its writing.</em></h1>
-      <p class="lede">Selected engineering and research work — the kind of project I couldn't write about honestly until I'd built it first.</p>
+      <p class="lede">Selected engineering and research work — the kind of project I couldn't write about honestly until I'd built it first. One thing done properly, rather than a grid of repositories nobody opens.</p>
     </header>
 
-    <div class="grid">
-      {/* One .proj card per curated project. Keyless map is fine: static SSG, no hydration. */}
-      {projects.map((p) => (
-        <article class="card proj">
-          <div class="ph"><span>{p.shot}</span></div>
-          <div class="body">
-            <div class="top"><span class="status">{p.status}</span><span class="meta-caps">{p.meta}</span></div>
-            <h3>{p.name}</h3>
-            <p>{p.description}</p>
-            <div class="tags">
-              {p.tags.map((tag) => <span class="tag">{tag}</span>)}
-            </div>
-            <div class="links">
-              <a href={GITHUB}><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.3-1.1.6-1.4-2.2-.2-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.6 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.3.1 2.6.6.7 1 1.6 1 2.7 0 3.8-2.4 4.7-4.6 4.9.3.3.6.9.6 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>Repository</a>
-              <a href={p.href}>Documentation →</a>
-            </div>
-          </div>
-        </article>
-      ))}
+    {/* Owner-only shortcut to the editor. Revealed by the inline script below for a
+        signed-in admin; readers never see it. Editing lives in Studio → Projects. */}
+    <div class="ownerbar" id="ownerbar">
+      <span class="who"><i></i>Owner view</span>
+      <span class="push">
+        <a class="gbtn" href="/admin/projects">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16Z"/><path d="M14 6l4 4"/></svg>
+          Manage in Studio ↗
+        </a>
+      </span>
     </div>
 
-    {/* Closing note carries the "More on GitHub" catch-all from the pre-skin page. */}
-    <div class="note">
+    {projects.map((p) => (
+      <article class="proj"
+        data-layout={p.layout}
+        data-hero={p.hero}
+        data-aspect={p.aspect}
+        data-cols={String(p.cols)}
+        data-families={p.families?.on ? 'on' : 'off'}
+        data-build={p.build?.on ? 'on' : 'off'}
+        data-fam-style={p.families?.style}
+        data-build-marker={p.build?.marker}
+        data-art={p.art?.type}
+      >
+        <div class="proj-top">
+          <div class="proj-copy">
+            <div class="states">
+              {p.states?.maintained && <span class="state live">Maintained</span>}
+              {p.states?.oss && <span class="state oss">Open source</span>}
+            </div>
+            <h2>{p.name}</h2>
+            <p class="lead">{p.lead}</p>
+            <div class="tags-row">{p.tags?.map((t) => <span class="tag">{t}</span>)}</div>
+            <div class="links">
+              {p.links?.github && (
+                <a class="btn btn-primary btn-sm" href={p.links.github}>GitHub
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.3-1.1.6-1.4-2.2-.2-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.6 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.3.1 2.6.6.7 1 1.6 1 2.7 0 3.8-2.4 4.7-4.6 4.9.3.3.6.9.6 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+                </a>
+              )}
+              {p.links?.docs && <a class="btn btn-ghost btn-sm" href={p.links.docs}>Documentation →</a>}
+            </div>
+          </div>
+          <div class="shot">
+            {p.art?.type === 'shot' && p.art?.shot
+              ? <img class="shot-img" src={p.art.shot} alt={`Screenshot — ${p.name}`} loading="lazy" />
+              : <div class="plate" set:html={plateSvg(p)}></div>}
+          </div>
+        </div>
+
+        {(p.families?.on || p.build?.on) && (
+          <div class="inside">
+            {p.families?.on && (
+              <div class="fam-block">
+                <h3>{p.families.heading}</h3>
+                {p.families.count && (
+                  <div class="count"><b>{p.families.count.fig}</b><span>{p.families.count.cap}</span></div>
+                )}
+                <ul class="fam">
+                  {p.families.rows?.map((r) => (
+                    <li><span class="n">{r.n}</span><span class="v">{r.v}{r.sub && <small>{r.sub}</small>}</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {p.build?.on && (
+              <div class="build-block">
+                <h3>{p.build.heading}</h3>
+                <ul class="practice">{p.build.items?.map((it) => <li><b>{it}</b></li>)}</ul>
+              </div>
+            )}
+          </div>
+        )}
+      </article>
+    ))}
+
+    <div class="writing">
+      <p><b>This is where the essays come from</b>The reimplementations are what make the writing possible — you can't explain an architecture honestly until you've had to make it train.</p>
+      <a class="btn btn-ghost btn-sm" href="/blog">Read the essays →</a>
+    </div>
+
+    <div class="oss-note">
       <span>Everything here is open source — MIT unless the repository says otherwise.</span>
-      <span>More on GitHub <a href={GITHUB}>github.com/shivam7569 →</a></span>
+      <a class="more" href={GITHUB}>More on GitHub · github.com/shivam7569 →</a>
     </div>
   </div>
 </BaseLayout>
 
-{/*
-  Page-specific classes only (copied verbatim from the editorial template). The
-  shared editorial utilities (.wrap .page-head .eyebrow .meta-caps .card .ph
-  .tag .tags) live in global.css. Colors come from the editorial tokens
-  (--paper/--ink/--rule/--accent/--serif-*) defined globally.
-*/}
+<script is:inline>
+  // Reveal the owner bar only for a signed-in admin (optimistic localStorage flag
+  // set by the admin gate). No Supabase on this public page; readers never see it.
+  try { if (localStorage.getItem('aysr:admin-ok') === '1') document.getElementById('ownerbar')?.classList.add('on'); } catch (e) {}
+</script>
+
 <style>
-  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(20px,3vw,32px)}
-  @media(max-width:860px){.grid{grid-template-columns:1fr}}
-  .proj{overflow:hidden;display:flex;flex-direction:column;transition:transform .22s,border-color .22s}
-  .proj:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--accent) 40%,var(--rule))}
-  .proj .ph{min-height:200px}
-  .proj .body{padding:clamp(22px,2.6vw,30px);display:flex;flex-direction:column;flex:1}
-  .proj .top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
-  .status{font-family:var(--sans);font-size:11px;letter-spacing:.14em;text-transform:uppercase;padding:5px 10px;border-radius:2px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
-  .status.quiet{background:transparent;border:1px solid var(--rule);color:var(--ink-faint)}
-  .proj h3{font-family:var(--serif-display);font-weight:600;font-size:26px;letter-spacing:-.01em;margin:0 0 12px;line-height:1.15}
-  .proj p{color:var(--ink-soft);margin:0 0 20px;font-size:17px}
-  .proj .tags{margin-bottom:22px}
-  .proj .links{display:flex;flex-wrap:wrap;gap:18px;margin-top:auto;padding-top:18px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:14px}
-  .proj .links a{color:var(--accent);display:inline-flex;align-items:center;gap:7px;border-bottom:1px solid transparent;transition:border-color .2s}
-  .proj .links a:hover{border-color:var(--accent)}
-  .proj .links svg{width:14px;height:14px}
-  .note{margin-top:clamp(44px,6vw,72px);padding:26px 0 0;border-top:1px solid var(--rule);font-family:var(--sans);font-size:14px;color:var(--ink-faint);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
-  .note a{color:var(--accent)}
+  /* One project, so it gets the whole page rather than a grid with a hole in it. */
+  .proj{position:relative;border:1px solid var(--rule);border-radius:8px;background:var(--card);overflow:hidden;box-shadow:var(--shadow)}
+  .proj + .proj{margin-top:clamp(20px,3vw,30px)}
+  .proj-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:0}
+  @media(max-width:900px){.proj-top{grid-template-columns:1fr}}
+  .proj-copy{padding:clamp(26px,3.4vw,40px)}
+  .states{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  .state{font-family:var(--sans);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;padding:5px 10px;border-radius:2px}
+  .state.live{background:var(--accent);color:var(--on-accent)}
+  .state.oss{border:1px solid var(--rule);color:var(--ink-faint)}
+  .proj-copy h2{font-family:var(--serif-display);font-weight:600;font-size:clamp(26px,3.4vw,36px);line-height:1.12;letter-spacing:-.018em;margin:0 0 16px;text-wrap:balance}
+  .proj-copy p.lead{font-size:17.5px;line-height:1.65;color:var(--ink-soft);margin:0 0 22px;text-wrap:pretty}
+  .tags-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}
+  .links{display:flex;gap:12px;flex-wrap:wrap}
+  .shot{position:relative;min-height:340px;border-left:1px solid var(--rule);background:var(--paper-2)}
+  @media(max-width:900px){.shot{border-left:0;border-top:1px solid var(--rule);min-height:260px}}
+  .plate{position:absolute;inset:0}
+  .shot-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+
+  /* what's actually in the repo — the engineering, not the pitch */
+  .inside{border-top:1px solid var(--rule);display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  @media(max-width:820px){.inside{grid-template-columns:1fr}}
+  .inside>div{padding:clamp(24px,3vw,34px)}
+  .inside>div+div{border-left:1px solid var(--rule)}
+  @media(max-width:820px){.inside>div+div{border-left:0;border-top:1px solid var(--rule)}}
+  .inside h3{font-family:var(--sans);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:600;margin:0 0 18px}
+  .fam{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:0}
+  .fam li{display:flex;align-items:baseline;gap:14px;padding:11px 0;border-bottom:1px solid var(--rule-soft);font-size:16.5px}
+  .fam li:last-child{border-bottom:0}
+  .fam .n{flex:none;font-family:var(--sans);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);width:96px}
+  .fam .v{color:var(--ink)}
+  .fam .v small{display:block;font-family:var(--sans);font-size:12.5px;color:var(--ink-faint);margin-top:3px}
+  .practice{margin:0;padding:0;list-style:none;display:grid;gap:11px}
+  .practice li{position:relative;padding-left:24px;font-size:16.5px;line-height:1.5;color:var(--ink-soft)}
+  .practice li::before{content:"";position:absolute;left:0;top:.42em;width:11px;height:6px;border-left:1.6px solid var(--accent);border-bottom:1.6px solid var(--accent);transform:rotate(-45deg)}
+  .practice li b{color:var(--ink);font-weight:600}
+  .count{display:flex;align-items:baseline;gap:12px;margin-bottom:20px}
+  .count b{font-family:var(--serif-display);font-weight:600;font-size:38px;line-height:1;letter-spacing:-.02em;color:var(--accent);font-variant-numeric:tabular-nums}
+  .count span{font-family:var(--sans);font-size:13px;line-height:1.4;color:var(--ink-faint);max-width:22ch}
+
+  /* thesis + catch-all */
+  .writing{margin-top:clamp(30px,4vw,46px);padding:clamp(24px,3vw,34px);border:1px solid var(--rule);border-radius:6px;background:var(--paper-2);display:flex;align-items:center;gap:clamp(20px,3vw,34px);flex-wrap:wrap}
+  .writing p{margin:0;flex:1;min-width:260px;font-size:16.5px;line-height:1.6;color:var(--ink-soft)}
+  .writing p b{font-family:var(--serif-display);display:block;font-size:20px;color:var(--ink);margin-bottom:7px;letter-spacing:-.01em}
+  .oss-note{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:clamp(26px,3.4vw,38px);padding-top:26px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:14px;color:var(--ink-faint)}
+  .oss-note a.more{margin-left:auto;color:var(--accent);border-bottom:1px solid transparent;transition:border-color .2s}
+  .oss-note a.more:hover{border-color:var(--accent)}
+
+  /* owner bar (reader-only page; this is just the shortcut into Studio) */
+  .ownerbar{display:none;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px;padding:12px 16px;border:1px solid color-mix(in srgb,var(--accent) 34%,var(--rule));border-radius:5px;background:color-mix(in srgb,var(--accent) 6%,var(--card));font-family:var(--sans);font-size:12.5px;color:var(--ink-soft)}
+  .ownerbar.on{display:flex}
+  .ownerbar .who{display:inline-flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  .ownerbar .who i{width:6px;height:6px;border-radius:999px;background:var(--accent);display:block}
+  .ownerbar .push{margin-left:auto;display:flex;gap:9px;flex-wrap:wrap}
+  .ownerbar .gbtn{font-family:var(--sans);font-size:12.5px;display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:3px;border:1px solid var(--rule);background:transparent;color:var(--ink-soft)}
+  .ownerbar .gbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .ownerbar .gbtn svg{width:13px;height:13px}
+
+  /* ——— layout variants (every arrangement Studio can choose) ——— */
+  .proj[data-hero="left"] .proj-top{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}
+  .proj[data-hero="left"] .proj-copy{order:2}
+  .proj[data-hero="left"] .shot{order:1;border-left:0;border-right:1px solid var(--rule)}
+  .proj[data-hero="top"] .proj-top{grid-template-columns:1fr}
+  .proj[data-hero="top"] .shot{order:-1;border-left:0;border-bottom:1px solid var(--rule)}
+  .proj[data-hero="none"] .proj-top{grid-template-columns:1fr}
+  .proj[data-hero="none"] .shot{display:none}
+  .proj[data-aspect="16-9"] .shot{aspect-ratio:16/9;min-height:0}
+  .proj[data-aspect="1-1"] .shot{aspect-ratio:1;min-height:0}
+  .proj[data-cols="1"] .inside{grid-template-columns:1fr}
+  .proj[data-cols="1"] .inside>div+div{border-left:0;border-top:1px solid var(--rule)}
+  .proj[data-families="off"] .fam-block,.proj[data-build="off"] .build-block{display:none}
+  .proj[data-families="off"][data-build="off"] .inside{display:none}
+  .proj[data-families="off"] .inside,.proj[data-build="off"] .inside{grid-template-columns:1fr}
+  .proj[data-families="off"] .inside>div+div,.proj[data-build="off"] .inside>div+div{border-left:0}
+  /* compact row — the shape every project below rank 1 uses */
+  .proj[data-layout="compact"] .inside{display:none}
+  .proj[data-layout="compact"] .proj-top{grid-template-columns:190px minmax(0,1fr)}
+  .proj[data-layout="compact"] .shot{order:-1;min-height:0;aspect-ratio:3/2;border-left:0;border-right:1px solid var(--rule)}
+  .proj[data-layout="compact"] .proj-copy{padding:20px 24px}
+  .proj[data-layout="compact"] .proj-copy h2{font-size:22px;margin-bottom:10px}
+  .proj[data-layout="compact"] .proj-copy p.lead{font-size:16px;margin-bottom:14px}
+  @media(max-width:700px){.proj[data-layout="compact"] .proj-top{grid-template-columns:1fr}}
+  /* quiet line — title, tags, links; for archived or minor work */
+  .proj[data-layout="line"] .shot,.proj[data-layout="line"] .inside,.proj[data-layout="line"] p.lead,.proj[data-layout="line"] .states{display:none}
+  .proj[data-layout="line"] .proj-top{grid-template-columns:1fr}
+  .proj[data-layout="line"] .proj-copy{padding:18px 22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .proj[data-layout="line"] .proj-copy h2{font-size:19px;margin:0}
+  .proj[data-layout="line"] .tags-row{margin:0}
+  .proj[data-layout="line"] .links{margin-left:auto}
+  /* detail-block presentation */
+  .proj[data-fam-style="stacked"] .fam li{flex-direction:column;gap:5px}
+  .proj[data-fam-style="stacked"] .fam .n{width:auto}
+  .proj[data-build-marker="dash"] .practice li::before{border:0;width:10px;height:1px;background:var(--accent);transform:none;top:.72em}
+  .proj[data-build-marker="number"] .practice{counter-reset:bn}
+  .proj[data-build-marker="number"] .practice li{counter-increment:bn}
+  .proj[data-build-marker="number"] .practice li::before{content:counter(bn,decimal-leading-zero);border:0;width:auto;height:auto;transform:none;top:.1em;font-family:var(--sans);font-size:11px;letter-spacing:.08em;color:var(--accent)}
+</style>
+
+{/* The plate artwork is injected via set:html, so its <svg> can't receive this
+   page's scoped attribute — size it globally. Scoped to .plate so it can't leak. */}
+<style is:global>
+  .plate svg { width:100%; height:100%; display:block; }
 </style>

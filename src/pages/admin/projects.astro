@@ -1,0 +1,576 @@
+---
+/**
+ * /admin/projects — the Studio "Projects" page (Claude Design's studio.html view).
+ * =============================================================================
+ * Manage the public /projects case-study page by hand: a project list (rank = the
+ * public layout), per-project layout swatches + detail blocks, and the content
+ * (title / blurb / tags / links / artwork) — with a live skeleton preview.
+ *
+ * Because public-page owner editing is intentionally out of scope, this Studio
+ * page is the ONE editing surface, so it also owns the content fields (the design
+ * edited those inline on the page; we edit them here).
+ *
+ * DATA FLOW mirrors the resume Studio page: client-rendered from src/data/
+ * projects.json (loaded via GET /api/admin/projects, seeded from the build-time
+ * import so it works instantly / in the sandbox); Save POSTs the model → commits
+ * projects.json → Cloudflare rebuild. Optional screenshots upload to
+ * public/projects/<id>.<ext> via the same endpoint. Artwork defaults to a
+ * generated plate (src/lib/plates.mjs), inlined here for the preview + thumbs.
+ *
+ * STYLING: components ported from studio.css into a `.projectstudio`-prefixed
+ * <style is:global> (innerHTML-safe — the list/editor/preview are built with
+ * innerHTML), same technique as .resumestudio.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import seed from '../../data/projects.json';
+import { PLATES } from '../../lib/plates.mjs';
+---
+
+<AdminLayout title="Projects — Studio" heading="Projects" active="projects">
+  <div class="projectstudio">
+    <script type="application/json" id="pj-seed" set:html={JSON.stringify(seed)} />
+    <script type="application/json" id="pj-plates" set:html={JSON.stringify(PLATES)} />
+
+    <div class="pj-top">
+      <div class="tabs" id="pj-tabs">
+        <button class="on" data-filter="all" type="button">All<span class="n" data-c="all">0</span></button>
+        <button data-filter="live" type="button">Live<span class="n" data-c="live">0</span></button>
+        <button data-filter="hidden" type="button">Hidden<span class="n" data-c="hidden">0</span></button>
+      </div>
+      <a class="btn btn-ghost btn-sm pj-view" href="/projects" target="_blank" rel="noopener">View the page ↗</a>
+      <button class="btn btn-ghost btn-sm" id="pj-new" type="button">New project</button>
+      <button class="btn btn-primary btn-sm" id="pj-save" type="button">Save changes</button>
+      <span class="pj-status" id="pj-status" role="status" aria-live="polite"></span>
+    </div>
+
+    <div class="panel">
+      <header><h2>Projects</h2><span class="hint">Rank sets the layout — first is the case study, the rest are rows</span></header>
+      <div class="pb flush"><div id="pjList"></div></div>
+    </div>
+
+    <div class="panel pjpanel">
+      <header><h2 id="pjEditTitle">Editing</h2><span class="hint">Layout and content · changes go live on save</span></header>
+      <div class="pb">
+        <div class="pjwork">
+          <div id="editors"></div>
+          <div class="pvwrap">
+            <div class="pvhead"><i></i>Live preview</div>
+            <div class="pvbody">
+              <div class="pv" id="pv"><div class="pv-top"><div class="pv-copy"><span class="pv-h"></span><span class="pv-l"></span><span class="pv-l"></span><span class="pv-l s"></span><div class="pv-tags"><i></i><i></i><i></i></div><div class="pv-btns"><i></i><i></i></div></div><div class="pv-shot plated" id="pvshot"></div></div><div class="pv-inside"><div class="pv-b" data-b="fam"><span></span><span></span><span></span><span></span></div><div class="pv-b" data-b="build"><span></span><span></span><span></span><span></span></div></div></div>
+            </div>
+            <div class="pvnote">What the projects page reads to lay this card out. Nothing rebuilds when you change it.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style is:global>
+  .projectstudio { font-family: var(--sans); }
+  .projectstudio .pj-top { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  .projectstudio .pj-view { margin-left:auto; }
+  .projectstudio .pj-status { font-size:12.5px; color:var(--ink-faint); flex-basis:100%; min-height:1.1em; }
+  .projectstudio .pj-status.err { color:var(--danger,#c2603f); }
+  .projectstudio .pj-status.ok { color:var(--accent); }
+
+  .projectstudio .tabs { display:flex; gap:2px; flex-wrap:wrap; }
+  .projectstudio .tabs button { font-family:var(--sans); font-size:13px; color:var(--ink-soft); background:transparent; border:1px solid transparent; border-radius:3px; padding:7px 13px; cursor:pointer; }
+  .projectstudio .tabs button:hover { background:var(--paper-2); color:var(--ink); }
+  .projectstudio .tabs button.on { background:color-mix(in srgb,var(--accent) 13%,transparent); color:var(--accent); }
+  .projectstudio .tabs .n { opacity:.7; margin-left:6px; font-variant-numeric:tabular-nums; }
+
+  .projectstudio .panel { border:1px solid var(--rule); border-radius:4px; background:var(--card); overflow:hidden; }
+  .projectstudio .panel + .panel { margin-top:16px; }
+  /* the editor panel must NOT clip, or the sticky live preview can't escape it */
+  .projectstudio .panel.pjpanel { overflow:visible; }
+  .projectstudio .panel > header { display:flex; align-items:baseline; justify-content:space-between; gap:14px; padding:15px 17px; border-bottom:1px solid var(--rule); }
+  .projectstudio .panel > header h2 { font-family:var(--serif-display); font-size:17px; font-weight:600; margin:0; letter-spacing:-.01em; }
+  .projectstudio .panel > header .hint { font-size:11.5px; color:var(--ink-faint); }
+  .projectstudio .panel .pb { padding:17px; }
+  .projectstudio .panel .pb.flush { padding:0; }
+
+  /* project list rows */
+  .projectstudio .pjrow { display:grid; grid-template-columns:74px minmax(0,1fr) 130px 96px 84px auto; gap:16px; align-items:center; padding:14px 18px; border-bottom:1px solid var(--rule-soft); cursor:pointer; }
+  .projectstudio .pjrow:last-child { border-bottom:0; }
+  .projectstudio .pjrow:hover { background:var(--paper-2); }
+  .projectstudio .pjrow.sel { background:color-mix(in srgb,var(--accent) 8%,transparent); }
+  .projectstudio .pjthumb { aspect-ratio:3/2; border:1px solid var(--rule); border-radius:3px; background:var(--paper-2); overflow:hidden; }
+  .projectstudio .pjthumb .plate, .projectstudio .pjthumb .plate svg { width:100%; height:100%; display:block; }
+  .projectstudio .pjthumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .projectstudio .pjrow .ti { font-family:var(--serif-display); font-size:17px; font-weight:600; color:var(--ink); display:block; line-height:1.25; }
+  .projectstudio .pjrow .sub { display:block; font-size:12px; color:var(--ink-faint); margin-top:4px; }
+  .projectstudio .pjtags { display:flex; gap:5px; flex-wrap:wrap; }
+  .projectstudio .pjtags span { font-size:10.5px; letter-spacing:.06em; color:var(--ink-faint); border:1px solid var(--rule); border-radius:2px; padding:3px 6px; }
+  .projectstudio .pill { display:inline-flex; align-items:center; gap:6px; font-size:10px; letter-spacing:.14em; text-transform:uppercase; padding:4px 9px; border-radius:2px; border:1px solid var(--rule); color:var(--ink-faint); white-space:nowrap; }
+  .projectstudio .pill.live { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+  .projectstudio .pill.hid::before { content:""; width:5px; height:5px; border-radius:999px; background:var(--ink-faint); display:inline-block; margin-right:6px; }
+  .projectstudio .pjlinks { display:flex; gap:8px; color:var(--ink-faint); }
+  .projectstudio .pjlinks svg { width:14px; height:14px; }
+  .projectstudio .rowacts { display:flex; align-items:center; gap:4px; justify-content:flex-end; }
+  .projectstudio .ia { width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border:1px solid transparent; border-radius:3px; background:none; color:var(--ink-faint); cursor:pointer; padding:0; }
+  .projectstudio .ia:hover { border-color:var(--rule); color:var(--accent); background:var(--card); }
+  .projectstudio .ia svg { width:14px; height:14px; }
+  .projectstudio .pjempty { display:flex; align-items:center; gap:16px; padding:18px; border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--rule)); border-radius:4px; margin:14px 18px 18px; font-size:13px; color:var(--ink-faint); }
+  .projectstudio .pjempty .btn { margin-left:auto; }
+
+  /* editor */
+  .projectstudio .pjwork { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:clamp(20px,2.6vw,30px); align-items:start; }
+  @media(max-width:1040px){ .projectstudio .pjwork { grid-template-columns:1fr; } }
+  .projectstudio .fl { display:block; font-family:var(--sans); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:7px; font-weight:600; }
+  .projectstudio .fh { font-size:11.5px; color:var(--ink-faint); margin-top:6px; }
+  .projectstudio .ctl + .ctl { margin-top:22px; padding-top:20px; border-top:1px solid var(--rule-soft); }
+  .projectstudio .ctl > .fl { margin-bottom:11px; }
+  .projectstudio .ctl[hidden] { display:none; }
+  .projectstudio .inp { font-family:var(--sans); font-size:13.5px; color:var(--ink); background:var(--paper); border:1px solid var(--rule); border-radius:2px; padding:9px 11px; width:100%; box-sizing:border-box; }
+  .projectstudio .inp:focus { outline:2px solid var(--accent); outline-offset:1px; border-color:transparent; }
+  .projectstudio textarea.inp { resize:none; overflow:hidden; min-height:74px; font-family:var(--serif-body); line-height:1.55; }
+  .projectstudio .pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .projectstudio .inline-ctl { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px; }
+  .projectstudio .inline-ctl > span { font-family:var(--sans); font-size:12.5px; color:var(--ink-faint); min-width:70px; }
+  .projectstudio .segctl { display:inline-flex; border:1px solid var(--rule); border-radius:3px; overflow:hidden; }
+  .projectstudio .segctl button { background:none; border:0; font-family:var(--sans); font-size:12px; color:var(--ink-soft); padding:7px 13px; cursor:pointer; }
+  .projectstudio .segctl button + button { border-left:1px solid var(--rule); }
+  .projectstudio .segctl button.on { background:var(--accent); color:var(--on-accent); }
+  .projectstudio .blocktog { display:flex; align-items:center; gap:11px; font-family:var(--sans); font-size:13.5px; color:var(--ink); cursor:pointer; }
+  .projectstudio .blocktog input { appearance:none; -webkit-appearance:none; width:34px; height:19px; border-radius:999px; background:var(--rule); position:relative; cursor:pointer; flex:none; transition:background .18s; }
+  .projectstudio .blocktog input::after { content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:999px; background:var(--card); transition:transform .18s; }
+  .projectstudio .blocktog input:checked { background:var(--accent); }
+  .projectstudio .blocktog input:checked::after { transform:translateX(15px); }
+  .projectstudio .blocktog small { color:var(--ink-faint); font-size:12px; margin-left:auto; }
+  .projectstudio .togrow { display:flex; gap:22px; flex-wrap:wrap; }
+
+  .projectstudio .swatches { display:flex; gap:10px; flex-wrap:wrap; }
+  .projectstudio .sw { border:1px solid var(--rule); border-radius:4px; background:var(--card); padding:9px; cursor:pointer; display:flex; flex-direction:column; gap:8px; align-items:center; width:96px; transition:border-color .15s; }
+  .projectstudio .sw:hover { border-color:color-mix(in srgb,var(--accent) 50%,var(--rule)); }
+  .projectstudio .sw.on { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .projectstudio .sw svg { width:100%; height:44px; display:block; }
+  .projectstudio .sw span { font-family:var(--sans); font-size:11px; color:var(--ink-soft); text-align:center; line-height:1.3; }
+  .projectstudio .sw.on span { color:var(--accent); }
+
+  .projectstudio .pjblk { border:1px solid var(--rule); border-radius:4px; background:var(--card); overflow:hidden; }
+  .projectstudio .pjblk + .pjblk { margin-top:10px; }
+  .projectstudio .pjblk-head { display:flex; align-items:center; gap:11px; padding:11px 13px; }
+  .projectstudio .pjblk-body { display:none; padding:0 13px 14px; border-top:1px solid var(--rule-soft); margin-top:2px; }
+  .projectstudio .pjblk.on .pjblk-body { display:block; }
+  .projectstudio .pjblk-body .fl { margin-top:14px; }
+  .projectstudio .rowedit { display:grid; grid-template-columns:13px 118px minmax(0,1fr) 24px; gap:7px; align-items:center; margin-bottom:7px; }
+  .projectstudio .rowedit.item { grid-template-columns:13px minmax(0,1fr) 24px; }
+  .projectstudio .rowedit .g2 { color:var(--ink-faint); line-height:0; }
+  .projectstudio .rowedit .g2 svg { width:11px; height:11px; }
+  .projectstudio .rowedit .inp { font-size:13px; padding:7px 9px; }
+  .projectstudio .xrow { border:0; background:none; color:var(--ink-faint); cursor:pointer; font-size:15px; line-height:1; padding:4px; }
+  .projectstudio .xrow:hover { color:var(--danger,#c2603f); }
+  .projectstudio .miniadd { margin-top:4px; border:1px dashed var(--rule); background:none; border-radius:3px; font-family:var(--sans); font-size:12px; color:var(--ink-soft); padding:7px 11px; cursor:pointer; width:100%; }
+  .projectstudio .miniadd:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* artwork picker */
+  .projectstudio .artwrap { display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; }
+  .projectstudio .artcur { width:120px; aspect-ratio:3/2; border:1px solid var(--rule); border-radius:4px; overflow:hidden; flex:none; }
+  .projectstudio .artcur .plate, .projectstudio .artcur .plate svg, .projectstudio .artcur img { width:100%; height:100%; display:block; object-fit:cover; }
+  .projectstudio .artside { flex:1; min-width:200px; }
+  .projectstudio .plategrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(46px,1fr)); gap:6px; margin-top:8px; max-height:150px; overflow-y:auto; padding:2px; }
+  .projectstudio .pp { aspect-ratio:3/2; border:1px solid var(--rule); border-radius:3px; overflow:hidden; cursor:pointer; padding:0; background:none; }
+  .projectstudio .pp.on { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .projectstudio .pp .plate, .projectstudio .pp .plate svg { width:100%; height:100%; display:block; }
+  .projectstudio .gbtn { font-family:var(--sans); font-size:12.5px; display:inline-flex; align-items:center; gap:7px; padding:7px 12px; border-radius:3px; border:1px solid var(--rule); background:transparent; color:var(--ink-soft); cursor:pointer; white-space:nowrap; }
+  .projectstudio .gbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .projectstudio input[type="file"] { display:none; }
+
+  /* preview */
+  .projectstudio .pvwrap { position:sticky; top:12px; border:1px solid var(--rule); border-radius:5px; background:var(--paper-2); overflow:hidden; }
+  .projectstudio .pvhead { display:flex; align-items:center; gap:9px; padding:10px 13px; border-bottom:1px solid var(--rule); font-family:var(--sans); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+  .projectstudio .pvhead i { width:6px; height:6px; border-radius:999px; background:var(--accent); display:block; }
+  .projectstudio .pvbody { padding:16px; }
+  .projectstudio .pvnote { padding:0 16px 14px; font-size:11px; line-height:1.5; color:var(--ink-faint); }
+  .projectstudio .pv { border:1px solid var(--rule); border-radius:5px; background:var(--card); overflow:hidden; }
+  .projectstudio .pv-top { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.05fr); }
+  .projectstudio .pv-copy { padding:13px; display:flex; flex-direction:column; gap:7px; }
+  .projectstudio .pv-h { height:9px; border-radius:2px; background:var(--ink); opacity:.82; }
+  .projectstudio .pv-l { height:5px; border-radius:2px; background:var(--ink); opacity:.2; }
+  .projectstudio .pv-l.s { width:72%; }
+  .projectstudio .pv-tags { display:flex; gap:4px; margin-top:2px; }
+  .projectstudio .pv-tags i { width:22px; height:8px; border-radius:2px; border:1px solid var(--rule); display:block; }
+  .projectstudio .pv-btns { display:flex; gap:5px; margin-top:4px; }
+  .projectstudio .pv-btns i { width:38px; height:12px; border-radius:2px; background:var(--accent); display:block; }
+  .projectstudio .pv-btns i + i { background:transparent; border:1px solid var(--rule); }
+  .projectstudio .pv-shot { aspect-ratio:3/2; border-left:1px solid var(--rule); background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,var(--paper-2)),var(--paper-2)); }
+  .projectstudio .pv-shot.plated { background:none; }
+  .projectstudio .pv-shot.plated .plate, .projectstudio .pv-shot.plated .plate svg { width:100%; height:100%; display:block; }
+  .projectstudio .pv-inside { border-top:1px solid var(--rule); display:grid; grid-template-columns:1fr 1fr; }
+  .projectstudio .pv-b { padding:12px; display:flex; flex-direction:column; gap:5px; }
+  .projectstudio .pv-b + .pv-b { border-left:1px solid var(--rule); }
+  .projectstudio .pv-b span { height:4px; border-radius:2px; background:var(--ink); opacity:.18; }
+  .projectstudio .pv-b span:first-child { width:46%; opacity:.55; background:var(--accent); height:5px; }
+  .projectstudio .pv[data-layout="case"][data-hero="left"] .pv-copy { order:2; }
+  .projectstudio .pv[data-layout="case"][data-hero="left"] .pv-shot { order:1; border-left:0; border-right:1px solid var(--rule); }
+  .projectstudio .pv[data-layout="case"][data-hero="top"] .pv-top { grid-template-columns:1fr; }
+  .projectstudio .pv[data-layout="case"][data-hero="top"] .pv-shot { order:-1; border-left:0; border-bottom:1px solid var(--rule); }
+  .projectstudio .pv[data-layout="case"][data-hero="none"] .pv-top { grid-template-columns:1fr; }
+  .projectstudio .pv[data-layout="case"][data-hero="none"] .pv-shot { display:none; }
+  .projectstudio .pv[data-layout="case"][data-aspect="16-9"] .pv-shot { aspect-ratio:16/9; }
+  .projectstudio .pv[data-layout="case"][data-aspect="1-1"] .pv-shot { aspect-ratio:1; }
+  .projectstudio .pv[data-layout="case"][data-cols="1"] .pv-inside { grid-template-columns:1fr; }
+  .projectstudio .pv[data-layout="case"][data-cols="1"] .pv-b + .pv-b { border-left:0; border-top:1px solid var(--rule); }
+  .projectstudio .pv[data-families="off"] .pv-b[data-b="fam"], .projectstudio .pv[data-build="off"] .pv-b[data-b="build"] { display:none; }
+  .projectstudio .pv[data-families="off"] .pv-inside, .projectstudio .pv[data-build="off"] .pv-inside { grid-template-columns:1fr; }
+  .projectstudio .pv[data-families="off"] .pv-b + .pv-b, .projectstudio .pv[data-build="off"] .pv-b + .pv-b { border-left:0; }
+  .projectstudio .pv[data-families="off"][data-build="off"] .pv-inside { display:none; }
+  .projectstudio .pv[data-layout="compact"] .pv-inside { display:none; }
+  .projectstudio .pv[data-layout="compact"] .pv-top { grid-template-columns:104px minmax(0,1fr); }
+  .projectstudio .pv[data-layout="compact"] .pv-shot { order:-1; border-left:0; border-right:1px solid var(--rule); aspect-ratio:3/2; }
+  .projectstudio .pv[data-layout="line"] .pv-inside, .projectstudio .pv[data-layout="line"] .pv-shot, .projectstudio .pv[data-layout="line"] .pv-l { display:none; }
+  .projectstudio .pv[data-layout="line"] .pv-top { grid-template-columns:1fr; }
+  .projectstudio .pv[data-layout="line"] .pv-copy { flex-direction:row; align-items:center; gap:10px; }
+  .projectstudio .pv[data-layout="line"] .pv-h { width:44%; flex:none; }
+  .projectstudio .pv[data-layout="line"] .pv-btns { margin:0 0 0 auto; }
+</style>
+
+<script>
+  import { adminFetch, onAdminReady } from '../../lib/admin-gate';
+  import { PLATES, plate, nextPlate } from '../../lib/plates.mjs';
+
+  const GRIP = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="2"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>';
+  const GH = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.3-1.1.6-1.4-2.2-.2-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.6 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.3.1 2.6.6.7 1 1.6 1 2.7 0 3.8-2.4 4.7-4.6 4.9.3.3.6.9.6 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>';
+  const DOCS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>';
+  const EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16Z"/><path d="M14 6l4 4"/></svg>';
+  const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m4 4 16 16"/><path d="M9.5 5.4A9.6 9.6 0 0 1 12 5c6.4 0 10 6.5 10 6.5a17 17 0 0 1-2.4 3.2M6.4 7.3A15.8 15.8 0 0 0 2 11.5S5.6 18 12 18c1 0 1.9-.2 2.7-.4"/></svg>';
+  const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>';
+  const SW = {
+    case: '<svg viewBox="0 0 80 44"><rect x="2" y="2" width="76" height="40" rx="1.5" fill="var(--rule)"/><rect x="4" y="4" width="34" height="22" rx="1.5" fill="var(--card)"/><rect x="40" y="4" width="36" height="22" rx="1.5" fill="var(--accent)"/><rect x="4" y="28" width="34" height="12" rx="1.5" fill="var(--card)"/><rect x="40" y="28" width="36" height="12" rx="1.5" fill="var(--card)"/></svg>',
+    compact: '<svg viewBox="0 0 80 44"><rect x="2" y="10" width="76" height="24" rx="1.5" fill="var(--rule)"/><rect x="4" y="12" width="20" height="20" rx="1.5" fill="var(--accent)"/><rect x="26" y="16" width="34" height="4" rx="1.5" fill="var(--ink-faint)"/><rect x="26" y="24" width="26" height="2" rx="1.5" fill="var(--rule)"/></svg>',
+    line: '<svg viewBox="0 0 80 44"><rect x="2" y="16" width="76" height="12" rx="1.5" fill="var(--rule)"/><rect x="6" y="20" width="28" height="4" rx="1.5" fill="var(--ink-faint)"/><rect x="50" y="20" width="24" height="4" rx="1.5" fill="var(--accent)"/></svg>',
+    right: '<svg viewBox="0 0 80 44"><rect x="2" y="2" width="76" height="40" rx="1.5" fill="var(--rule)"/><rect x="4" y="4" width="34" height="36" rx="1.5" fill="var(--card)"/><rect x="40" y="4" width="36" height="36" rx="1.5" fill="var(--accent)"/></svg>',
+    left: '<svg viewBox="0 0 80 44"><rect x="2" y="2" width="76" height="40" rx="1.5" fill="var(--rule)"/><rect x="4" y="4" width="36" height="36" rx="1.5" fill="var(--accent)"/><rect x="42" y="4" width="34" height="36" rx="1.5" fill="var(--card)"/></svg>',
+    top: '<svg viewBox="0 0 80 44"><rect x="2" y="2" width="76" height="40" rx="1.5" fill="var(--rule)"/><rect x="4" y="4" width="72" height="18" rx="1.5" fill="var(--accent)"/><rect x="4" y="24" width="72" height="16" rx="1.5" fill="var(--card)"/></svg>',
+    none: '<svg viewBox="0 0 80 44"><rect x="2" y="2" width="76" height="40" rx="1.5" fill="var(--rule)"/><rect x="4" y="4" width="72" height="36" rx="1.5" fill="var(--card)"/><rect x="10" y="12" width="40" height="4" rx="1.5" fill="var(--ink-faint)"/><rect x="10" y="20" width="52" height="2" rx="1.5" fill="var(--rule)"/></svg>',
+  };
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const attr = (s = '') => String(s).replace(/"/g, '&quot;');
+  const splitList = (s) => String(s || '').split(/\s*,\s*/).map((x) => x.trim()).filter(Boolean);
+  const slug = (s) => String(s || 'project').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'project';
+  // Auto-grow a textarea to fit its content (no inner scrollbar).
+  const grow = (t) => { if (!t) return; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; };
+
+  const root = $('.projectstudio');
+  let model = normalize(JSON.parse($('#pj-seed').textContent || '{}'));
+  let sel = 0;      // index of the project being edited
+  let filter = 'all';
+
+  function normalize(m) {
+    m = m || {}; m.projects = Array.isArray(m.projects) ? m.projects : [];
+    m.projects.forEach((p) => {
+      p.tags = p.tags || []; p.states = p.states || {}; p.links = p.links || {};
+      p.layout = p.layout || 'compact'; p.hero = p.hero || 'right'; p.aspect = p.aspect || '3-2'; p.cols = p.cols || 2;
+      p.families = p.families || { on: false, heading: 'Architecture families', count: { fig: '', cap: '' }, style: 'rows', rows: [] };
+      p.build = p.build || { on: false, heading: "How it's built", marker: 'check', items: [] };
+      p.art = p.art || { type: 'plate', plateId: '01' };
+      if (p.show === undefined) p.show = true;
+      if (!p.id) p.id = slug(p.name);
+    });
+    return m;
+  }
+
+  // ---------- project list ----------
+  function usedPlates() { return model.projects.map((p) => p.art && p.art.plateId).filter(Boolean); }
+  function thumbHtml(p) {
+    if (p.art && p.art.type === 'shot' && p.art.shot) return '<img src="' + attr(p.art.shot) + '" alt="">';
+    return '<span class="plate">' + plate((p.art && p.art.plateId) || '01').svg + '</span>';
+  }
+  function buildList() {
+    const c = { all: model.projects.length, live: model.projects.filter((p) => p.show).length, hidden: model.projects.filter((p) => !p.show).length };
+    $$('#pj-tabs .n').forEach((n) => { n.textContent = c[n.dataset.c]; });
+    const rows = model.projects
+      .map((p, i) => ({ p, i }))
+      .filter(({ p }) => filter === 'all' || (filter === 'live' ? p.show : !p.show))
+      .map(({ p, i }) =>
+        `<div class="pjrow${i === sel ? ' sel' : ''}" data-i="${i}">
+          <div class="pjthumb">${thumbHtml(p)}</div>
+          <div><span class="ti">${esc(p.name || 'Untitled project')}</span><span class="sub">Rank ${i + 1}${i === 0 ? ' · featured' : ''} · ${esc(p.layout)}</span></div>
+          <div class="pjtags">${(p.tags || []).slice(0, 3).map((t) => `<span>${esc(t)}</span>`).join('')}</div>
+          <div>${p.show ? '<span class="pill live">Live</span>' : '<span class="pill hid">Hidden</span>'}</div>
+          <div class="pjlinks">${p.links && p.links.github ? GH : ''}${p.links && p.links.docs ? DOCS : ''}</div>
+          <span class="rowacts">
+            <button class="ia" data-act="edit" title="Edit" aria-label="Edit">${EDIT}</button>
+            <button class="ia" data-act="hide" title="${p.show ? 'Hide' : 'Show'}" aria-label="Hide">${EYE}</button>
+            <button class="ia" data-act="del" title="Delete" aria-label="Delete">${TRASH}</button>
+          </span>
+        </div>`).join('');
+    const empty = model.projects.length < 2
+      ? `<div class="pjempty"><span>Nothing at rank 2 yet. The next project renders as a compact row on the public page.</span><button class="btn btn-ghost btn-sm" id="pj-add2" type="button">Add a project</button></div>`
+      : '';
+    $('#pjList').innerHTML = (rows || '<div class="pjempty"><span>No projects.</span></div>') + empty;
+  }
+
+  // ---------- editor ----------
+  const seg = (label, g, opts, cur) => `<div class="inline-ctl"><span>${label}</span><div class="segctl">${opts.map(([v, t]) => `<button type="button" data-g="${g}" data-v="${v}"${String(v) === String(cur) ? ' class="on"' : ''}>${t}</button>`).join('')}</div></div>`;
+  const swGroup = (g, opts, cur) => `<div class="swatches">${opts.map(([v, t]) => `<button type="button" class="sw${v === cur ? ' on' : ''}" data-g="${g}" data-v="${v}">${SW[v]}<span>${t}</span></button>`).join('')}</div>`;
+  const famRow = (n = '', v = '') => `<div class="rowedit"><span class="g2">${GRIP}</span><input class="inp" value="${attr(n)}" placeholder="CNNs" aria-label="Label"><input class="inp" value="${attr(v)}" placeholder="Comma-separated" aria-label="Detail"><button class="xrow" type="button" data-del aria-label="Remove">×</button></div>`;
+  const buildItemRow = (v = '') => `<div class="rowedit item"><span class="g2">${GRIP}</span><input class="inp" value="${attr(v)}" placeholder="Practice" aria-label="Item"><button class="xrow" type="button" data-del aria-label="Remove">×</button></div>`;
+
+  function buildEditor() {
+    const p = model.projects[sel];
+    if (!p) { $('#editors').innerHTML = '<div class="fh">No project selected.</div>'; $('#pjEditTitle').textContent = 'Editing'; return; }
+    $('#pjEditTitle').textContent = p.name || 'Untitled project';
+    const plateGrid = PLATES.map((pl) => `<button type="button" class="pp${p.art && p.art.plateId === pl.id && p.art.type !== 'shot' ? ' on' : ''}" data-plate="${pl.id}" title="${attr(pl.name)}"><span class="plate">${pl.svg}</span></button>`).join('');
+    const artCur = p.art && p.art.type === 'shot' && p.art.shot ? `<img src="${attr(p.art.shot)}" alt="">` : `<span class="plate">${plate((p.art && p.art.plateId) || '01').svg}</span>`;
+    $('#editors').innerHTML =
+      `<div class="ctl"><span class="fl">Content</span>
+        <input class="inp" id="pName" style="margin-bottom:8px" value="${attr(p.name)}" placeholder="Project title" aria-label="Title">
+        <textarea class="inp" id="pLead" placeholder="One paragraph" aria-label="Summary">${esc(p.lead || '')}</textarea>
+        <span class="fl" style="margin-top:12px">Tags</span>
+        <input class="inp" id="pTags" value="${attr((p.tags || []).join(', '))}" placeholder="pytorch, computer-vision, open-source" aria-label="Tags">
+        <div class="pair" style="margin-top:10px">
+          <input class="inp" id="pGithub" value="${attr(p.links.github || '')}" placeholder="Repository URL" aria-label="Repository URL">
+          <input class="inp" id="pDocs" value="${attr(p.links.docs || '')}" placeholder="Docs / demo URL" aria-label="Docs URL">
+        </div>
+        <div class="togrow" style="margin-top:12px">
+          <label class="blocktog"><input type="checkbox" id="pMaint" ${p.states.maintained ? 'checked' : ''}>Maintained</label>
+          <label class="blocktog"><input type="checkbox" id="pOss" ${p.states.oss ? 'checked' : ''}>Open source</label>
+        </div>
+      </div>
+
+      <div class="ctl"><span class="fl">Artwork</span>
+        <div class="artwrap">
+          <div class="artcur" id="artcur">${artCur}</div>
+          <div class="artside">
+            <div class="fh" style="margin:0 0 4px">A generated plate by default — pick one, or upload a real screenshot.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <label class="gbtn" for="pShot">Upload screenshot</label>
+              <button class="gbtn" type="button" id="pShotClear"${p.art && p.art.type === 'shot' ? '' : ' hidden'}>Use a plate</button>
+              <input type="file" id="pShot" accept="image/png,image/jpeg,image/webp">
+            </div>
+            <div class="plategrid" id="plategrid">${plateGrid}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ctl"><span class="fl">Layout</span>${swGroup('layout', [['case', 'Case study'], ['compact', 'Compact row'], ['line', 'Quiet line']], p.layout)}
+        <div class="fh">Case study is for the project at rank 1. Compact rows stack below it; a quiet line is for archived work.</div>
+      </div>
+
+      <div class="ctl" data-only="case"><span class="fl">Screenshot position</span>${swGroup('hero', [['right', 'Beside, right'], ['left', 'Beside, left'], ['top', 'Full width, above'], ['none', 'No screenshot']], p.hero)}</div>
+
+      <div class="ctl" data-only="case"><span class="fl">Screenshot ratio</span>${seg('', 'aspect', [['3-2', '3:2'], ['16-9', '16:9'], ['1-1', 'Square']], p.aspect).replace('<span></span>', '')}</div>
+
+      <div class="ctl" data-only="case"><span class="fl">Detail blocks</span>
+        <div class="pjblk${p.families.on ? ' on' : ''}" data-blk="families">
+          <div class="pjblk-head"><label class="blocktog" style="flex:1"><input type="checkbox" data-g="families" ${p.families.on ? 'checked' : ''}>Architecture families<small>${(p.families.rows || []).length} rows</small></label></div>
+          <div class="pjblk-body">
+            <span class="fl">Heading</span><input class="inp" id="famHeading" value="${attr(p.families.heading || '')}" aria-label="Families heading">
+            <span class="fl">Counter</span>
+            <div class="pair"><input class="inp" id="famFig" value="${attr(p.families.count ? p.families.count.fig : '')}" placeholder="25+" aria-label="Counter figure"><input class="inp" id="famCap" value="${attr(p.families.count ? p.families.count.cap : '')}" placeholder="architectures…" aria-label="Counter caption"></div>
+            <span class="fl">Rows</span>
+            <div data-rows id="famRows">${(p.families.rows || []).map((r) => famRow(r.n, r.v)).join('')}</div>
+            <button class="miniadd" type="button" data-add="fam">+ Add a row</button>
+            ${seg('Row style', 'famStyle', [['rows', 'Label beside'], ['stacked', 'Label above']], p.families.style)}
+          </div>
+        </div>
+        <div class="pjblk${p.build.on ? ' on' : ''}" data-blk="build">
+          <div class="pjblk-head"><label class="blocktog" style="flex:1"><input type="checkbox" data-g="build" ${p.build.on ? 'checked' : ''}>How it's built<small>${(p.build.items || []).length} items</small></label></div>
+          <div class="pjblk-body">
+            <span class="fl">Heading</span><input class="inp" id="buildHeading" value="${attr(p.build.heading || '')}" aria-label="Build heading">
+            <span class="fl">Items</span>
+            <div data-rows id="buildRows">${(p.build.items || []).map((it) => buildItemRow(it)).join('')}</div>
+            <button class="miniadd" type="button" data-add="item">+ Add an item</button>
+            ${seg('Marker', 'buildMarker', [['check', 'Tick'], ['dash', 'Dash'], ['number', 'Number']], p.build.marker)}
+          </div>
+        </div>
+      </div>
+
+      <div class="ctl" data-only="case">${seg('Columns', 'cols', [['2', 'Two'], ['1', 'One']], String(p.cols))}
+        <div class="fh">Turn both detail blocks off and the lower half disappears — the card becomes hero only.</div>
+      </div>`;
+    applyOnlyCase();
+    grow($('#pLead'));
+    syncPreview();
+  }
+
+  function applyOnlyCase() {
+    // Trust the swatch's current .on state (not the not-yet-collected model), so
+    // the case-only controls hide the instant you switch to compact/line.
+    const btn = $('#editors [data-g="layout"].on');
+    const isCase = btn ? btn.dataset.v === 'case' : model.projects[sel]?.layout === 'case';
+    $$('#editors [data-only="case"]').forEach((el) => { el.hidden = !isCase; });
+  }
+
+  // ---------- serialize editor DOM → the selected project ----------
+  function segVal(g, d) { const b = $('#editors [data-g="' + g + '"].on'); return b ? b.dataset.v : d; }
+  function rowsOf(sel2) { return $$('#editors ' + sel2 + ' .rowedit').map((r) => $$('input', r).map((i) => i.value.trim())); }
+  function collectSelected() {
+    const p = model.projects[sel]; if (!p) return;
+    p.name = $('#pName').value.trim();
+    p.id = p.id || slug(p.name);
+    p.lead = $('#pLead').value.trim();
+    p.tags = splitList($('#pTags').value);
+    p.links.github = $('#pGithub').value.trim();
+    p.links.docs = $('#pDocs').value.trim();
+    p.states.maintained = $('#pMaint').checked;
+    p.states.oss = $('#pOss').checked;
+    p.layout = segVal('layout', p.layout);
+    p.hero = segVal('hero', p.hero);
+    p.aspect = segVal('aspect', p.aspect);
+    p.cols = Number(segVal('cols', p.cols));
+    p.families.on = $('#editors [data-g="families"]').checked;
+    p.families.heading = $('#famHeading').value.trim();
+    p.families.count = { fig: $('#famFig').value.trim(), cap: $('#famCap').value.trim() };
+    p.families.style = segVal('famStyle', p.families.style);
+    p.families.rows = rowsOf('#famRows').filter((r) => r[0] || r[1]).map((r) => ({ n: r[0], v: r[1] }));
+    p.build.on = $('#editors [data-g="build"]').checked;
+    p.build.heading = $('#buildHeading').value.trim();
+    p.build.marker = segVal('buildMarker', p.build.marker);
+    p.build.items = rowsOf('#buildRows').map((r) => r[0]).filter(Boolean);
+  }
+
+  // ---------- live preview ----------
+  function syncPreview() {
+    collectSelected();
+    const p = model.projects[sel]; if (!p) return;
+    const pv = $('#pv');
+    pv.dataset.layout = p.layout; pv.dataset.hero = p.hero; pv.dataset.aspect = p.aspect;
+    pv.dataset.cols = p.cols; pv.dataset.families = p.families.on ? 'on' : 'off'; pv.dataset.build = p.build.on ? 'on' : 'off';
+    const shot = $('#pvshot');
+    if (p.art && p.art.type === 'shot' && p.art.shot) { shot.classList.remove('plated'); shot.style.backgroundImage = 'url(' + p.art.shot + ')'; shot.style.backgroundSize = 'cover'; shot.innerHTML = ''; }
+    else { shot.classList.add('plated'); shot.style.backgroundImage = ''; shot.innerHTML = '<span class="plate">' + plate((p.art && p.art.plateId) || '01').svg + '</span>'; }
+    // reflect into the row + block-count labels without a full rebuild
+    const row = $('#pjList .pjrow[data-i="' + sel + '"]');
+    if (row) { row.querySelector('.ti').textContent = p.name || 'Untitled project'; row.querySelector('.pjthumb').innerHTML = thumbHtml(p); }
+    const fh = $('#editors [data-blk="families"] .blocktog small'); if (fh) fh.textContent = p.families.rows.length + ' rows';
+    const bh = $('#editors [data-blk="build"] .blocktog small'); if (bh) bh.textContent = p.build.items.length + ' items';
+    $('#pjEditTitle').textContent = p.name || 'Untitled project';
+  }
+
+  // ---------- status ----------
+  let statusTimer;
+  function status(msg, kind) {
+    const el = $('#pj-status'); el.textContent = msg;
+    el.className = 'pj-status' + (kind === 'err' ? ' err' : kind === 'ok' ? ' ok' : '');
+    clearTimeout(statusTimer);
+    if (kind === 'ok') statusTimer = setTimeout(() => { el.textContent = ''; el.className = 'pj-status'; }, 6000);
+  }
+
+  // ---------- events ----------
+  let deb;
+  $('#editors').addEventListener('input', (e) => { if (e.target.tagName === 'TEXTAREA') grow(e.target); clearTimeout(deb); deb = setTimeout(syncPreview, 150); });
+  $('#editors').addEventListener('change', (e) => {
+    if (e.target.matches('[data-g="families"],[data-g="build"]')) {
+      const blk = e.target.closest('.pjblk'); if (blk) blk.classList.toggle('on', e.target.checked);
+    }
+    syncPreview();
+  });
+  $('#editors').addEventListener('click', (e) => {
+    const sw = e.target.closest('.sw[data-g],[data-g][data-v]');
+    if (sw && sw.dataset.g) {
+      const g = sw.dataset.g, isSw = sw.classList.contains('sw');
+      (isSw ? sw.parentNode.querySelectorAll('.sw') : sw.parentNode.querySelectorAll('[data-g="' + g + '"]')).forEach((b) => b.classList.toggle('on', b === sw));
+      if (g === 'layout') applyOnlyCase();
+      syncPreview(); return;
+    }
+    const add = e.target.closest('[data-add]');
+    if (add) {
+      if (add.dataset.add === 'fam') $('#famRows').insertAdjacentHTML('beforeend', famRow());
+      else if (add.dataset.add === 'item') $('#buildRows').insertAdjacentHTML('beforeend', buildItemRow());
+      syncPreview(); return;
+    }
+    const del = e.target.closest('[data-del]');
+    if (del) { del.closest('.rowedit').remove(); syncPreview(); return; }
+    const pp = e.target.closest('.pp[data-plate]');
+    if (pp) {
+      const p = model.projects[sel];
+      p.art = { type: 'plate', plateId: pp.dataset.plate };
+      $$('#plategrid .pp').forEach((b) => b.classList.toggle('on', b === pp));
+      $('#artcur').innerHTML = '<span class="plate">' + plate(pp.dataset.plate).svg + '</span>';
+      $('#pShotClear').hidden = true;
+      syncPreview(); return;
+    }
+    if (e.target.closest('#pShotClear')) {
+      const p = model.projects[sel];
+      p.art = { type: 'plate', plateId: (p.art && p.art.plateId) || nextPlate(usedPlates()) };
+      buildEditor(); return;
+    }
+  });
+
+  // filter tabs
+  $('#pj-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-filter]'); if (!b) return;
+    filter = b.dataset.filter;
+    $$('#pj-tabs button').forEach((x) => x.classList.toggle('on', x === b));
+    buildList();
+  });
+
+  // list actions (edit / hide / delete / add)
+  $('#pjList').addEventListener('click', (e) => {
+    if (e.target.closest('#pj-add2')) { newProject(); return; }
+    const rowEl = e.target.closest('.pjrow'); if (!rowEl) return;
+    const i = Number(rowEl.dataset.i);
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'hide') { collectSelected(); model.projects[i].show = !model.projects[i].show; buildList(); return; }
+    if (act === 'del') {
+      if (model.projects.length <= 1) { status('Keep at least one project.', 'err'); return; }
+      collectSelected(); model.projects.splice(i, 1); if (sel >= model.projects.length) sel = model.projects.length - 1; buildList(); buildEditor(); return;
+    }
+    // edit / row click → select
+    if (i !== sel) { collectSelected(); sel = i; buildList(); buildEditor(); }
+  });
+
+  function newProject() {
+    collectSelected();
+    const id = 'project-' + (model.projects.length + 1);
+    model.projects.push({
+      id, name: 'New project', lead: '', tags: [], states: { maintained: false, oss: true },
+      links: { github: '', docs: '' }, layout: model.projects.length ? 'compact' : 'case',
+      hero: 'right', aspect: '3-2', cols: 2,
+      families: { on: false, heading: 'Architecture families', count: { fig: '', cap: '' }, style: 'rows', rows: [] },
+      build: { on: false, heading: "How it's built", marker: 'check', items: [] },
+      art: { type: 'plate', plateId: nextPlate(usedPlates()) }, show: true,
+    });
+    sel = model.projects.length - 1; buildList(); buildEditor();
+    status('New project added — fill it in and Save.');
+  }
+  $('#pj-new').addEventListener('click', newProject);
+
+  // screenshot upload
+  const fileToB64 = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(f); });
+  $('#editors').addEventListener('change', async (e) => {
+    if (e.target.id !== 'pShot') return;
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    const p = model.projects[sel];
+    status('Uploading screenshot…');
+    try {
+      const b64 = await fileToB64(file);
+      const r = await adminFetch('/api/admin/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'shot', id: p.id, imgBase64: b64, name: file.name }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      p.art = { type: 'shot', shot: d.shot, plateId: p.art && p.art.plateId };
+      buildEditor();
+      status('Screenshot uploaded and committed. Save to apply.', 'ok');
+    } catch (err) { status('Upload failed: ' + err.message, 'err'); }
+    e.target.value = '';
+  });
+
+  // save
+  $('#pj-save').addEventListener('click', async () => {
+    collectSelected();
+    status('Saving…');
+    try {
+      const r = await adminFetch('/api/admin/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: model }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      status('Saved. The projects page rebuilds in ~1 minute.', 'ok');
+    } catch (err) { status('Save failed: ' + err.message, 'err'); }
+  });
+
+  // build from seed immediately, then refresh from the committed copy
+  buildList(); buildEditor();
+  onAdminReady(async () => {
+    try {
+      const r = await adminFetch('/api/admin/projects');
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d && d.content && Array.isArray(d.content.projects)) { model = normalize(d.content); sel = 0; buildList(); buildEditor(); }
+    } catch { /* keep the seed */ }
+  });
+</script>
