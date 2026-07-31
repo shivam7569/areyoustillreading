@@ -178,6 +178,15 @@ import seed from '../../data/resume.json';
   .resumestudio .segctl button + button { border-left:1px solid var(--rule); }
   .resumestudio .segctl button.on { background:var(--accent); color:var(--on-accent); }
 
+  /* Structure panel: grouped clusters (Figures / Experience / Skills / …) with a
+     small caption, each a label-left / control-right settings row — reads as
+     organised sections instead of a flat wall of controls. */
+  .resumestudio .structgrp + .structgrp { margin-top:15px; padding-top:15px; border-top:1px solid var(--rule-soft); }
+  .resumestudio .sgh { font-family:var(--sans); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); font-weight:600; margin:0 0 9px; }
+  .resumestudio .srow { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:5px 0; }
+  .resumestudio .srow + .srow { margin-top:2px; }
+  .resumestudio .srow .sl { font-family:var(--sans); font-size:13px; color:var(--ink-soft); }
+
   .resumestudio .togs { display:flex; flex-direction:column; gap:9px; }
   .resumestudio .blocktog { display:flex; align-items:center; gap:11px; font-family:var(--sans); font-size:13.5px; color:var(--ink); cursor:pointer; }
   .resumestudio .blocktog input { appearance:none; -webkit-appearance:none; width:34px; height:19px; border-radius:999px; background:var(--rule); position:relative; cursor:pointer; flex:none; transition:background .18s; }
@@ -403,7 +412,8 @@ import seed from '../../data/resume.json';
         <button class="miniadd" type="button" data-add="bullet">+ Add a bullet</button>
       </div>
     </div>`;
-  const seg = (label, g, opts, cur) => `<div class="inline-ctl"><span>${label}</span><div class="segctl">${opts.map(([v, t]) => `<button type="button" data-g="${g}" data-v="${v}"${String(v) === String(cur) ? ' class="on"' : ''}>${t}</button>`).join('')}</div></div>`;
+  const srow = (label, g, opts, cur) => `<div class="srow"><span class="sl">${label}</span><div class="segctl">${opts.map(([v, t]) => `<button type="button" data-g="${g}" data-v="${v}"${String(v) === String(cur) ? ' class="on"' : ''}>${t}</button>`).join('')}</div></div>`;
+  const sgrp = (title, rows) => `<div class="structgrp"><div class="sgh">${title}</div>${rows}</div>`;
   const ctl = (label, inner) => `<div class="ctl"><span class="fl">${label}</span>${inner}</div>`;
 
   // ---- build the three areas from `model` ----
@@ -416,12 +426,14 @@ import seed from '../../data/resume.json';
       return `<div class="secrow${locked ? ' locked' : ''}"><span class="g2">${GRIP}</span><span class="nm">${esc(name)}<small>${esc(sub)}</small></span><span class="sp">${tog}</span></div>`;
     }).join('');
     $('#structCtls').innerHTML =
-      seg('Figures across', 'figCols', [['4', 'Four'], ['3', 'Three'], ['2', 'Two']], model.figCols) +
-      seg('Experience dates', 'expLayout', [['rail', 'Left rail'], ['inline', 'Above title']], model.experience.layout) +
-      seg('Bullets shown', 'expDensity', [['full', 'All'], ['tight', 'First two']], model.experience.density) +
-      seg('Skills style', 'skills', [['chips', 'Chips'], ['list', 'Plain list']], model.skills.style) +
-      seg('Skills columns', 'skillCols', [['4', 'Four'], ['2', 'Two']], String(model.skills.cols)) +
-      seg('Publication cards', 'pubCols', [['2', 'Side by side'], ['1', 'Stacked']], String(model.pubs.cols));
+      sgrp('Figures', srow('Across', 'figCols', [['4', 'Four'], ['3', 'Three'], ['2', 'Two']], model.figCols)) +
+      sgrp('Experience',
+        srow('Dates', 'expLayout', [['rail', 'Left rail'], ['inline', 'Above title']], model.experience.layout) +
+        srow('Bullets', 'expDensity', [['full', 'All'], ['tight', 'First two']], model.experience.density)) +
+      sgrp('Skills',
+        srow('Style', 'skills', [['chips', 'Chips'], ['list', 'Plain list']], model.skills.style) +
+        srow('Columns', 'skillCols', [['4', 'Four'], ['2', 'Two']], String(model.skills.cols))) +
+      sgrp('Publications', srow('Cards', 'pubCols', [['2', 'Side by side'], ['1', 'Stacked']], String(model.pubs.cols)));
   }
 
   function buildEditors() {
