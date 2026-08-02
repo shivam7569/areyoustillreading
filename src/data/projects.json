@@ -4,8 +4,16 @@
       "id": "arch-from-scratch",
       "name": "Deep-Learning Architectures from Scratch",
       "lead": "An open-source PyTorch library implementing 25+ computer-vision architectures — CNNs, vision transformers and segmentation networks — reimplemented from their original papers.",
-      "tags": ["pytorch", "computer-vision", "open-source", "cv 0.0.1"],
-      "states": { "maintained": true, "oss": true },
+      "tags": [
+        "pytorch",
+        "computer-vision",
+        "open-source",
+        "cv 0.0.1"
+      ],
+      "states": {
+        "maintained": true,
+        "oss": true
+      },
       "links": {
         "github": "https://github.com/shivam7569",
         "docs": "https://shivam7569.github.io/cv/"
@@ -17,12 +25,24 @@
       "families": {
         "on": true,
         "heading": "Architecture families",
-        "count": { "fig": "25+", "cap": "architectures, each traced back to its paper" },
+        "count": {
+          "fig": "25+",
+          "cap": "architectures, each traced back to its paper"
+        },
         "style": "rows",
         "rows": [
-          { "n": "CNNs", "v": "ResNet, ConvNeXt, DenseNet, AlexNet, Inception-v1" },
-          { "n": "Transformers", "v": "DeiT, Swin, Deep ViT, Bottleneck ViT, CeiT, ConViT" },
-          { "n": "Segmentation", "v": "Segmentation networks", "sub": "hosted docs currently publish the backbone packages" }
+          {
+            "n": "CNNs",
+            "v": "ResNet, ConvNeXt, DenseNet, AlexNet, Inception-v1"
+          },
+          {
+            "n": "Transformers",
+            "v": "DeiT, Swin, Deep ViT, Bottleneck ViT, CeiT, ConViT"
+          },
+          {
+            "n": "Segmentation",
+            "v": "Segmentation networks"
+          }
         ]
       },
       "build": {
@@ -38,8 +58,11 @@
           "Hosted documentation"
         ]
       },
-      "art": { "type": "plate", "plateId": "04" },
-      "show": true
+      "art": {
+        "type": "plate",
+        "plateId": "04"
+      },
+      "show": false
     }
   ]
 }
