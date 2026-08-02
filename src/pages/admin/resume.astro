@@ -237,7 +237,7 @@ import seed from '../../data/resume.json';
   .resumestudio .sumbox-head { display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid var(--rule-soft); font-family:var(--sans); font-size:10.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
   .resumestudio .sumbox-head .c { width:6px; height:6px; border-radius:999px; background:var(--accent); flex:none; }
   .resumestudio .sumbox-head .n { margin-left:auto; font-weight:400; letter-spacing:0; text-transform:none; font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--ink-soft); }
-  .resumestudio .sumbox textarea { display:block; width:100%; box-sizing:border-box; border:0; background:transparent; padding:13px; font-family:var(--serif-body); font-size:15px; line-height:1.6; color:var(--ink); resize:vertical; min-height:108px; }
+  .resumestudio .sumbox textarea { display:block; width:100%; box-sizing:border-box; border:0; background:transparent; padding:13px; font-family:var(--serif-body); font-size:15px; line-height:1.6; color:var(--ink); resize:none; overflow:hidden; min-height:108px; }
   .resumestudio .sumbox textarea:focus { outline:2px solid var(--accent); outline-offset:-2px; }
   .resumestudio .sumbox-foot { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:9px 12px; border-top:1px solid var(--rule-soft); background:var(--paper-2); }
   .resumestudio .meter { flex:none; width:150px; height:4px; border-radius:2px; background:var(--rule); overflow:hidden; }
@@ -362,6 +362,9 @@ import seed from '../../data/resume.json';
   const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const attr = (s = '') => String(s).replace(/"/g, '&quot;');
   const splitList = (s) => String(s || '').split(/\s*(?:,|·)\s*/).map((x) => x.trim()).filter(Boolean);
+  // Auto-grow a textarea to fit its content (no inner scrollbar). Skips when the
+  // element is hidden (offsetParent null) so it isn't collapsed to 0 on a hidden tab.
+  const grow = (t) => { if (!t || !t.offsetParent) return; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; };
   const hrefFor = (c) => (/@/.test(c) && !/^https?:/.test(c)) ? 'mailto:' + c : (/^https?:\/\//.test(c) ? c : '//' + c);
   const deep = (o) => JSON.parse(JSON.stringify(o));
 
@@ -455,6 +458,7 @@ import seed from '../../data/resume.json';
         <input class="inp" id="eduSchool" style="margin-bottom:8px" value="${attr(model.education.school)}" placeholder="School · minor" aria-label="School">
         <input class="inp" id="eduDates" value="${attr(model.education.dates)}" placeholder="Aug '16 — Jul '20" aria-label="Dates">`) +
       ctl('Closing line', `<input class="inp" id="closeText" value="${attr(model.close)}" placeholder="References available on request…" aria-label="Closing line">`);
+    grow($('#sumText'));
   }
 
   function buildPrint() {
@@ -549,7 +553,7 @@ import seed from '../../data/resume.json';
     scale.style.height = Math.ceil(rpv.offsetHeight * s) + 'px';
   }
   if (window.ResizeObserver) new ResizeObserver(fitPreview).observe($('#rpvscale'));
-  addEventListener('resize', fitPreview);
+  addEventListener('resize', () => { fitPreview(); grow($('#sumText')); });
 
   function meter() {
     const t = $('#sumText'); if (!t) return;
@@ -610,7 +614,7 @@ import seed from '../../data/resume.json';
   // ---- events (delegated on the whole tool, so dynamic rows work) ----
   let deb;
   root.addEventListener('input', (e) => {
-    if (e.target.id === 'sumText') meter();
+    if (e.target.id === 'sumText') { meter(); grow(e.target); }
     clearTimeout(deb); deb = setTimeout(syncPreview, 160);
   });
   root.addEventListener('change', (e) => {
@@ -648,7 +652,7 @@ import seed from '../../data/resume.json';
     if (tab !== 'print') {
       $('#pane-sections').classList.toggle('on', tab === 'sections');
       $('#pane-content').classList.toggle('on', tab === 'content');
-      requestAnimationFrame(fitPreview);
+      requestAnimationFrame(() => { fitPreview(); if (tab === 'content') grow($('#sumText')); });
     }
   });
 
