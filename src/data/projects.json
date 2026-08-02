@@ -62,7 +62,7 @@
         "type": "plate",
         "plateId": "04"
       },
-      "show": false
+      "show": true
     }
   ]
 }
