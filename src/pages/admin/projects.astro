@@ -509,14 +509,28 @@ import { PLATES } from '../../lib/plates.mjs';
     const rowEl = e.target.closest('.pjrow'); if (!rowEl) return;
     const i = Number(rowEl.dataset.i);
     const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'hide') { collectSelected(); model.projects[i].show = !model.projects[i].show; buildList(); return; }
+    if (act === 'hide') {
+      collectSelected();
+      const p = model.projects[i]; p.show = !p.show; buildList();
+      status(p.show ? 'Set to live — save to apply.' : 'Hidden from the page — save to apply.', 'ok');
+      return;
+    }
     if (act === 'del') {
       if (model.projects.length <= 1) { status('Keep at least one project.', 'err'); return; }
       collectSelected(); model.projects.splice(i, 1); if (sel >= model.projects.length) sel = model.projects.length - 1; buildList(); buildEditor(); return;
     }
-    // edit / row click → select
+    // edit / row click → select that project; the pencil also jumps to its editor
     if (i !== sel) { collectSelected(); sel = i; buildList(); buildEditor(); }
+    if (act === 'edit') openEditor();
   });
+
+  // Bring the editor for the selected project into view and focus its title —
+  // the list can sit above the fold, so "Edit" must actively take you there.
+  function openEditor() {
+    const panel = $('.pjpanel');
+    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const name = $('#pName'); if (name) name.focus({ preventScroll: true });
+  }
 
   function newProject() {
     collectSelected();
