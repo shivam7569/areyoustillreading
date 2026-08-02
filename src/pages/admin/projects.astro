@@ -93,7 +93,9 @@ import { PLATES } from '../../lib/plates.mjs';
   .projectstudio .panel .pb.flush { padding:0; }
 
   /* project list rows */
-  .projectstudio .pjrow { display:grid; grid-template-columns:74px minmax(0,1fr) 130px 96px 84px auto; gap:16px; align-items:center; padding:14px 18px; border-bottom:1px solid var(--rule-soft); cursor:pointer; }
+  .projectstudio .pjrow { display:grid; grid-template-columns:74px minmax(0,1fr) 130px 84px auto; gap:16px; align-items:center; padding:14px 18px; border-bottom:1px solid var(--rule-soft); cursor:pointer; }
+  /* Hidden projects read as de-emphasised — the struck-through eye is the signal, this reinforces it. */
+  .projectstudio .pjrow.is-hidden .pjthumb, .projectstudio .pjrow.is-hidden .ti, .projectstudio .pjrow.is-hidden .sub, .projectstudio .pjrow.is-hidden .pjtags, .projectstudio .pjrow.is-hidden .pjlinks { opacity:.45; }
   .projectstudio .pjrow:last-child { border-bottom:0; }
   .projectstudio .pjrow:hover { background:var(--paper-2); }
   .projectstudio .pjrow.sel { background:color-mix(in srgb,var(--accent) 8%,transparent); }
@@ -104,15 +106,18 @@ import { PLATES } from '../../lib/plates.mjs';
   .projectstudio .pjrow .sub { display:block; font-size:12px; color:var(--ink-faint); margin-top:4px; }
   .projectstudio .pjtags { display:flex; gap:5px; flex-wrap:wrap; }
   .projectstudio .pjtags span { font-size:10.5px; letter-spacing:.06em; color:var(--ink-faint); border:1px solid var(--rule); border-radius:2px; padding:3px 6px; }
-  .projectstudio .pill { display:inline-flex; align-items:center; gap:6px; font-size:10px; letter-spacing:.14em; text-transform:uppercase; padding:4px 9px; border-radius:2px; border:1px solid var(--rule); color:var(--ink-faint); white-space:nowrap; }
-  .projectstudio .pill.live { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
-  .projectstudio .pill.hid::before { content:""; width:5px; height:5px; border-radius:999px; background:var(--ink-faint); display:inline-block; margin-right:6px; }
   .projectstudio .pjlinks { display:flex; gap:8px; color:var(--ink-faint); }
   .projectstudio .pjlinks svg { width:14px; height:14px; }
   .projectstudio .rowacts { display:flex; align-items:center; gap:4px; justify-content:flex-end; }
   .projectstudio .ia { width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border:1px solid transparent; border-radius:3px; background:none; color:var(--ink-faint); cursor:pointer; padding:0; }
   .projectstudio .ia:hover { border-color:var(--rule); color:var(--accent); background:var(--card); }
   .projectstudio .ia svg { width:14px; height:14px; }
+  /* The eye reflects state at rest: live = accent-tinted open eye, hidden = muted struck eye. */
+  .projectstudio .eye[aria-pressed="false"] { color:color-mix(in srgb,var(--accent) 72%,var(--ink-faint)); }
+  .projectstudio .eye[aria-pressed="true"] { color:var(--ink-faint); }
+  /* Edit pulses the editor so the affordance is unmistakable even when it's already on screen. */
+  @keyframes pjflash { from { box-shadow:0 0 0 2px var(--accent), 0 0 0 6px color-mix(in srgb,var(--accent) 30%,transparent); } to { box-shadow:0 0 0 2px transparent, 0 0 0 6px transparent; } }
+  .projectstudio .pjpanel.flash { animation:pjflash 1.05s ease-out; }
   .projectstudio .pjempty { display:flex; align-items:center; gap:16px; padding:18px; border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--rule)); border-radius:4px; margin:14px 18px 18px; font-size:13px; color:var(--ink-faint); }
   .projectstudio .pjempty .btn { margin-left:auto; }
 
@@ -236,7 +241,9 @@ import { PLATES } from '../../lib/plates.mjs';
   const GH = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.3-1.1.6-1.4-2.2-.2-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.6 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.3.1 2.6.6.7 1 1.6 1 2.7 0 3.8-2.4 4.7-4.6 4.9.3.3.6.9.6 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>';
   const DOCS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>';
   const EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16Z"/><path d="M14 6l4 4"/></svg>';
-  const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m4 4 16 16"/><path d="M9.5 5.4A9.6 9.6 0 0 1 12 5c6.4 0 10 6.5 10 6.5a17 17 0 0 1-2.4 3.2M6.4 7.3A15.8 15.8 0 0 0 2 11.5S5.6 18 12 18c1 0 1.9-.2 2.7-.4"/></svg>';
+  // Visibility signal: an open eye when the project is live, a struck-through eye when hidden.
+  const EYE_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 4 16 16"/><path d="M9.5 5.4A9.6 9.6 0 0 1 12 5c6.4 0 10 6.5 10 6.5a17 17 0 0 1-2.4 3.2M6.4 7.3A15.8 15.8 0 0 0 2 11.5S5.6 18 12 18c1 0 1.9-.2 2.7-.4"/></svg>';
   const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>';
   const SW = {
     case: '<svg viewBox="0 0 80 44"><rect x="2" y="2" width="76" height="40" rx="1.5" fill="var(--rule)"/><rect x="4" y="4" width="34" height="22" rx="1.5" fill="var(--card)"/><rect x="40" y="4" width="36" height="22" rx="1.5" fill="var(--accent)"/><rect x="4" y="28" width="34" height="12" rx="1.5" fill="var(--card)"/><rect x="40" y="28" width="36" height="12" rx="1.5" fill="var(--card)"/></svg>',
@@ -289,16 +296,15 @@ import { PLATES } from '../../lib/plates.mjs';
       .map((p, i) => ({ p, i }))
       .filter(({ p }) => filter === 'all' || (filter === 'live' ? p.show : !p.show))
       .map(({ p, i }) =>
-        `<div class="pjrow${i === sel ? ' sel' : ''}" data-i="${i}">
+        `<div class="pjrow${i === sel ? ' sel' : ''}${p.show ? '' : ' is-hidden'}" data-i="${i}">
           <div class="pjthumb">${thumbHtml(p)}</div>
           <div><span class="ti">${esc(p.name || 'Untitled project')}</span><span class="sub">Rank ${i + 1}${i === 0 ? ' · featured' : ''} · ${esc(p.layout)}</span></div>
           <div class="pjtags">${(p.tags || []).slice(0, 3).map((t) => `<span>${esc(t)}</span>`).join('')}</div>
-          <div>${p.show ? '<span class="pill live">Live</span>' : '<span class="pill hid">Hidden</span>'}</div>
           <div class="pjlinks">${p.links && p.links.github ? GH : ''}${p.links && p.links.docs ? DOCS : ''}</div>
           <span class="rowacts">
-            <button class="ia" data-act="edit" title="Edit" aria-label="Edit">${EDIT}</button>
-            <button class="ia" data-act="hide" title="${p.show ? 'Hide' : 'Show'}" aria-label="Hide">${EYE}</button>
-            <button class="ia" data-act="del" title="Delete" aria-label="Delete">${TRASH}</button>
+            <button class="ia" data-act="edit" title="Edit" aria-label="Edit project">${EDIT}</button>
+            <button class="ia eye" data-act="hide" title="${p.show ? 'Visible — click to hide' : 'Hidden — click to show'}" aria-label="${p.show ? 'Hide project' : 'Show project'}" aria-pressed="${p.show ? 'false' : 'true'}">${p.show ? EYE_OPEN : EYE_OFF}</button>
+            <button class="ia" data-act="del" title="Delete" aria-label="Delete project">${TRASH}</button>
           </span>
         </div>`).join('');
     const empty = model.projects.length < 2
@@ -524,12 +530,16 @@ import { PLATES } from '../../lib/plates.mjs';
     if (act === 'edit') openEditor();
   });
 
-  // Bring the editor for the selected project into view and focus its title —
-  // the list can sit above the fold, so "Edit" must actively take you there.
+  // Bring the editor for the selected project into view and make the jump obvious:
+  // scroll to it (it can sit off-screen), pulse the panel (so it reads even when
+  // already visible — the one-project case), and select the title to start editing.
   function openEditor() {
     const panel = $('.pjpanel');
-    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    const name = $('#pName'); if (name) name.focus({ preventScroll: true });
+    if (panel) {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      panel.classList.remove('flash'); void panel.offsetWidth; panel.classList.add('flash');
+    }
+    const name = $('#pName'); if (name) { name.focus({ preventScroll: true }); name.select(); }
   }
 
   function newProject() {
