@@ -101,8 +101,8 @@
     { "key": "close", "show": true }
   ],
   "download": {
-    "mode": "print",
-    "pdfName": "",
+    "mode": "file",
+    "pdfName": "resume.pdf",
     "printFigs": true,
     "printLinks": false
   }
