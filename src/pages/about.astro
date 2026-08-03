@@ -30,56 +30,69 @@
  * =============================================================================
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
+import site from '../data/site.json';
+
+// About-page copy, editable from Studio → Content Management. Prose lives in
+// site.json (always committed); short labels fall back to their originals.
+const a = (site as any).about || {};
+const body = a.body || {};
+const co = a.colophon || {};
+const contact = a.contact || {};
+const portrait = a.portrait || {};
+// Escape HTML, then turn *emphasis* into <em>. Content is admin-authored and
+// committed to the repo (trusted), so set:html on the result is safe.
+const emph = (s = '') =>
+  String(s).replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] as string)).replace(/\*([^*]+)\*/g, '<em>$1</em>');
 ---
 
-<BaseLayout title="About — areyoustillreading" description="About the site and the person writing it: measured, first-person notes on LLM engineering and the systems underneath." wide>
+<BaseLayout title={a.seo?.title || 'About — areyoustillreading'} description={a.seo?.description || 'About the site and the person writing it: measured, first-person notes on LLM engineering and the systems underneath.'} wide>
   <div class="wrap">
     <div class="about">
       <div>
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px"><span style="height:1px;width:48px;background:var(--accent);opacity:.6"></span><span class="eyebrow">About</span></div>
-        <h1>The name is <em>a question I ask myself</em> while editing.</h1>
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px"><span style="height:1px;width:48px;background:var(--accent);opacity:.6"></span><span class="eyebrow">{a.eyebrow || 'About'}</span></div>
+        <h1 set:html={emph(a.headline || 'The name is *a question I ask myself* while editing.')}></h1>
         <div class="prose">
-          <p>I'm Shivam — I work on machine-learning systems, and I write here about LLM engineering and the unglamorous infrastructure underneath it. The day job is making inference fast and reliable; the evenings are for writing down the parts that were harder than the papers implied.</p>
-          <p>This site exists because the good stuff kept getting lost. A profiling session would turn up something genuinely surprising — a cache policy that behaved backwards under load, a retrieval metric that flattered a broken system — and it would end up in a Slack thread, then nowhere. Writing it down properly forces the second question: <em>do I actually understand this, or did I just get it working?</em> Usually the answer is uncomfortable, and the essay gets better.</p>
-          <p>Everything here is first-person and measured. If I claim a number, I ran it; if I'm guessing, I say so. I don't cover launches, I don't do hot takes, and I try very hard not to write anything that could have been a tweet.</p>
-          <blockquote><p>Most of what I know I learned by being wrong in public, slowly.</p></blockquote>
-          <p>Most of the writing is free. A few of the longer essays sit behind a one-time unlock — a single payment for that piece, set per essay, not a subscription and nothing recurring. It's less a growth strategy than a filter: paying a little usually means you intend to finish, which is the only readership metric I care about.</p>
-          <p>If something here is wrong, tell me. Corrections get a note at the bottom of the piece with your name on it, unless you'd rather they didn't.</p>
+          <p set:html={emph(body.p1)}></p>
+          <p set:html={emph(body.p2)}></p>
+          <p set:html={emph(body.p3)}></p>
+          <blockquote><p set:html={emph(body.quote)}></p></blockquote>
+          <p set:html={emph(body.p4)}></p>
+          <p set:html={emph(body.p5)}></p>
         </div>
       </div>
 
       <aside class="portrait">
-        <div class="ph"><span>Portrait — 4:5, desk or outdoors</span></div>
-        <p class="cap">A photo goes here — something plain and unstaged. Same warm paper tone as the rest of the site, nothing glossy.</p>
+        <div class="ph"><span>{portrait.placeholder || 'Portrait — 4:5, desk or outdoors'}</span></div>
+        <p class="cap">{portrait.caption || 'A photo goes here — something plain and unstaged. Same warm paper tone as the rest of the site, nothing glossy.'}</p>
       </aside>
     </div>
 
     <section class="colophon">
-      <h2>Colophon</h2>
+      <h2>{co.heading || 'Colophon'}</h2>
       <div class="col-grid">
         <div>
-          <h4>Type</h4>
-          <p>Headings in Source Serif 4, body in Charis SIL — a descendant of Bitstream Charter — with interface text in the system sans. Both serifs are self-hosted, so the site reads the same on every platform.</p>
+          <h4>{co.typeHeading || 'Type'}</h4>
+          <p>{co.typeBody}</p>
         </div>
         <div>
-          <h4>Built with</h4>
-          <p>Astro, built to static HTML and deployed on Cloudflare Pages on every push. Written in plain Markdown, with diagrams and plots rendered from source at build time.</p>
+          <h4>{co.builtHeading || 'Built with'}</h4>
+          <p>{co.builtBody}</p>
         </div>
         <div>
-          <h4>Elsewhere</h4>
-          <p><a class="link" href="/rss.xml">RSS</a> — the whole feed, full text.<br><a class="link" href="https://github.com/shivam7569">GitHub</a> — the code behind the essays.</p>
+          <h4>{co.elsewhereHeading || 'Elsewhere'}</h4>
+          <p><a class="link" href="/rss.xml">{co.rssLabel || 'RSS'}</a> {co.rssDesc || '— the whole feed, full text.'}<br><a class="link" href={co.githubHref || 'https://github.com/shivam7569'}>{co.githubLabel || 'GitHub'}</a> {co.githubDesc || '— the code behind the essays.'}</p>
         </div>
       </div>
     </section>
 
     <section class="card contact">
       <div>
-        <h3>Say something</h3>
-        <p>Corrections, arguments, and job questions all welcome. I read everything and reply to most of it.</p>
+        <h3>{contact.heading || 'Say something'}</h3>
+        <p>{contact.body}</p>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <a class="btn btn-primary" href="mailto:hello@areyoustillreading.dev">hello@areyoustillreading.dev</a>
-        <a class="btn btn-ghost" href="/blog">Read the archive <span class="arrow">&rarr;</span></a>
+        <a class="btn btn-primary" href={`mailto:${contact.email || 'hello@areyoustillreading.dev'}`}>{contact.email || 'hello@areyoustillreading.dev'}</a>
+        <a class="btn btn-ghost" href={contact.ctaHref || '/blog'}>{contact.cta || 'Read the archive'} <span class="arrow">&rarr;</span></a>
       </div>
     </section>
   </div>

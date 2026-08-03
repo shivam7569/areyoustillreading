@@ -61,5 +61,45 @@
       "link": "More on GitHub · github.com/shivam7569 →",
       "href": "https://github.com/shivam7569"
     }
+  },
+  "about": {
+    "seo": {
+      "title": "About — areyoustillreading",
+      "description": "About the site and the person writing it: measured, first-person notes on LLM engineering and the systems underneath."
+    },
+    "eyebrow": "About",
+    "headline": "The name is *a question I ask myself* while editing.",
+    "body": {
+      "p1": "I'm Shivam — I work on machine-learning systems, and I write here about LLM engineering and the unglamorous infrastructure underneath it. The day job is making inference fast and reliable; the evenings are for writing down the parts that were harder than the papers implied.",
+      "p2": "This site exists because the good stuff kept getting lost. A profiling session would turn up something genuinely surprising — a cache policy that behaved backwards under load, a retrieval metric that flattered a broken system — and it would end up in a Slack thread, then nowhere. Writing it down properly forces the second question: *do I actually understand this, or did I just get it working?* Usually the answer is uncomfortable, and the essay gets better.",
+      "p3": "Everything here is first-person and measured. If I claim a number, I ran it; if I'm guessing, I say so. I don't cover launches, I don't do hot takes, and I try very hard not to write anything that could have been a tweet.",
+      "quote": "Most of what I know I learned by being wrong in public, slowly.",
+      "p4": "Most of the writing is free. A few of the longer essays sit behind a one-time unlock — a single payment for that piece, set per essay, not a subscription and nothing recurring. It's less a growth strategy than a filter: paying a little usually means you intend to finish, which is the only readership metric I care about.",
+      "p5": "If something here is wrong, tell me. Corrections get a note at the bottom of the piece with your name on it, unless you'd rather they didn't."
+    },
+    "portrait": {
+      "placeholder": "Portrait — 4:5, desk or outdoors",
+      "caption": "A photo goes here — something plain and unstaged. Same warm paper tone as the rest of the site, nothing glossy."
+    },
+    "colophon": {
+      "heading": "Colophon",
+      "typeHeading": "Type",
+      "typeBody": "Headings in Source Serif 4, body in Charis SIL — a descendant of Bitstream Charter — with interface text in the system sans. Both serifs are self-hosted, so the site reads the same on every platform.",
+      "builtHeading": "Built with",
+      "builtBody": "Astro, built to static HTML and deployed on Cloudflare Pages on every push. Written in plain Markdown, with diagrams and plots rendered from source at build time.",
+      "elsewhereHeading": "Elsewhere",
+      "rssLabel": "RSS",
+      "rssDesc": "— the whole feed, full text.",
+      "githubLabel": "GitHub",
+      "githubDesc": "— the code behind the essays.",
+      "githubHref": "https://github.com/shivam7569"
+    },
+    "contact": {
+      "heading": "Say something",
+      "body": "Corrections, arguments, and job questions all welcome. I read everything and reply to most of it.",
+      "email": "hello@areyoustillreading.dev",
+      "cta": "Read the archive",
+      "ctaHref": "/blog"
+    }
   }
 }

@@ -25,6 +25,7 @@ import site from '../../data/site.json';
       <div class="tabs" id="cm-tabs">
         <button class="on" data-page="home" type="button">Home page</button>
         <button data-page="projects" type="button">Projects page</button>
+        <button data-page="about" type="button">About page</button>
         <button data-page="global" type="button">Global</button>
       </div>
       <a class="btn btn-ghost btn-sm cm-view" id="cm-view" href="/projects" target="_blank" rel="noopener">View the page ↗</a>
@@ -124,6 +125,51 @@ import site from '../../data/site.json';
           { path: 'oss.note', label: 'Note', type: 'text' },
           { path: 'oss.link', label: 'Link label', type: 'text' },
           { path: 'oss.href', label: 'Link URL', type: 'text' },
+        ] },
+      ],
+    },
+    about: {
+      label: 'About page', view: '/about',
+      groups: [
+        { label: 'SEO', fields: [
+          { path: 'seo.title', label: 'Browser tab / SEO title', type: 'text' },
+          { path: 'seo.description', label: 'SEO description', type: 'area' },
+        ] },
+        { label: 'Hero', fields: [
+          { path: 'eyebrow', label: 'Eyebrow', type: 'text' },
+          { path: 'headline', label: 'Headline — wrap italics in *asterisks*', type: 'text' },
+        ] },
+        { label: 'Body — one paragraph each · *…* renders italic', fields: [
+          { path: 'body.p1', label: 'Paragraph 1 (lead)', type: 'area' },
+          { path: 'body.p2', label: 'Paragraph 2', type: 'area' },
+          { path: 'body.p3', label: 'Paragraph 3', type: 'area' },
+          { path: 'body.quote', label: 'Pull-quote', type: 'area' },
+          { path: 'body.p4', label: 'Paragraph 4', type: 'area' },
+          { path: 'body.p5', label: 'Paragraph 5', type: 'area' },
+        ] },
+        { label: 'Portrait', fields: [
+          { path: 'portrait.placeholder', label: 'Image placeholder text', type: 'text' },
+          { path: 'portrait.caption', label: 'Caption', type: 'area' },
+        ] },
+        { label: 'Colophon', fields: [
+          { path: 'colophon.heading', label: 'Section title', type: 'text' },
+          { path: 'colophon.typeHeading', label: 'Column 1 heading', type: 'text' },
+          { path: 'colophon.typeBody', label: 'Column 1 body', type: 'area' },
+          { path: 'colophon.builtHeading', label: 'Column 2 heading', type: 'text' },
+          { path: 'colophon.builtBody', label: 'Column 2 body', type: 'area' },
+          { path: 'colophon.elsewhereHeading', label: 'Column 3 heading', type: 'text' },
+          { path: 'colophon.rssLabel', label: 'RSS link label', type: 'text' },
+          { path: 'colophon.rssDesc', label: 'RSS description', type: 'text' },
+          { path: 'colophon.githubLabel', label: 'GitHub link label', type: 'text' },
+          { path: 'colophon.githubDesc', label: 'GitHub description', type: 'text' },
+          { path: 'colophon.githubHref', label: 'GitHub URL', type: 'text' },
+        ] },
+        { label: 'Contact card', fields: [
+          { path: 'contact.heading', label: 'Heading', type: 'text' },
+          { path: 'contact.body', label: 'Body', type: 'area' },
+          { path: 'contact.email', label: 'Email — label + mailto target', type: 'text' },
+          { path: 'contact.cta', label: 'Secondary link label', type: 'text' },
+          { path: 'contact.ctaHref', label: 'Secondary link URL', type: 'text' },
         ] },
       ],
     },
