@@ -144,7 +144,8 @@ import { PLATES } from '../../lib/plates.mjs';
   .projectstudio .blocktog input::after { content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:999px; background:var(--card); transition:transform .18s; }
   .projectstudio .blocktog input:checked { background:var(--accent); }
   .projectstudio .blocktog input:checked::after { transform:translateX(15px); }
-  .projectstudio .blocktog small { color:var(--ink-faint); font-size:12px; margin-left:auto; }
+  .projectstudio .blocktog small { color:var(--ink-faint); font-size:12px; margin-left:auto; padding-left:10px; flex:none; }
+  .projectstudio .blkname { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .projectstudio .togrow { display:flex; gap:22px; flex-wrap:wrap; }
 
   .projectstudio .swatches { display:flex; gap:10px; flex-wrap:wrap; }
@@ -375,9 +376,9 @@ import { PLATES } from '../../lib/plates.mjs';
 
       <div class="ctl" data-only="case"><span class="fl">Detail blocks</span>
         <div class="pjblk${p.families.on ? ' on' : ''}" data-blk="families">
-          <div class="pjblk-head"><label class="blocktog" style="flex:1"><input type="checkbox" data-g="families" ${p.families.on ? 'checked' : ''}>Architecture families<small>${(p.families.rows || []).length} rows</small></label></div>
+          <div class="pjblk-head"><label class="blocktog" style="flex:1"><input type="checkbox" data-g="families" ${p.families.on ? 'checked' : ''}><span class="blkname" id="famBlkName">${esc(p.families.heading || 'Architecture families')}</span><small>${(p.families.rows || []).length} rows</small></label></div>
           <div class="pjblk-body">
-            <span class="fl">Heading</span><input class="inp" id="famHeading" value="${attr(p.families.heading || '')}" aria-label="Families heading">
+            <span class="fl">Section heading — shown on the page</span><input class="inp" id="famHeading" value="${attr(p.families.heading || '')}" placeholder="Architecture families" aria-label="Families heading">
             <span class="fl">Counter</span>
             <div class="pair"><input class="inp" id="famFig" value="${attr(p.families.count ? p.families.count.fig : '')}" placeholder="25+" aria-label="Counter figure"><input class="inp" id="famCap" value="${attr(p.families.count ? p.families.count.cap : '')}" placeholder="architectures…" aria-label="Counter caption"></div>
             <span class="fl">Rows</span>
@@ -387,9 +388,9 @@ import { PLATES } from '../../lib/plates.mjs';
           </div>
         </div>
         <div class="pjblk${p.build.on ? ' on' : ''}" data-blk="build">
-          <div class="pjblk-head"><label class="blocktog" style="flex:1"><input type="checkbox" data-g="build" ${p.build.on ? 'checked' : ''}>How it's built<small>${(p.build.items || []).length} items</small></label></div>
+          <div class="pjblk-head"><label class="blocktog" style="flex:1"><input type="checkbox" data-g="build" ${p.build.on ? 'checked' : ''}><span class="blkname" id="buildBlkName">${esc(p.build.heading || "How it's built")}</span><small>${(p.build.items || []).length} items</small></label></div>
           <div class="pjblk-body">
-            <span class="fl">Heading</span><input class="inp" id="buildHeading" value="${attr(p.build.heading || '')}" aria-label="Build heading">
+            <span class="fl">Section heading — shown on the page</span><input class="inp" id="buildHeading" value="${attr(p.build.heading || '')}" placeholder="How it's built" aria-label="Build heading">
             <span class="fl">Items</span>
             <div data-rows id="buildRows">${(p.build.items || []).map((it) => buildItemRow(it)).join('')}</div>
             <button class="miniadd" type="button" data-add="item">+ Add an item</button>
@@ -471,7 +472,13 @@ import { PLATES } from '../../lib/plates.mjs';
 
   // ---------- events ----------
   let deb;
-  $('#editors').addEventListener('input', (e) => { if (e.target.tagName === 'TEXTAREA') grow(e.target); clearTimeout(deb); deb = setTimeout(syncPreview, 150); });
+  $('#editors').addEventListener('input', (e) => {
+    if (e.target.tagName === 'TEXTAREA') grow(e.target);
+    // Keep each detail block's header in sync with its (editable) section heading.
+    if (e.target.id === 'famHeading') { const el = $('#famBlkName'); if (el) el.textContent = e.target.value.trim() || 'Architecture families'; }
+    if (e.target.id === 'buildHeading') { const el = $('#buildBlkName'); if (el) el.textContent = e.target.value.trim() || "How it's built"; }
+    clearTimeout(deb); deb = setTimeout(syncPreview, 150);
+  });
   $('#editors').addEventListener('change', (e) => {
     if (e.target.matches('[data-g="families"],[data-g="build"]')) {
       const blk = e.target.closest('.pjblk'); if (blk) blk.classList.toggle('on', e.target.checked);
