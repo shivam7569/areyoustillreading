@@ -285,8 +285,13 @@ import { PLATES } from '../../lib/plates.mjs';
 
   // ---------- project list ----------
   function usedPlates() { return model.projects.map((p) => p.art && p.art.plateId).filter(Boolean); }
+  // A just-uploaded image previews from its local data URL until the site rebuilds and
+  // serves the committed /projects/<id> file — otherwise every surface points at a 404.
+  const localShots = {};
+  function shotSrc(p) { return (p && p.id && localShots[p.id]) || (p && p.art && p.art.shot) || ''; }
   function thumbHtml(p) {
-    if (p.art && p.art.type === 'shot' && p.art.shot) return '<img src="' + attr(p.art.shot) + '" alt="">';
+    const src = shotSrc(p);
+    if (p.art && p.art.type === 'shot' && src) return '<img src="' + attr(src) + '" alt="">';
     return '<span class="plate">' + plate((p.art && p.art.plateId) || '01').svg + '</span>';
   }
   function buildList() {
@@ -324,7 +329,7 @@ import { PLATES } from '../../lib/plates.mjs';
     if (!p) { $('#editors').innerHTML = '<div class="fh">No project selected.</div>'; $('#pjEditTitle').textContent = 'Editing'; return; }
     $('#pjEditTitle').textContent = p.name || 'Untitled project';
     const plateGrid = PLATES.map((pl) => `<button type="button" class="pp${p.art && p.art.plateId === pl.id && p.art.type !== 'shot' ? ' on' : ''}" data-plate="${pl.id}" title="${attr(pl.name)}"><span class="plate">${pl.svg}</span></button>`).join('');
-    const artCur = p.art && p.art.type === 'shot' && p.art.shot ? `<img src="${attr(p.art.shot)}" alt="">` : `<span class="plate">${plate((p.art && p.art.plateId) || '01').svg}</span>`;
+    const artCur = p.art && p.art.type === 'shot' && shotSrc(p) ? `<img src="${attr(shotSrc(p))}" alt="">` : `<span class="plate">${plate((p.art && p.art.plateId) || '01').svg}</span>`;
     $('#editors').innerHTML =
       `<div class="ctl"><span class="fl">Content</span>
         <input class="inp" id="pName" style="margin-bottom:8px" value="${attr(p.name)}" placeholder="Project title" aria-label="Title">
@@ -345,9 +350,9 @@ import { PLATES } from '../../lib/plates.mjs';
         <div class="artwrap">
           <div class="artcur" id="artcur">${artCur}</div>
           <div class="artside">
-            <div class="fh" style="margin:0 0 4px">A generated plate by default — pick one, or upload a real screenshot.</div>
+            <div class="fh" style="margin:0 0 4px">A generated plate by default — pick one, or upload your own image.</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <label class="gbtn" for="pShot">Upload screenshot</label>
+              <label class="gbtn" for="pShot">Upload an image</label>
               <button class="gbtn" type="button" id="pShotClear"${p.art && p.art.type === 'shot' ? '' : ' hidden'}>Use a plate</button>
               <input type="file" id="pShot" accept="image/png,image/jpeg,image/webp">
             </div>
@@ -441,7 +446,7 @@ import { PLATES } from '../../lib/plates.mjs';
     pv.dataset.layout = p.layout; pv.dataset.hero = p.hero; pv.dataset.aspect = p.aspect;
     pv.dataset.cols = p.cols; pv.dataset.families = p.families.on ? 'on' : 'off'; pv.dataset.build = p.build.on ? 'on' : 'off';
     const shot = $('#pvshot');
-    if (p.art && p.art.type === 'shot' && p.art.shot) { shot.classList.remove('plated'); shot.style.backgroundImage = 'url(' + p.art.shot + ')'; shot.style.backgroundSize = 'cover'; shot.innerHTML = ''; }
+    if (p.art && p.art.type === 'shot' && shotSrc(p)) { shot.classList.remove('plated'); shot.style.backgroundImage = 'url(' + shotSrc(p) + ')'; shot.style.backgroundSize = 'cover'; shot.innerHTML = ''; }
     else { shot.classList.add('plated'); shot.style.backgroundImage = ''; shot.innerHTML = '<span class="plate">' + plate((p.art && p.art.plateId) || '01').svg + '</span>'; }
     // reflect into the row + block-count labels without a full rebuild
     const row = $('#pjList .pjrow[data-i="' + sel + '"]');
@@ -564,15 +569,17 @@ import { PLATES } from '../../lib/plates.mjs';
     if (e.target.id !== 'pShot') return;
     const file = e.target.files && e.target.files[0]; if (!file) return;
     const p = model.projects[sel];
-    status('Uploading screenshot…');
+    status('Uploading image…');
     try {
+      collectSelected(); // keep any unsaved field edits before the editor re-renders
       const b64 = await fileToB64(file);
       const r = await adminFetch('/api/admin/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'shot', id: p.id, imgBase64: b64, name: file.name }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      localShots[p.id] = 'data:' + (file.type || 'image/png') + ';base64,' + b64; // show it instantly; the committed file serves after the rebuild
       p.art = { type: 'shot', shot: d.shot, plateId: p.art && p.art.plateId };
       buildEditor();
-      status('Screenshot uploaded and committed. Save to apply.', 'ok');
+      status('Image uploaded and committed. Save to apply.', 'ok');
     } catch (err) { status('Upload failed: ' + err.message, 'err'); }
     e.target.value = '';
   });
