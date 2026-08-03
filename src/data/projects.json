@@ -80,7 +80,7 @@
         "github": "https://github.com/shivam7569/Memoir/",
         "docs": ""
       },
-      "layout": "compact",
+      "layout": "case",
       "hero": "right",
       "aspect": "3-2",
       "cols": 2,
