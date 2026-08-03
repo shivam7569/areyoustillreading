@@ -56,9 +56,9 @@ import { PLATES } from '../../lib/plates.mjs';
           <div class="pvwrap">
             <div class="pvhead"><i></i>Live preview</div>
             <div class="pvbody">
-              <div class="pv" id="pv"><div class="pv-top"><div class="pv-copy"><span class="pv-h"></span><span class="pv-l"></span><span class="pv-l"></span><span class="pv-l s"></span><div class="pv-tags"><i></i><i></i><i></i></div><div class="pv-btns"><i></i><i></i></div></div><div class="pv-shot plated" id="pvshot"></div></div><div class="pv-inside"><div class="pv-b" data-b="fam"><span></span><span></span><span></span><span></span></div><div class="pv-b" data-b="build"><span></span><span></span><span></span><span></span></div></div></div>
+              <div class="pv" id="pv"><div class="pv-top"><div class="pv-copy"><div class="pv-states" id="pvStates"></div><div class="pv-title" id="pvTitle"></div><div class="pv-lead" id="pvLead"></div><div class="pv-tags" id="pvTags"></div><div class="pv-btns" id="pvBtns"></div></div><div class="pv-shot plated" id="pvshot"></div></div><div class="pv-inside"><div class="pv-b" data-b="fam"><div class="pv-bh" id="pvFamH"></div><div class="pv-count" id="pvFamCount"></div><ul class="pv-fam" id="pvFamRows"></ul></div><div class="pv-b" data-b="build"><div class="pv-bh" id="pvBuildH"></div><ul class="pv-list" id="pvBuildItems"></ul></div></div></div>
             </div>
-            <div class="pvnote">What the projects page reads to lay this card out. Nothing rebuilds when you change it.</div>
+            <div class="pvnote">A live preview of the card as the projects page renders it. Changes show here instantly; “Save changes” publishes them.</div>
           </div>
         </div>
       </div>
@@ -196,23 +196,36 @@ import { PLATES } from '../../lib/plates.mjs';
   .projectstudio .pvnote { padding:0 16px 14px; font-size:11px; line-height:1.5; color:var(--ink-faint); }
   .projectstudio .pv { border:1px solid var(--rule); border-radius:5px; background:var(--card); overflow:hidden; }
   .projectstudio .pv-top { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.05fr); }
-  .projectstudio .pv-copy { padding:13px; display:flex; flex-direction:column; gap:7px; }
-  .projectstudio .pv-h { height:9px; border-radius:2px; background:var(--ink); opacity:.82; }
-  .projectstudio .pv-l { height:5px; border-radius:2px; background:var(--ink); opacity:.2; }
-  .projectstudio .pv-l.s { width:72%; }
-  .projectstudio .pv-tags { display:flex; gap:4px; margin-top:2px; }
-  .projectstudio .pv-tags i { width:22px; height:8px; border-radius:2px; border:1px solid var(--rule); display:block; }
-  .projectstudio .pv-btns { display:flex; gap:5px; margin-top:4px; }
-  .projectstudio .pv-btns i { width:38px; height:12px; border-radius:2px; background:var(--accent); display:block; }
-  .projectstudio .pv-btns i + i { background:transparent; border:1px solid var(--rule); }
+  .projectstudio .pv-copy { padding:13px; display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .projectstudio .pv-states { display:flex; gap:5px; flex-wrap:wrap; }
+  .projectstudio .pv-states:empty { display:none; }
+  .projectstudio .pv-states span { font-size:8px; letter-spacing:.1em; text-transform:uppercase; padding:2px 5px; border-radius:2px; border:1px solid var(--rule); color:var(--ink-faint); }
+  .projectstudio .pv-states span.on { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+  .projectstudio .pv-title { font-family:var(--serif-display); font-size:15px; line-height:1.2; color:var(--ink); font-weight:600; overflow-wrap:anywhere; }
+  .projectstudio .pv-lead { font-family:var(--serif-body); font-size:10.5px; line-height:1.45; color:var(--ink-soft); overflow-wrap:anywhere; }
+  .projectstudio .pv-lead:empty { display:none; }
+  .projectstudio .pv-tags { display:flex; gap:4px; flex-wrap:wrap; }
+  .projectstudio .pv-tags span { font-size:8px; letter-spacing:.04em; color:var(--ink-faint); border:1px solid var(--rule); border-radius:2px; padding:2px 5px; }
+  .projectstudio .pv-btns { display:flex; gap:5px; margin-top:2px; flex-wrap:wrap; }
+  .projectstudio .pv-btns span { font-size:8.5px; padding:3px 7px; border-radius:2px; border:1px solid var(--rule); color:var(--ink-soft); }
+  .projectstudio .pv-btns span.primary { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
   .projectstudio .pv-shot { aspect-ratio:3/2; border-left:1px solid var(--rule); background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,var(--paper-2)),var(--paper-2)); }
   .projectstudio .pv-shot.plated { background:none; }
   .projectstudio .pv-shot.plated .plate, .projectstudio .pv-shot.plated .plate svg { width:100%; height:100%; display:block; }
   .projectstudio .pv-inside { border-top:1px solid var(--rule); display:grid; grid-template-columns:1fr 1fr; }
-  .projectstudio .pv-b { padding:12px; display:flex; flex-direction:column; gap:5px; }
+  .projectstudio .pv-b { padding:12px; display:flex; flex-direction:column; gap:6px; min-width:0; }
   .projectstudio .pv-b + .pv-b { border-left:1px solid var(--rule); }
-  .projectstudio .pv-b span { height:4px; border-radius:2px; background:var(--ink); opacity:.18; }
-  .projectstudio .pv-b span:first-child { width:46%; opacity:.55; background:var(--accent); height:5px; }
+  .projectstudio .pv-bh { font-family:var(--sans); font-size:8.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); font-weight:600; overflow-wrap:anywhere; }
+  .projectstudio .pv-count { font-size:9px; color:var(--ink-faint); }
+  .projectstudio .pv-count:empty { display:none; }
+  .projectstudio .pv-count b { color:var(--ink); font-family:var(--serif-display); font-size:12px; }
+  .projectstudio .pv-fam, .projectstudio .pv-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
+  .projectstudio .pv-fam li { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px; font-size:9px; align-items:baseline; }
+  .projectstudio .pv-fam li .n { color:var(--ink); font-weight:600; white-space:nowrap; }
+  .projectstudio .pv-fam li .v { color:var(--ink-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .projectstudio .pv[data-fam-style="stacked"] .pv-fam li { grid-template-columns:1fr; gap:1px; }
+  .projectstudio .pv-list li { font-size:9px; color:var(--ink-soft); position:relative; padding-left:11px; }
+  .projectstudio .pv-list li::before { content:""; position:absolute; left:0; top:.38em; width:5px; height:5px; border:1px solid var(--accent); border-radius:1px; }
   .projectstudio .pv[data-layout="case"][data-hero="left"] .pv-copy { order:2; }
   .projectstudio .pv[data-layout="case"][data-hero="left"] .pv-shot { order:1; border-left:0; border-right:1px solid var(--rule); }
   .projectstudio .pv[data-layout="case"][data-hero="top"] .pv-top { grid-template-columns:1fr; }
@@ -230,10 +243,11 @@ import { PLATES } from '../../lib/plates.mjs';
   .projectstudio .pv[data-layout="compact"] .pv-inside { display:none; }
   .projectstudio .pv[data-layout="compact"] .pv-top { grid-template-columns:104px minmax(0,1fr); }
   .projectstudio .pv[data-layout="compact"] .pv-shot { order:-1; border-left:0; border-right:1px solid var(--rule); aspect-ratio:3/2; }
-  .projectstudio .pv[data-layout="line"] .pv-inside, .projectstudio .pv[data-layout="line"] .pv-shot, .projectstudio .pv[data-layout="line"] .pv-l { display:none; }
+  .projectstudio .pv[data-layout="compact"] .pv-lead { display:none; }
+  .projectstudio .pv[data-layout="line"] .pv-inside, .projectstudio .pv[data-layout="line"] .pv-shot, .projectstudio .pv[data-layout="line"] .pv-lead, .projectstudio .pv[data-layout="line"] .pv-tags, .projectstudio .pv[data-layout="line"] .pv-states { display:none; }
   .projectstudio .pv[data-layout="line"] .pv-top { grid-template-columns:1fr; }
   .projectstudio .pv[data-layout="line"] .pv-copy { flex-direction:row; align-items:center; gap:10px; }
-  .projectstudio .pv[data-layout="line"] .pv-h { width:44%; flex:none; }
+  .projectstudio .pv[data-layout="line"] .pv-title { flex:1; font-size:12px; }
   .projectstudio .pv[data-layout="line"] .pv-btns { margin:0 0 0 auto; }
 </style>
 
@@ -450,6 +464,19 @@ import { PLATES } from '../../lib/plates.mjs';
     const pv = $('#pv');
     pv.dataset.layout = p.layout; pv.dataset.hero = p.hero; pv.dataset.aspect = p.aspect;
     pv.dataset.cols = p.cols; pv.dataset.families = p.families.on ? 'on' : 'off'; pv.dataset.build = p.build.on ? 'on' : 'off';
+    pv.dataset.famStyle = p.families.style; pv.dataset.buildMarker = p.build.marker;
+    // real content — the preview mirrors exactly what the projects page renders
+    $('#pvTitle').textContent = p.name || 'Untitled project';
+    $('#pvLead').textContent = p.lead || '';
+    $('#pvStates').innerHTML = (p.states.maintained ? '<span class="on">Maintained</span>' : '') + (p.states.oss ? '<span>Open source</span>' : '');
+    $('#pvTags').innerHTML = (p.tags || []).map((t) => '<span>' + esc(t) + '</span>').join('');
+    $('#pvBtns').innerHTML = (p.links.github ? '<span class="primary">GitHub</span>' : '') + (p.links.docs ? '<span>Documentation</span>' : '');
+    $('#pvFamH').textContent = p.families.heading || '';
+    const fc = p.families.count || {};
+    $('#pvFamCount').innerHTML = (fc.fig || fc.cap) ? ('<b>' + esc(fc.fig || '') + '</b> ' + esc(fc.cap || '')) : '';
+    $('#pvFamRows').innerHTML = (p.families.rows || []).map((r) => '<li><span class="n">' + esc(r.n) + '</span><span class="v">' + esc(r.v) + '</span></li>').join('');
+    $('#pvBuildH').textContent = p.build.heading || '';
+    $('#pvBuildItems').innerHTML = (p.build.items || []).map((it) => '<li>' + esc(it) + '</li>').join('');
     const shot = $('#pvshot');
     if (p.art && p.art.type === 'shot' && shotSrc(p)) { shot.classList.remove('plated'); shot.style.backgroundImage = 'url(' + shotSrc(p) + ')'; shot.style.backgroundSize = 'cover'; shot.innerHTML = ''; }
     else { shot.classList.add('plated'); shot.style.backgroundImage = ''; shot.innerHTML = '<span class="plate">' + plate((p.art && p.art.plateId) || '01').svg + '</span>'; }
