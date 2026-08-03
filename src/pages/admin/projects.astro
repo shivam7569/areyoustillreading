@@ -183,6 +183,9 @@ import { PLATES } from '../../lib/plates.mjs';
   .projectstudio .gbtn { font-family:var(--sans); font-size:12.5px; display:inline-flex; align-items:center; gap:7px; padding:7px 12px; border-radius:3px; border:1px solid var(--rule); background:transparent; color:var(--ink-soft); cursor:pointer; white-space:nowrap; }
   .projectstudio .gbtn:hover { border-color:var(--accent); color:var(--accent); }
   .projectstudio input[type="file"] { display:none; }
+  .projectstudio .artmsg { font-size:12px; margin-top:9px; min-height:1em; color:var(--ink-faint); }
+  .projectstudio .artmsg.ok { color:var(--accent); }
+  .projectstudio .artmsg.err { color:var(--danger,#c2603f); }
 
   /* preview */
   .projectstudio .pvwrap { position:sticky; top:12px; border:1px solid var(--rule); border-radius:5px; background:var(--paper-2); overflow:hidden; }
@@ -356,6 +359,7 @@ import { PLATES } from '../../lib/plates.mjs';
               <button class="gbtn" type="button" id="pShotClear"${p.art && p.art.type === 'shot' ? '' : ' hidden'}>Use a plate</button>
               <input type="file" id="pShot" accept="image/png,image/jpeg,image/webp">
             </div>
+            <div class="artmsg" id="artmsg" role="status" aria-live="polite"></div>
             <div class="plategrid" id="plategrid">${plateGrid}</div>
           </div>
         </div>
@@ -565,22 +569,48 @@ import { PLATES } from '../../lib/plates.mjs';
 
   // screenshot upload
   const fileToB64 = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(f); });
+  // Feedback shown right in the Artwork block — the top status bar is off-screen while editing here.
+  function artMsg(t, kind) { const el = $('#artmsg'); if (!el) return; el.textContent = t || ''; el.className = 'artmsg' + (kind === 'err' ? ' err' : kind === 'ok' ? ' ok' : ''); }
+  // Downscale/re-encode large images client-side so they clear the server's size cap and
+  // committed assets stay lean. Any failure falls back to the untouched file bytes.
+  async function prepImage(file) {
+    const rawB64 = await fileToB64(file);
+    try {
+      const src = 'data:' + (file.type || 'image/png') + ';base64,' + rawB64;
+      const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('decode')); im.src = src; });
+      const maxDim = 1800;
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      if (scale === 1 && rawB64.length * 0.75 <= 3 * 1024 * 1024) return { b64: rawB64, mime: file.type || 'image/png', name: file.name };
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      const outMime = file.type === 'image/webp' ? 'image/webp' : file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      let b64 = (cv.toDataURL(outMime, 0.92).split(',')[1]) || '';
+      // A re-encoded PNG can still be heavy for photos — fall back to JPEG, which is far smaller.
+      if (outMime === 'image/png' && b64.length * 0.75 > 3.5 * 1024 * 1024) {
+        b64 = (cv.toDataURL('image/jpeg', 0.9).split(',')[1]) || '';
+        return { b64, mime: 'image/jpeg', name: file.name.replace(/\.[^.]+$/, '') + '.jpg' };
+      }
+      return { b64, mime: outMime, name: file.name };
+    } catch { return { b64: rawB64, mime: file.type || 'image/png', name: file.name }; }
+  }
   $('#editors').addEventListener('change', async (e) => {
     if (e.target.id !== 'pShot') return;
     const file = e.target.files && e.target.files[0]; if (!file) return;
     const p = model.projects[sel];
-    status('Uploading image…');
+    status('Uploading image…'); artMsg('Uploading image…');
     try {
       collectSelected(); // keep any unsaved field edits before the editor re-renders
-      const b64 = await fileToB64(file);
-      const r = await adminFetch('/api/admin/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'shot', id: p.id, imgBase64: b64, name: file.name }) });
+      const img = await prepImage(file);
+      const r = await adminFetch('/api/admin/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'shot', id: p.id, imgBase64: img.b64, name: img.name }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
-      localShots[p.id] = 'data:' + (file.type || 'image/png') + ';base64,' + b64; // show it instantly; the committed file serves after the rebuild
+      localShots[p.id] = 'data:' + img.mime + ';base64,' + img.b64; // show it instantly; the committed file serves after the rebuild
       p.art = { type: 'shot', shot: d.shot, plateId: p.art && p.art.plateId };
       buildEditor();
-      status('Image uploaded and committed. Save to apply.', 'ok');
-    } catch (err) { status('Upload failed: ' + err.message, 'err'); }
+      status('Image uploaded and committed. Save to apply.', 'ok'); artMsg('Uploaded — click “Save changes” to publish.', 'ok');
+    } catch (err) { status('Upload failed: ' + err.message, 'err'); artMsg('Upload failed: ' + err.message, 'err'); }
     e.target.value = '';
   });
 
