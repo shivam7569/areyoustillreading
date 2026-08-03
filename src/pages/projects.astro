@@ -231,6 +231,8 @@ const plateSvg = (p) => plate(p.art?.plateId || '01').svg;
   .proj[data-build-marker="number"] .practice{counter-reset:bn}
   .proj[data-build-marker="number"] .practice li{counter-increment:bn}
   .proj[data-build-marker="number"] .practice li::before{content:counter(bn,decimal-leading-zero);border:0;width:auto;height:auto;transform:none;top:.1em;font-family:var(--sans);font-size:11px;letter-spacing:.08em;color:var(--accent)}
+  .proj[data-build-marker="dot"] .practice li::before{border:0;transform:none;width:6px;height:6px;border-radius:999px;background:var(--accent);top:.52em;left:2px}
+  .proj[data-build-marker="arrow"] .practice li::before{content:"→";border:0;width:auto;height:auto;transform:none;top:0;left:0;color:var(--accent);font-size:15px;line-height:1.5;font-family:var(--sans)}
 </style>
 
 {/* The plate artwork is injected via set:html, so its <svg> can't receive this

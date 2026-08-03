@@ -230,6 +230,8 @@ import { PLATES } from '../../lib/plates.mjs';
   .projectstudio .pv[data-build-marker="number"] .pv-list { counter-reset:bn; }
   .projectstudio .pv[data-build-marker="number"] .pv-list li { counter-increment:bn; }
   .projectstudio .pv[data-build-marker="number"] .pv-list li::before { content:counter(bn,decimal-leading-zero); top:0; font-size:7.5px; letter-spacing:.05em; }
+  .projectstudio .pv[data-build-marker="dot"] .pv-list li::before { content:""; top:.5em; width:4px; height:4px; border-radius:999px; background:var(--accent); }
+  .projectstudio .pv[data-build-marker="arrow"] .pv-list li::before { content:"→"; top:0; font-size:8px; }
   .projectstudio .pv[data-layout="case"][data-hero="left"] .pv-copy { order:2; }
   .projectstudio .pv[data-layout="case"][data-hero="left"] .pv-shot { order:1; border-left:0; border-right:1px solid var(--rule); }
   .projectstudio .pv[data-layout="case"][data-hero="top"] .pv-top { grid-template-columns:1fr; }
@@ -412,7 +414,7 @@ import { PLATES } from '../../lib/plates.mjs';
             <span class="fl">Items</span>
             <div data-rows id="buildRows">${(p.build.items || []).map((it) => buildItemRow(it)).join('')}</div>
             <button class="miniadd" type="button" data-add="item">+ Add an item</button>
-            ${seg('Marker', 'buildMarker', [['check', 'Tick'], ['dash', 'Dash'], ['number', 'Number']], p.build.marker)}
+            ${seg('Marker', 'buildMarker', [['check', 'Tick'], ['dash', 'Dash'], ['number', 'Number'], ['dot', 'Dot'], ['arrow', 'Arrow']], p.build.marker)}
           </div>
         </div>
       </div>
