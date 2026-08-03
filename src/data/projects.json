@@ -63,6 +63,48 @@
         "plateId": "08"
       },
       "show": true
+    },
+    {
+      "id": "project-2",
+      "name": "Memoir",
+      "lead": "A project to colorize images",
+      "tags": [
+        "pytorch",
+        "gans"
+      ],
+      "states": {
+        "maintained": false,
+        "oss": true
+      },
+      "links": {
+        "github": "https://github.com/shivam7569/Memoir/",
+        "docs": ""
+      },
+      "layout": "compact",
+      "hero": "right",
+      "aspect": "3-2",
+      "cols": 2,
+      "families": {
+        "on": false,
+        "heading": "Architecture families",
+        "count": {
+          "fig": "",
+          "cap": ""
+        },
+        "style": "rows",
+        "rows": []
+      },
+      "build": {
+        "on": false,
+        "heading": "How it's built",
+        "marker": "check",
+        "items": []
+      },
+      "art": {
+        "type": "plate",
+        "plateId": "20"
+      },
+      "show": true
     }
   ]
 }
