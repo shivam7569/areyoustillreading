@@ -61,6 +61,7 @@
  * ============================================================================
  */
 import BaseLayout from '../../../layouts/BaseLayout.astro';
+import site from '../../../data/site.json';
 import { getCollection } from 'astro:content';
 
 /**
@@ -108,6 +109,16 @@ const { tag, posts } = Astro.props;
 
 const fmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).filter(Boolean).length ?? 0) / 200));
+
+// Editable copy from Studio → Content Management → Tag archive. The templates
+// carry {tag}/{count}/{word} placeholders filled here (author-controlled).
+const c = (site as any).blogTag || {};
+const seoTitle = (c.seoTitleTemplate || 'Posts tagged “{tag}” — areyoustillreading').replace('{tag}', tag);
+const seoDesc = (c.seoDescTemplate || 'Posts tagged {tag}.').replace('{tag}', tag);
+const ledeText = (c.ledeTemplate || '{count} {word} on {tag}.')
+  .replace('{count}', String(posts.length))
+  .replace('{word}', posts.length === 1 ? (c.essaySingular || 'essay') : (c.essayPlural || 'essays'))
+  .replace('{tag}', tag);
 ---
 
 {/*
@@ -116,13 +127,13 @@ const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).f
   interpolated into both; JSX auto-escaping neutralises any special characters,
   though tags are author-controlled build inputs anyway.
 */}
-<BaseLayout title={`Posts tagged “${tag}” — areyoustillreading`} description={`Posts tagged ${tag}.`} wide>
+<BaseLayout title={seoTitle} description={seoDesc} wide>
   <div class="wrap">
     <header class="page-head">
-      <a class="backlink" href="/blog/tags"><span aria-hidden="true">&larr;</span> All topics</a>
-      <div class="kicker"><span class="line"></span><span class="eyebrow">Topic</span></div>
-      <h1>Tagged <em>{tag}</em></h1>
-      <p class="lede">{posts.length} {posts.length === 1 ? 'essay' : 'essays'} on {tag}.</p>
+      <a class="backlink" href="/blog/tags"><span aria-hidden="true">&larr;</span> {c.backlink || 'All topics'}</a>
+      <div class="kicker"><span class="line"></span><span class="eyebrow">{c.eyebrow || 'Topic'}</span></div>
+      <h1>{c.headingPrefix || 'Tagged'} <em>{tag}</em></h1>
+      <p class="lede">{ledeText}</p>
     </header>
     {/* Editorial post rows (getStaticPaths guarantees a non-empty list). */}
     <div class="post-list">

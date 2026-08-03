@@ -142,5 +142,41 @@
     "heading": "Almost there",
     "body": "Check your inbox for a confirmation link to finish subscribing. If it's not there in a minute, check your spam folder.",
     "home": "← Home"
+  },
+  "blogTopics": {
+    "seo": { "title": "Topics — areyoustillreading", "description": "Browse essays by topic." },
+    "backlink": "All essays",
+    "eyebrow": "Topics",
+    "title": "Browse by",
+    "titleEm": "subject.",
+    "lede": "Every subject across the archive, most-written first."
+  },
+  "blogTag": {
+    "seoTitleTemplate": "Posts tagged “{tag}” — areyoustillreading",
+    "seoDescTemplate": "Posts tagged {tag}.",
+    "backlink": "All topics",
+    "eyebrow": "Topic",
+    "headingPrefix": "Tagged",
+    "ledeTemplate": "{count} {word} on {tag}.",
+    "essaySingular": "essay",
+    "essayPlural": "essays"
+  },
+  "series": {
+    "seo": { "title": "Series — areyoustillreading", "description": "Multi-part collections — each a single argument split across essays that build on each other." },
+    "eyebrow": "Series",
+    "title": "Some ideas",
+    "titleEm": "don't fit in one sitting.",
+    "lede": "Running collections — each one a single argument split across essays that build on each other. Start at part one, or don't; every part stands up alone.",
+    "statusInProgress": "In progress",
+    "statusComplete": "Complete",
+    "statusPaused": "Paused",
+    "publishedLabel": "published",
+    "toCome": "To come",
+    "empty": "No multi-part series yet. When essays share a series, they gather here.",
+    "emptyLink": "Browse all posts →",
+    "newsletter": {
+      "heading": "Get the next part when it lands",
+      "blurb": "Series instalments go out by email as they publish. No noise — unsubscribe from any email in one click."
+    }
   }
 }

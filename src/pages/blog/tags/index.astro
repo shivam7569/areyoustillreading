@@ -60,7 +60,10 @@
 // here (rather than after aggregating) means draft-only tags never surface and
 // draft posts never inflate any count.
 import BaseLayout from '../../../layouts/BaseLayout.astro';
+import site from '../../../data/site.json';
 import { getCollection } from 'astro:content';
+
+const c = (site as any).blogTopics || {};
 
 const posts = await getCollection('blog', ({ data }) => !data.draft);
 
@@ -81,13 +84,13 @@ const tags = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeComp
 ---
 
 {/* BaseLayout supplies <head>/nav/footer; title+description feed the SEO/OG tags. */}
-<BaseLayout title="Topics — areyoustillreading" description="Browse essays by topic." wide>
+<BaseLayout title={c.seo?.title || 'Topics — areyoustillreading'} description={c.seo?.description || 'Browse essays by topic.'} wide>
   <div class="wrap">
     <header class="page-head">
-      <a class="backlink" href="/blog"><span aria-hidden="true">&larr;</span> All essays</a>
-      <div class="kicker"><span class="line"></span><span class="eyebrow">Topics</span></div>
-      <h1>Browse by <em>subject.</em></h1>
-      <p class="lede">Every subject across the archive, most-written first.</p>
+      <a class="backlink" href="/blog"><span aria-hidden="true">&larr;</span> {c.backlink || 'All essays'}</a>
+      <div class="kicker"><span class="line"></span><span class="eyebrow">{c.eyebrow || 'Topics'}</span></div>
+      <h1>{c.title || 'Browse by'} <em>{c.titleEm || 'subject.'}</em></h1>
+      <p class="lede">{c.lede || 'Every subject across the archive, most-written first.'}</p>
     </header>
     <div class="topics">
       {tags.map(([tag, count]) => (

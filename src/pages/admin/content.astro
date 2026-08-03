@@ -22,17 +22,7 @@ import site from '../../data/site.json';
     <script type="application/json" id="site-seed" set:html={JSON.stringify(site)} />
 
     <div class="cm-top">
-      <div class="tabs" id="cm-tabs">
-        <button class="on" data-page="home" type="button">Home page</button>
-        <button data-page="projects" type="button">Projects page</button>
-        <button data-page="about" type="button">About page</button>
-        <button data-page="global" type="button">Global</button>
-        <button data-page="notFound" type="button">404</button>
-        <button data-page="subscribeError" type="button">Subscribe error</button>
-        <button data-page="subscribed" type="button">Subscribed</button>
-        <button data-page="unsubscribed" type="button">Unsubscribed</button>
-        <button data-page="checkInbox" type="button">Check inbox</button>
-      </div>
+      <label class="cm-picker">Editing <select id="cm-page" aria-label="Page to edit"></select></label>
       <a class="btn btn-ghost btn-sm cm-view" id="cm-view" href="/projects" target="_blank" rel="noopener">View the page ↗</a>
       <button class="btn btn-primary btn-sm" id="cm-save" type="button">Save changes</button>
       <span class="cm-status" id="cm-status" role="status" aria-live="polite"></span>
@@ -48,7 +38,9 @@ import site from '../../data/site.json';
 <style is:global>
   .contentstudio { font-family: var(--sans); }
   .contentstudio .cm-top { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
-  .contentstudio #cm-tabs { flex-wrap:wrap; }
+  .contentstudio .cm-picker { display:flex; align-items:center; gap:9px; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; }
+  .contentstudio .cm-picker select { font-family:var(--sans); font-size:13.5px; letter-spacing:normal; text-transform:none; color:var(--ink); background:var(--paper-2); border:1px solid var(--rule); border-radius:4px; padding:8px 30px 8px 11px; cursor:pointer; }
+  .contentstudio .cm-picker select:focus { outline:2px solid var(--accent); outline-offset:1px; border-color:transparent; }
   .contentstudio .cm-view { margin-left:auto; }
   .contentstudio .cm-status { font-size:12.5px; color:var(--ink-faint); }
   .contentstudio .cm-status.ok { color:var(--accent); }
@@ -286,6 +278,67 @@ import site from '../../data/site.json';
         ] },
       ],
     },
+    blogTopics: {
+      label: 'Topics page', view: '/blog/tags',
+      groups: [
+        { label: 'SEO', fields: [
+          { path: 'seo.title', label: 'SEO title', type: 'text' },
+          { path: 'seo.description', label: 'SEO description', type: 'text' },
+        ] },
+        { label: 'Header', fields: [
+          { path: 'backlink', label: 'Back-link label', type: 'text' },
+          { path: 'eyebrow', label: 'Eyebrow', type: 'text' },
+          { path: 'title', label: 'Headline', type: 'text' },
+          { path: 'titleEm', label: 'Headline — accent italic', type: 'text' },
+          { path: 'lede', label: 'Intro paragraph', type: 'area' },
+        ] },
+      ],
+    },
+    blogTag: {
+      label: 'Tag archive', view: '/blog/tags',
+      groups: [
+        { label: 'SEO templates — {tag} is filled in', fields: [
+          { path: 'seoTitleTemplate', label: 'SEO title (use {tag})', type: 'text' },
+          { path: 'seoDescTemplate', label: 'SEO description (use {tag})', type: 'text' },
+        ] },
+        { label: 'Header', fields: [
+          { path: 'backlink', label: 'Back-link label', type: 'text' },
+          { path: 'eyebrow', label: 'Eyebrow', type: 'text' },
+          { path: 'headingPrefix', label: 'Heading prefix (before the tag)', type: 'text' },
+          { path: 'ledeTemplate', label: 'Lede (use {count} {word} {tag})', type: 'text' },
+          { path: 'essaySingular', label: 'Word for one post', type: 'text' },
+          { path: 'essayPlural', label: 'Word for many posts', type: 'text' },
+        ] },
+      ],
+    },
+    series: {
+      label: 'Series page', view: '/series',
+      groups: [
+        { label: 'SEO', fields: [
+          { path: 'seo.title', label: 'SEO title', type: 'text' },
+          { path: 'seo.description', label: 'SEO description', type: 'text' },
+        ] },
+        { label: 'Header', fields: [
+          { path: 'eyebrow', label: 'Eyebrow', type: 'text' },
+          { path: 'title', label: 'Headline', type: 'text' },
+          { path: 'titleEm', label: 'Headline — accent italic', type: 'text' },
+          { path: 'lede', label: 'Intro paragraph', type: 'area' },
+        ] },
+        { label: 'Status + labels', fields: [
+          { path: 'statusInProgress', label: 'Status — in progress', type: 'text' },
+          { path: 'statusComplete', label: 'Status — complete', type: 'text' },
+          { path: 'statusPaused', label: 'Status — paused', type: 'text' },
+          { path: 'publishedLabel', label: '“published” word', type: 'text' },
+          { path: 'toCome', label: '“To come” label', type: 'text' },
+        ] },
+        { label: 'Empty state + newsletter', fields: [
+          { path: 'empty', label: 'Empty-state text', type: 'area' },
+          { path: 'emptyLink', label: 'Empty-state link', type: 'text' },
+          { path: 'newsletter.heading', label: 'Newsletter heading', type: 'text' },
+          { path: 'newsletter.blurb', label: 'Newsletter blurb', type: 'area' },
+        ] },
+      ],
+    },
   };
 
   let model = (() => { try { return JSON.parse($('#site-seed').textContent || '{}') || {}; } catch { return {}; } })();
@@ -325,13 +378,10 @@ import site from '../../data/site.json';
 
   $('#cm-editor').addEventListener('input', (e) => { if (e.target.tagName === 'TEXTAREA') grow(e.target); });
 
-  $('#cm-tabs').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-page]'); if (!b) return;
-    collect(cur);
-    cur = b.dataset.page;
-    $$('#cm-tabs button').forEach((x) => x.classList.toggle('on', x === b));
-    buildEditor(cur);
-  });
+  // Populate the page picker straight from PAGES — adding a page needs no markup.
+  const sel = $('#cm-page');
+  sel.innerHTML = Object.entries(PAGES).map(([k, spec]) => `<option value="${k}"${k === cur ? ' selected' : ''}>${esc(spec.label)}</option>`).join('');
+  sel.addEventListener('change', () => { collect(cur); cur = sel.value; buildEditor(cur); });
 
   $('#cm-save').addEventListener('click', async () => {
     collect(cur);
