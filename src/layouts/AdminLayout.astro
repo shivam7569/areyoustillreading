@@ -75,7 +75,6 @@ const navGroups = [
   { label: 'Pages', items: [
     { key: 'projects', href: '/admin/projects', label: 'Projects', icon: icon.projects, count: 'projects' },
     { key: 'resume', href: '/admin/resume', label: 'Resume', icon: icon.resume },
-    { key: 'content', href: '/admin/content', label: 'Content', icon: icon.content },
   ] },
   { label: 'Readers', items: [
     { key: 'audience', href: '/admin/audience', label: 'Audience', icon: icon.audience },
@@ -189,6 +188,9 @@ const navGroups = [
         </nav>
 
         <div class="admin-side-foot">
+          <a class:list={['quiet', active === 'content' && 'is-active']} href="/admin/content" aria-current={active === 'content' ? 'page' : undefined}>
+            <Fragment set:html={icon.content} /><span class="lbl">Content</span>
+          </a>
           <a class:list={['quiet', active === 'settings' && 'is-active']} href="/admin/settings" aria-current={active === 'settings' ? 'page' : undefined}>
             <Fragment set:html={icon.settings} /><span class="lbl">Settings</span>
           </a>

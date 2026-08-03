@@ -22,7 +22,15 @@
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
+import site from '../data/site.json';
 import { getCollection } from 'astro:content';
+
+// Page copy, editable from Studio → Content Management. Fall back to the
+// original text so nothing renders blank if a field is missing.
+const c = (site as any).home || {};
+const hHero = c.hero || {};
+const hFeat = c.featured || {};
+const hNews = c.newsletter || {};
 
 // Published posts, newest first. The draft filter is a publication guard.
 const posts = (await getCollection('blog', ({ data }) => !data.draft))
@@ -46,28 +54,28 @@ const fSeries = featured?.data.series;
 const fBadge = fSeries ? `${featured.data.seriesTitle ?? fSeries} · Part ${featured.data.seriesOrder ?? 1}` : null;
 ---
 
-<BaseLayout title="areyoustillreading — LLM engineering notes" wide>
+<BaseLayout title={c.seo?.title || 'areyoustillreading — LLM engineering notes'} wide>
   {/* ---------- HERO ---------- */}
   <section class="hero">
     <div class="wrap hero-grid">
       <div>
-        <div class="kicker"><span class="line"></span><span class="eyebrow">Deep dives &amp; field notes</span></div>
-        <h1>In-depth writing on LLM engineering — and the <em>systems behind it.</em></h1>
-        <p class="lede">Long-form notes on building, shipping, and speeding up language-model systems. Measured, first-person, and free of hype.</p>
+        <div class="kicker"><span class="line"></span><span class="eyebrow">{hHero.eyebrow || 'Deep dives & field notes'}</span></div>
+        <h1>{hHero.title || 'In-depth writing on LLM engineering — and the'} <em>{hHero.titleEm || 'systems behind it.'}</em></h1>
+        <p class="lede">{hHero.lede || 'Long-form notes on building, shipping, and speeding up language-model systems. Measured, first-person, and free of hype.'}</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="#subscribe" data-hide-admin>Subscribe to the letter
+          <a class="btn btn-primary" href="#subscribe" data-hide-admin>{hHero.ctaPrimary || 'Subscribe to the letter'}
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>
           </a>
-          <a class="btn btn-ghost" href="/blog">Read the blog <span class="arrow">&rarr;</span></a>
+          <a class="btn btn-ghost" href="/blog">{hHero.ctaSecondary || 'Read the blog'} <span class="arrow">&rarr;</span></a>
         </div>
       </div>
       <aside class="hero-aside">
-        <p class="q">&ldquo;Most latency lives in the places nobody profiles. The essay is where I go looking.&rdquo;</p>
-        <div class="attr">From the field notes</div>
+        <p class="q">&ldquo;{hHero.quote || 'Most latency lives in the places nobody profiles. The essay is where I go looking.'}&rdquo;</p>
+        <div class="attr">{hHero.attr || 'From the field notes'}</div>
         <div class="hero-stats">
-          <div><div class="n">{posts.length}</div><div class="l">{posts.length === 1 ? 'Piece' : 'Pieces'}</div></div>
-          <div><div class="n">{topics.size}</div><div class="l">{topics.size === 1 ? 'Topic' : 'Topics'}</div></div>
-          <div><div class="n">{sinceYear}</div><div class="l">Writing since</div></div>
+          <div><div class="n">{posts.length}</div><div class="l">{hHero.statPieces || 'Pieces'}</div></div>
+          <div><div class="n">{topics.size}</div><div class="l">{hHero.statTopics || 'Topics'}</div></div>
+          <div><div class="n">{sinceYear}</div><div class="l">{hHero.statSince || 'Writing since'}</div></div>
         </div>
       </aside>
     </div>
@@ -81,8 +89,8 @@ const fBadge = fSeries ? `${featured.data.seriesTitle ?? fSeries} · Part ${feat
       <section class="featured">
         <div class="wrap">
           <div class="sec-head">
-            <h2>{fSeries ? 'The current series' : 'Latest essay'}</h2>
-            <a class="more" href="/blog">Browse the archive &rarr;</a>
+            <h2>{fSeries ? (hFeat.titleSeries || 'The current series') : (hFeat.titleLatest || 'Latest essay')}</h2>
+            <a class="more" href="/blog">{c.browse || 'Browse the archive →'}</a>
           </div>
           <article class="feat-card">
             <div class="feat-art">
@@ -112,7 +120,7 @@ const fBadge = fSeries ? `${featured.data.seriesTitle ?? fSeries} · Part ${feat
               <div class="meta-caps">{fmt(featured.data.pubDate)} &nbsp;·&nbsp; {readMins(featured.body)} min read</div>
               <h3><a href={`/blog/${featured.id}`}>{featured.data.title}</a></h3>
               <p>{featured.data.description}</p>
-              <a class="go" href={`/blog/${featured.id}`}>{fSeries ? 'Continue the series' : 'Read the essay'} <span class="arrow">&rarr;</span></a>
+              <a class="go" href={`/blog/${featured.id}`}>{fSeries ? (hFeat.ctaSeries || 'Continue the series') : (hFeat.cta || 'Read the essay')} <span class="arrow">&rarr;</span></a>
             </div>
           </article>
         </div>
@@ -124,8 +132,8 @@ const fBadge = fSeries ? `${featured.data.seriesTitle ?? fSeries} · Part ${feat
     <section class="recent">
       <div class="wrap">
         <div class="sec-head">
-          <h2>Recent writing</h2>
-          <a class="more" href="/blog">Browse the archive &rarr;</a>
+          <h2>{c.recent?.heading || 'Recent writing'}</h2>
+          <a class="more" href="/blog">{c.browse || 'Browse the archive →'}</a>
         </div>
         <div class="post-list">
           {recent.map((post, i) => (
@@ -154,8 +162,8 @@ const fBadge = fSeries ? `${featured.data.seriesTitle ?? fSeries} · Part ${feat
     <div class="wrap">
       <div class="sub-inner">
         <SubscribeForm
-          heading="Get the next essay by email."
-          blurb="New posts on LLM engineering and the systems underneath — straight to your inbox. No spam, unsubscribe in one click."
+          heading={hNews.heading || 'Get the next essay by email.'}
+          blurb={hNews.blurb || 'New posts on LLM engineering and the systems underneath — straight to your inbox. No spam, unsubscribe in one click.'}
         />
       </div>
     </div>

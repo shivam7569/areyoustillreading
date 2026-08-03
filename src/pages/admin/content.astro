@@ -23,7 +23,8 @@ import site from '../../data/site.json';
 
     <div class="cm-top">
       <div class="tabs" id="cm-tabs">
-        <button class="on" data-page="projects" type="button">Projects page</button>
+        <button class="on" data-page="home" type="button">Home page</button>
+        <button data-page="projects" type="button">Projects page</button>
       </div>
       <a class="btn btn-ghost btn-sm cm-view" id="cm-view" href="/projects" target="_blank" rel="noopener">View the page ↗</a>
       <button class="btn btn-primary btn-sm" id="cm-save" type="button">Save changes</button>
@@ -68,6 +69,41 @@ import site from '../../data/site.json';
   // The whole content map. Add a page here (+ point its public .astro at
   // site.json) and it becomes editable — no other change needed.
   const PAGES = {
+    home: {
+      label: 'Home page', view: '/',
+      groups: [
+        { label: 'SEO', fields: [
+          { path: 'seo.title', label: 'Browser tab / SEO title', type: 'text' },
+        ] },
+        { label: 'Hero', fields: [
+          { path: 'hero.eyebrow', label: 'Eyebrow', type: 'text' },
+          { path: 'hero.title', label: 'Headline', type: 'text' },
+          { path: 'hero.titleEm', label: 'Headline — accent italic', type: 'text' },
+          { path: 'hero.lede', label: 'Intro paragraph', type: 'area' },
+          { path: 'hero.ctaPrimary', label: 'Primary button', type: 'text' },
+          { path: 'hero.ctaSecondary', label: 'Secondary button', type: 'text' },
+          { path: 'hero.quote', label: 'Pull-quote', type: 'area' },
+          { path: 'hero.attr', label: 'Pull-quote attribution', type: 'text' },
+        ] },
+        { label: 'Hero stats (labels)', fields: [
+          { path: 'hero.statPieces', label: 'Pieces label', type: 'text' },
+          { path: 'hero.statTopics', label: 'Topics label', type: 'text' },
+          { path: 'hero.statSince', label: 'Since-year label', type: 'text' },
+        ] },
+        { label: 'Featured essay section', fields: [
+          { path: 'featured.titleLatest', label: 'Section title — single essay', type: 'text' },
+          { path: 'featured.titleSeries', label: 'Section title — when a series', type: 'text' },
+          { path: 'featured.cta', label: 'Card link — single essay', type: 'text' },
+          { path: 'featured.ctaSeries', label: 'Card link — when a series', type: 'text' },
+          { path: 'browse', label: '“Browse the archive” link', type: 'text' },
+        ] },
+        { label: 'Recent + newsletter', fields: [
+          { path: 'recent.heading', label: 'Recent-writing heading', type: 'text' },
+          { path: 'newsletter.heading', label: 'Newsletter heading', type: 'text' },
+          { path: 'newsletter.blurb', label: 'Newsletter blurb', type: 'area' },
+        ] },
+      ],
+    },
     projects: {
       label: 'Projects page', view: '/projects',
       groups: [
@@ -93,7 +129,7 @@ import site from '../../data/site.json';
   };
 
   let model = (() => { try { return JSON.parse($('#site-seed').textContent || '{}') || {}; } catch { return {}; } })();
-  let cur = 'projects';
+  let cur = 'home';
 
   function buildEditor(key) {
     const spec = PAGES[key]; if (!spec) return;

@@ -1,4 +1,32 @@
 {
+  "home": {
+    "seo": { "title": "areyoustillreading — LLM engineering notes" },
+    "hero": {
+      "eyebrow": "Deep dives & field notes",
+      "title": "In-depth writing on LLM engineering — and the",
+      "titleEm": "systems behind it.",
+      "lede": "Long-form notes on building, shipping, and speeding up language-model systems. Measured, first-person, and free of hype.",
+      "ctaPrimary": "Subscribe to the letter",
+      "ctaSecondary": "Read the blog",
+      "quote": "Most latency lives in the places nobody profiles. The essay is where I go looking.",
+      "attr": "From the field notes",
+      "statPieces": "Pieces",
+      "statTopics": "Topics",
+      "statSince": "Writing since"
+    },
+    "featured": {
+      "titleLatest": "Latest essay",
+      "titleSeries": "The current series",
+      "cta": "Read the essay",
+      "ctaSeries": "Continue the series"
+    },
+    "browse": "Browse the archive →",
+    "recent": { "heading": "Recent writing" },
+    "newsletter": {
+      "heading": "Get the next essay by email.",
+      "blurb": "New posts on LLM engineering and the systems underneath — straight to your inbox. No spam, unsubscribe in one click."
+    }
+  },
   "projects": {
     "eyebrow": "Things I built",
     "title": "Work that",
