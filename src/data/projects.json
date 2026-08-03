@@ -59,7 +59,8 @@
         ]
       },
       "art": {
-        "type": "plate",
+        "type": "shot",
+        "shot": "/projects/arch-from-scratch.jpg",
         "plateId": "04"
       },
       "show": true
