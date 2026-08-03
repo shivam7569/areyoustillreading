@@ -19,7 +19,20 @@
  */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import SubscribeForm from '../../components/SubscribeForm.astro';
+import site from '../../data/site.json';
 import { getCollection } from 'astro:content';
+
+// Blog-index copy, editable from Studio → Content Management → Blog index.
+// The lede + filter empty-state carry one inline link each: a {series}/{reset}
+// token is filled with the anchor here (text escaped; content is trusted).
+const c = (site as any).blogIndex || {};
+const esc = (s = '') => String(s).replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] as string));
+const ledeHtml = esc(c.lede || 'The complete archive — everything published here on LLM engineering and the systems underneath. Filter by subject or search the titles; for multi-part reads, see the {series}.')
+  .replace('{series}', `<a class="link" href="/series">${esc(c.ledeSeriesLabel || 'series')}</a>`);
+const emptyFilterHtml = esc(c.emptyFilter || 'Nothing matches that. Try a broader subject, or {reset}.')
+  .replace('{reset}', `<a class="link" href="#" data-reset>${esc(c.emptyResetLabel || 'clear the filters')}</a>`);
+const essaySingular = c.essaySingular || 'essay';
+const essayPlural = c.essayPlural || 'essays';
 
 const posts = (await getCollection('blog', ({ data }) => !data.draft))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
@@ -45,12 +58,12 @@ const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).f
 let n = 0;
 ---
 
-<BaseLayout title="Blog — areyoustillreading" description="Every essay on LLM engineering and the systems underneath, grouped by year." wide>
+<BaseLayout title={c.seo?.title || 'Blog — areyoustillreading'} description={c.seo?.description || 'Every essay on LLM engineering and the systems underneath, grouped by year.'} wide>
   <div class="wrap">
     <header class="page-head">
-      <div class="kicker"><span class="line"></span><span class="eyebrow">The blog</span></div>
-      <h1>Every essay, <em>in the order it arrived.</em></h1>
-      <p class="lede">The complete archive — everything published here on LLM engineering and the systems underneath. Filter by subject or search the titles; for multi-part reads, see the <a class="link" href="/series">series</a>.</p>
+      <div class="kicker"><span class="line"></span><span class="eyebrow">{c.eyebrow || 'The blog'}</span></div>
+      <h1>{c.title || 'Every essay,'} <em>{c.titleEm || 'in the order it arrived.'}</em></h1>
+      <p class="lede" set:html={ledeHtml}></p>
     </header>
 
     {posts.length > 0 ? (
@@ -58,11 +71,11 @@ let n = 0;
         <div class="filters">
           <label class="search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-            <input type="search" id="q" placeholder="Search titles and summaries" aria-label="Search essays" />
+            <input type="search" id="q" placeholder={c.searchPlaceholder || 'Search titles and summaries'} aria-label="Search essays" />
           </label>
-          <span class="count" id="count">{posts.length} shown</span>
+          <span class="count" id="count" data-shown={c.shownLabel || 'shown'}>{posts.length} {c.shownLabel || 'shown'}</span>
           <div class="chips" id="chips">
-            <button class="chip" data-tag="all" aria-pressed="true" type="button">All</button>
+            <button class="chip" data-tag="all" aria-pressed="true" type="button">{c.allChip || 'All'}</button>
             {topTags.map((t) => (<button class="chip" data-tag={t} aria-pressed="false" type="button">{t}</button>))}
           </div>
         </div>
@@ -72,7 +85,7 @@ let n = 0;
 
         {years.map((year) => (
           <Fragment>
-            <div class="yr" data-year={year}><h2>{year}</h2><span class="n">{groups.get(year)!.length} {groups.get(year)!.length === 1 ? 'essay' : 'essays'}</span><span class="rule"></span></div>
+            <div class="yr" data-year={year}><h2>{year}</h2><span class="n">{groups.get(year)!.length} {groups.get(year)!.length === 1 ? essaySingular : essayPlural}</span><span class="rule"></span></div>
             <div class="post-list" data-year={year}>
               {groups.get(year)!.map((post) => {
                 n += 1;
@@ -105,17 +118,17 @@ let n = 0;
           </Fragment>
         ))}
 
-        <p class="empty" id="empty">Nothing matches that. Try a broader subject, or <a class="link" href="#" data-reset>clear the filters</a>.</p>
+        <p class="empty" id="empty" set:html={emptyFilterHtml}></p>
       </Fragment>
     ) : (
-      <p class="empty on" style="border:0">No essays yet — the first one is on its way.</p>
+      <p class="empty on" style="border:0">{c.emptyArchive || 'No essays yet — the first one is on its way.'}</p>
     )}
 
     <div class="archive-foot" data-hide-admin>
       <div class="sub-inner">
         <SubscribeForm
-          heading="Read the next one first"
-          blurb="New essays on LLM engineering and the systems underneath, straight to your inbox. No noise — unsubscribe in one click."
+          heading={c.newsletter?.heading || 'Read the next one first'}
+          blurb={c.newsletter?.blurb || 'New essays on LLM engineering and the systems underneath, straight to your inbox. No noise — unsubscribe in one click.'}
         />
       </div>
     </div>
@@ -182,7 +195,7 @@ let n = 0;
         const head = document.querySelector('.yr[data-year="' + list.getAttribute('data-year') + '"]');
         if (head) head.classList.toggle('is-hidden', !any);
       });
-      count.textContent = shown + ' shown';
+      count.textContent = shown + ' ' + (count.getAttribute('data-shown') || 'shown');
       empty.classList.toggle('on', shown === 0);
     };
     q.addEventListener('input', apply);

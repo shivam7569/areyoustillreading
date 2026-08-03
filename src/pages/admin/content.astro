@@ -278,6 +278,36 @@ import site from '../../data/site.json';
         ] },
       ],
     },
+    blogIndex: {
+      label: 'Blog index', view: '/blog',
+      groups: [
+        { label: 'SEO', fields: [
+          { path: 'seo.title', label: 'SEO title', type: 'text' },
+          { path: 'seo.description', label: 'SEO description', type: 'text' },
+        ] },
+        { label: 'Header', fields: [
+          { path: 'eyebrow', label: 'Eyebrow', type: 'text' },
+          { path: 'title', label: 'Headline', type: 'text' },
+          { path: 'titleEm', label: 'Headline — accent italic', type: 'text' },
+          { path: 'lede', label: 'Intro (use {series} for the series link)', type: 'area' },
+          { path: 'ledeSeriesLabel', label: 'Series link label', type: 'text' },
+        ] },
+        { label: 'Filter bar', fields: [
+          { path: 'searchPlaceholder', label: 'Search placeholder', type: 'text' },
+          { path: 'shownLabel', label: '“shown” word', type: 'text' },
+          { path: 'allChip', label: '“All” chip label', type: 'text' },
+          { path: 'essaySingular', label: 'Year count — one', type: 'text' },
+          { path: 'essayPlural', label: 'Year count — many', type: 'text' },
+        ] },
+        { label: 'Empty states + newsletter', fields: [
+          { path: 'emptyFilter', label: 'No-results text (use {reset})', type: 'area' },
+          { path: 'emptyResetLabel', label: '“clear the filters” link', type: 'text' },
+          { path: 'emptyArchive', label: 'Empty-archive text', type: 'text' },
+          { path: 'newsletter.heading', label: 'Newsletter heading', type: 'text' },
+          { path: 'newsletter.blurb', label: 'Newsletter blurb', type: 'area' },
+        ] },
+      ],
+    },
     blogTopics: {
       label: 'Topics page', view: '/blog/tags',
       groups: [

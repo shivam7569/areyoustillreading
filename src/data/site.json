@@ -143,6 +143,26 @@
     "body": "Check your inbox for a confirmation link to finish subscribing. If it's not there in a minute, check your spam folder.",
     "home": "← Home"
   },
+  "blogIndex": {
+    "seo": { "title": "Blog — areyoustillreading", "description": "Every essay on LLM engineering and the systems underneath, grouped by year." },
+    "eyebrow": "The blog",
+    "title": "Every essay,",
+    "titleEm": "in the order it arrived.",
+    "lede": "The complete archive — everything published here on LLM engineering and the systems underneath. Filter by subject or search the titles; for multi-part reads, see the {series}.",
+    "ledeSeriesLabel": "series",
+    "searchPlaceholder": "Search titles and summaries",
+    "shownLabel": "shown",
+    "allChip": "All",
+    "essaySingular": "essay",
+    "essayPlural": "essays",
+    "emptyFilter": "Nothing matches that. Try a broader subject, or {reset}.",
+    "emptyResetLabel": "clear the filters",
+    "emptyArchive": "No essays yet — the first one is on its way.",
+    "newsletter": {
+      "heading": "Read the next one first",
+      "blurb": "New essays on LLM engineering and the systems underneath, straight to your inbox. No noise — unsubscribe in one click."
+    }
+  },
   "blogTopics": {
     "seo": { "title": "Topics — areyoustillreading", "description": "Browse essays by topic." },
     "backlink": "All essays",
