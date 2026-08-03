@@ -392,6 +392,34 @@ import site from '../../data/site.json';
         ] },
       ],
     },
+    login: {
+      label: 'Sign in page', view: '/login',
+      groups: [
+        { label: 'SEO', fields: [
+          { path: 'seo.title', label: 'SEO title', type: 'text' },
+          { path: 'seo.description', label: 'SEO description', type: 'text' },
+        ] },
+        { label: 'Page', fields: [
+          { path: 'heading', label: 'Heading', type: 'text' },
+          { path: 'lede', label: 'Intro line', type: 'text' },
+          { path: 'emailPlaceholder', label: 'Email placeholder', type: 'text' },
+          { path: 'sendCode', label: 'Send-code button', type: 'text' },
+          { path: 'codePlaceholder', label: 'Code placeholder', type: 'text' },
+          { path: 'verify', label: 'Verify button', type: 'text' },
+          { path: 'useDifferent', label: '“Use a different email” link', type: 'text' },
+          { path: 'divider', label: 'Divider (“or”)', type: 'text' },
+          { path: 'github', label: 'GitHub button', type: 'text' },
+        ] },
+        { label: 'Status messages', fields: [
+          { path: 'msgSending', label: 'Sending…', type: 'text' },
+          { path: 'msgCodeSent', label: 'Code-sent message', type: 'area' },
+          { path: 'msgVerifying', label: 'Verifying…', type: 'text' },
+          { path: 'msgSignedIn', label: 'Signed-in message', type: 'text' },
+          { path: 'msgEnterCode', label: 'Enter-code prompt', type: 'text' },
+          { path: 'msgRedirecting', label: 'Redirecting-to-GitHub', type: 'text' },
+        ] },
+      ],
+    },
   };
 
   let model = (() => { try { return JSON.parse($('#site-seed').textContent || '{}') || {}; } catch { return {}; } })();

@@ -214,5 +214,23 @@
       "heading": "Read the next one first",
       "blurb": "One considered essay every few weeks on LLM engineering and the systems underneath. No noise — unsubscribe in one click."
     }
+  },
+  "login": {
+    "seo": { "title": "Sign in — areyoustillreading", "description": "Sign in to areyoustillreading." },
+    "heading": "Sign in",
+    "lede": "Sign in to comment, highlight, and keep private notes on posts.",
+    "emailPlaceholder": "you@example.com",
+    "sendCode": "Email me a sign-in code",
+    "codePlaceholder": "6-digit code",
+    "verify": "Verify & sign in",
+    "useDifferent": "Use a different email",
+    "divider": "or",
+    "github": "Sign in with GitHub",
+    "msgSending": "Sending…",
+    "msgCodeSent": "We emailed you a 6-digit code. Enter it here to finish signing in.",
+    "msgVerifying": "Verifying…",
+    "msgSignedIn": "Signed in — taking you in…",
+    "msgEnterCode": "Enter the code from your email.",
+    "msgRedirecting": "Redirecting to GitHub…"
   }
 }
