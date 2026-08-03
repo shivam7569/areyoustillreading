@@ -1,4 +1,22 @@
 {
+  "global": {
+    "brand": { "accent": "are", "rest": "youstillreading" },
+    "nav": {
+      "home": "Home",
+      "blog": "Blog",
+      "allPosts": "All posts",
+      "series": "Series",
+      "projects": "Projects",
+      "resume": "Resume",
+      "about": "About",
+      "account": "Account"
+    },
+    "footer": {
+      "rss": "RSS",
+      "tagline": "Written to be finished."
+    },
+    "seo": { "description": "Notes on LLM engineering, plus the projects behind them." }
+  },
   "home": {
     "seo": { "title": "areyoustillreading — LLM engineering notes" },
     "hero": {

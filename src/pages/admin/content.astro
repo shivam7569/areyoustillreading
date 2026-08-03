@@ -25,6 +25,7 @@ import site from '../../data/site.json';
       <div class="tabs" id="cm-tabs">
         <button class="on" data-page="home" type="button">Home page</button>
         <button data-page="projects" type="button">Projects page</button>
+        <button data-page="global" type="button">Global</button>
       </div>
       <a class="btn btn-ghost btn-sm cm-view" id="cm-view" href="/projects" target="_blank" rel="noopener">View the page ↗</a>
       <button class="btn btn-primary btn-sm" id="cm-save" type="button">Save changes</button>
@@ -123,6 +124,32 @@ import site from '../../data/site.json';
           { path: 'oss.note', label: 'Note', type: 'text' },
           { path: 'oss.link', label: 'Link label', type: 'text' },
           { path: 'oss.href', label: 'Link URL', type: 'text' },
+        ] },
+      ],
+    },
+    global: {
+      label: 'Global — nav · footer · brand', view: '/',
+      groups: [
+        { label: 'Brand wordmark', fields: [
+          { path: 'brand.accent', label: 'Accent part (gold)', type: 'text' },
+          { path: 'brand.rest', label: 'Rest of the wordmark', type: 'text' },
+        ] },
+        { label: 'Primary navigation', fields: [
+          { path: 'nav.home', label: 'Home', type: 'text' },
+          { path: 'nav.blog', label: 'Blog', type: 'text' },
+          { path: 'nav.allPosts', label: 'Blog dropdown — All posts', type: 'text' },
+          { path: 'nav.series', label: 'Blog dropdown — Series', type: 'text' },
+          { path: 'nav.projects', label: 'Projects', type: 'text' },
+          { path: 'nav.resume', label: 'Resume', type: 'text' },
+          { path: 'nav.about', label: 'About', type: 'text' },
+          { path: 'nav.account', label: 'Account', type: 'text' },
+        ] },
+        { label: 'Footer', fields: [
+          { path: 'footer.rss', label: 'RSS link label', type: 'text' },
+          { path: 'footer.tagline', label: 'Copyline tagline', type: 'text' },
+        ] },
+        { label: 'SEO', fields: [
+          { path: 'seo.description', label: 'Default meta description (used when a page sets none)', type: 'area' },
         ] },
       ],
     },

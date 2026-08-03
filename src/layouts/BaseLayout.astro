@@ -80,6 +80,15 @@ import '../styles/global.css';
 import BaseHead from '../components/BaseHead.astro';
 // First-party, cookieless analytics beacon (public pages only; see the component).
 import Analytics from '../components/Analytics.astro';
+// Site-wide chrome copy (brand, nav labels, footer, default SEO description),
+// editable from Studio → Content Management. Every use below falls back to the
+// original string so the shell never renders blank if a field is missing.
+import site from '../data/site.json';
+const g = (site as any).global || {};
+const gnav = g.nav || {};
+const gfoot = g.footer || {};
+const brandAccent = g.brand?.accent ?? 'are';
+const brandRest = g.brand?.rest ?? 'youstillreading';
 
 /**
  * Props accepted from the wrapping page.
@@ -102,7 +111,7 @@ interface Props {
 // never left blank.
 const {
   title,
-  description = 'Notes on LLM engineering, plus the projects behind them.',
+  description = g.seo?.description || 'Notes on LLM engineering, plus the projects behind them.',
   image,
   wide = false,
 } = Astro.props;
@@ -116,14 +125,14 @@ const {
 // The Blog item is a dropdown: its trigger goes to the full archive, and the
 // menu also surfaces Series (which otherwise lived only in the footer).
 const nav = [
-  { href: '/', label: 'Home' },
-  { href: '/blog', label: 'Blog', children: [
-    { href: '/blog', label: 'All posts' },
-    { href: '/series', label: 'Series' },
+  { href: '/', label: gnav.home || 'Home' },
+  { href: '/blog', label: gnav.blog || 'Blog', children: [
+    { href: '/blog', label: gnav.allPosts || 'All posts' },
+    { href: '/series', label: gnav.series || 'Series' },
   ] },
-  { href: '/projects', label: 'Projects' },
-  { href: '/resume', label: 'Resume' },
-  { href: '/about', label: 'About' },
+  { href: '/projects', label: gnav.projects || 'Projects' },
+  { href: '/resume', label: gnav.resume || 'Resume' },
+  { href: '/about', label: gnav.about || 'About' },
 ];
 
 // Current path, for marking the active nav item (aria-current="page"). Home
@@ -188,7 +197,7 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
     <header class="site-header">
       <div class="wrap">
         <div class="bar">
-          <a href="/" class="wordmark"><span class="are">are</span>youstillreading</a>
+          <a href="/" class="wordmark"><span class="are">{brandAccent}</span>{brandRest}</a>
           <nav class="nav-primary">
             {/* Data-driven primary links; aria-current marks (and styles) the active section.
                 An item with `children` renders as a hover/focus dropdown (Blog → Series). */}
@@ -207,7 +216,7 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
             ) : (
               <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>{item.label}</a>
             )))}
-            <a href="/account" class="account" aria-current={isActive('/account') ? 'page' : undefined}>Account</a>
+            <a href="/account" class="account" aria-current={isActive('/account') ? 'page' : undefined}>{gnav.account || 'Account'}</a>
             {/* Studio (admin dashboard) entry — hidden by default; the script below reveals
                 it only for a signed-in admin. Link visibility is UX only; /admin and every
                 mutation are enforced by the gate + requireAdmin. */}
@@ -311,13 +320,13 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
     <footer class="site-footer">
       <div class="wrap">
         <div class="foot">
-          <a href="/" class="wordmark"><span class="are">are</span>youstillreading</a>
+          <a href="/" class="wordmark"><span class="are">{brandAccent}</span>{brandRest}</a>
           <nav>
-            <a href="/blog">Blog</a>
-            <a href="/series">Series</a>
-            <a href="/projects">Projects</a>
-            <a href="/resume">Resume</a>
-            <a href="/rss.xml">RSS</a>
+            <a href="/blog">{gnav.blog || 'Blog'}</a>
+            <a href="/series">{gnav.series || 'Series'}</a>
+            <a href="/projects">{gnav.projects || 'Projects'}</a>
+            <a href="/resume">{gnav.resume || 'Resume'}</a>
+            <a href="/rss.xml">{gfoot.rss || 'RSS'}</a>
           </nav>
           <div class="social">
             <a href="/rss.xml" aria-label="RSS feed" title="RSS feed">
@@ -326,7 +335,7 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
           </div>
         </div>
         {/* Copyright year computed at BUILD TIME (SSG): advances whenever anything next ships. */}
-        <p class="copyline">&copy; {new Date().getFullYear()} areyoustillreading &middot; Written to be finished.</p>
+        <p class="copyline">&copy; {new Date().getFullYear()} {brandAccent}{brandRest} &middot; {gfoot.tagline || 'Written to be finished.'}</p>
       </div>
     </footer>
     {/* Cookieless first-party analytics beacon — public pages only. */}
