@@ -53,6 +53,8 @@
  *     The token check + RLS-protected mutation must stay in the Pages Function.
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
+import site from '../data/site.json';
+const c = (site as any).unsubscribed || {};
 ---
 
 {/*
@@ -61,12 +63,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   site's page-title convention. `description` is intentionally generic so the
   page carries no subscriber-identifying text even if indexed or previewed.
 */}
-<BaseLayout title="Unsubscribed — areyoustillreading" description="You've been unsubscribed.">
-  <h1>You've been unsubscribed</h1>
+<BaseLayout title={c.seo?.title || 'Unsubscribed — areyoustillreading'} description={c.seo?.description || "You've been unsubscribed."}>
+  <h1>{c.heading || "You've been unsubscribed"}</h1>
   {/* Reassurance + a self-service path back: resubscribe lives on the homepage
       (the newsletter signup form), so we don't duplicate that form here. */}
-  <p>You won't receive any more emails. You can resubscribe anytime from the homepage.</p>
-  {/* &larr; is the HTML entity for the left-arrow glyph; kept as an entity so it
-      renders reliably regardless of source encoding. */}
-  <p><a href="/">&larr; Home</a></p>
+  <p>{c.body || "You won't receive any more emails. You can resubscribe anytime from the homepage."}</p>
+  <p><a href="/">{c.home || '← Home'}</a></p>
 </BaseLayout>

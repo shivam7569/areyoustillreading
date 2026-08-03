@@ -31,27 +31,31 @@
  *     reading column so the full-bleed editorial layout can run.
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
+import site from '../data/site.json';
+// Copy editable from Studio → Content Management → 404 page (fallbacks preserve the original).
+const c = (site as any).notFound || {};
+const picks = c.picks || {};
 ---
 
-<BaseLayout title="Not found — areyoustillreading" description="Page not found." wide>
+<BaseLayout title={c.seo?.title || 'Not found — areyoustillreading'} description={c.seo?.description || 'Page not found.'} wide>
   <div class="wrap lost">
     <div>
-      <p class="num">404</p>
-      <h1>You've read past the end of the page.</h1>
-      <p>Nothing lives at this address. The link was probably wrong before it reached you, or the page has since moved.</p>
+      <p class="num">{c.num || '404'}</p>
+      <h1>{c.heading || "You've read past the end of the page."}</h1>
+      <p>{c.body || 'Nothing lives at this address. The link was probably wrong before it reached you, or the page has since moved.'}</p>
       {/* Escape hatches to KNOWN-GOOD, hard-coded same-origin routes. Never
           derive these from the requested URL or referrer — see security note. */}
       <div class="acts">
-        <a class="btn btn-primary" href="/blog">Browse the archive</a>
-        <a class="btn btn-ghost" href="/">Back to the front <span class="arrow">→</span></a>
+        <a class="btn btn-primary" href="/blog">{c.ctaPrimary || 'Browse the archive'}</a>
+        <a class="btn btn-ghost" href="/">{c.ctaSecondary || 'Back to the front'} <span class="arrow">→</span></a>
       </div>
     </div>
 
     <div class="picks">
-      <h2>Try one of these instead</h2>
-      <a class="pick" href="/blog"><span class="t">The archive</span><span class="m">Every essay · Newest first</span></a>
-      <a class="pick" href="/projects"><span class="t">Projects</span><span class="m">Things I've built</span></a>
-      <a class="pick" href="/resume"><span class="t">Resume</span><span class="m">The short version</span></a>
+      <h2>{c.picksHeading || 'Try one of these instead'}</h2>
+      <a class="pick" href="/blog"><span class="t">{picks.archiveTitle || 'The archive'}</span><span class="m">{picks.archiveMeta || 'Every essay · Newest first'}</span></a>
+      <a class="pick" href="/projects"><span class="t">{picks.projectsTitle || 'Projects'}</span><span class="m">{picks.projectsMeta || "Things I've built"}</span></a>
+      <a class="pick" href="/resume"><span class="t">{picks.resumeTitle || 'Resume'}</span><span class="m">{picks.resumeMeta || 'The short version'}</span></a>
     </div>
   </div>
 </BaseLayout>

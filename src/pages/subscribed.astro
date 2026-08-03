@@ -58,6 +58,8 @@
  * publicly-reachable static page.
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
+import site from '../data/site.json';
+const c = (site as any).subscribed || {};
 ---
 
 {/*
@@ -69,8 +71,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   - The only interactive element is a plain internal link back to /blog — no forms,
     no scripts, no client JS ships from this page.
 */}
-<BaseLayout title="Subscribed — areyoustillreading" description="You're subscribed.">
-  <h1>You're subscribed &#127881;</h1>
-  <p>Thanks for confirming. You'll get new posts by email.</p>
-  <p><a href="/blog">Read the blog &rarr;</a></p>
+<BaseLayout title={c.seo?.title || 'Subscribed — areyoustillreading'} description={c.seo?.description || "You're subscribed."}>
+  <h1>{c.heading || 'You’re subscribed 🎉'}</h1>
+  <p>{c.body || "Thanks for confirming. You'll get new posts by email."}</p>
+  <p><a href="/blog">{c.cta || 'Read the blog →'}</a></p>
 </BaseLayout>

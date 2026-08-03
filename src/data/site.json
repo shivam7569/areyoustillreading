@@ -101,5 +101,46 @@
       "cta": "Read the archive",
       "ctaHref": "/blog"
     }
+  },
+  "notFound": {
+    "seo": { "title": "Not found — areyoustillreading", "description": "Page not found." },
+    "num": "404",
+    "heading": "You've read past the end of the page.",
+    "body": "Nothing lives at this address. The link was probably wrong before it reached you, or the page has since moved.",
+    "ctaPrimary": "Browse the archive",
+    "ctaSecondary": "Back to the front",
+    "picksHeading": "Try one of these instead",
+    "picks": {
+      "archiveTitle": "The archive",
+      "archiveMeta": "Every essay · Newest first",
+      "projectsTitle": "Projects",
+      "projectsMeta": "Things I've built",
+      "resumeTitle": "Resume",
+      "resumeMeta": "The short version"
+    }
+  },
+  "subscribeError": {
+    "seo": { "title": "Something went wrong — areyoustillreading", "description": "Subscription error." },
+    "heading": "Hmm, that didn't work",
+    "body": "That link may be invalid or expired, or the email was malformed. Try subscribing again from the homepage.",
+    "home": "← Home"
+  },
+  "subscribed": {
+    "seo": { "title": "Subscribed — areyoustillreading", "description": "You're subscribed." },
+    "heading": "You're subscribed 🎉",
+    "body": "Thanks for confirming. You'll get new posts by email.",
+    "cta": "Read the blog →"
+  },
+  "unsubscribed": {
+    "seo": { "title": "Unsubscribed — areyoustillreading", "description": "You've been unsubscribed." },
+    "heading": "You've been unsubscribed",
+    "body": "You won't receive any more emails. You can resubscribe anytime from the homepage.",
+    "home": "← Home"
+  },
+  "checkInbox": {
+    "seo": { "title": "Almost there — areyoustillreading", "description": "Confirm your subscription." },
+    "heading": "Almost there",
+    "body": "Check your inbox for a confirmation link to finish subscribing. If it's not there in a minute, check your spam folder.",
+    "home": "← Home"
   }
 }

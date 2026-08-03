@@ -27,6 +27,11 @@ import site from '../../data/site.json';
         <button data-page="projects" type="button">Projects page</button>
         <button data-page="about" type="button">About page</button>
         <button data-page="global" type="button">Global</button>
+        <button data-page="notFound" type="button">404</button>
+        <button data-page="subscribeError" type="button">Subscribe error</button>
+        <button data-page="subscribed" type="button">Subscribed</button>
+        <button data-page="unsubscribed" type="button">Unsubscribed</button>
+        <button data-page="checkInbox" type="button">Check inbox</button>
       </div>
       <a class="btn btn-ghost btn-sm cm-view" id="cm-view" href="/projects" target="_blank" rel="noopener">View the page ↗</a>
       <button class="btn btn-primary btn-sm" id="cm-save" type="button">Save changes</button>
@@ -43,6 +48,7 @@ import site from '../../data/site.json';
 <style is:global>
   .contentstudio { font-family: var(--sans); }
   .contentstudio .cm-top { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  .contentstudio #cm-tabs { flex-wrap:wrap; }
   .contentstudio .cm-view { margin-left:auto; }
   .contentstudio .cm-status { font-size:12.5px; color:var(--ink-faint); }
   .contentstudio .cm-status.ok { color:var(--accent); }
@@ -196,6 +202,87 @@ import site from '../../data/site.json';
         ] },
         { label: 'SEO', fields: [
           { path: 'seo.description', label: 'Default meta description (used when a page sets none)', type: 'area' },
+        ] },
+      ],
+    },
+    notFound: {
+      label: '404 page', view: '/this-page-does-not-exist',
+      groups: [
+        { label: 'SEO', fields: [
+          { path: 'seo.title', label: 'SEO title', type: 'text' },
+          { path: 'seo.description', label: 'SEO description', type: 'text' },
+        ] },
+        { label: 'Body', fields: [
+          { path: 'num', label: 'Big number', type: 'text' },
+          { path: 'heading', label: 'Heading', type: 'text' },
+          { path: 'body', label: 'Body', type: 'area' },
+          { path: 'ctaPrimary', label: 'Primary button', type: 'text' },
+          { path: 'ctaSecondary', label: 'Secondary button', type: 'text' },
+        ] },
+        { label: 'Suggested links', fields: [
+          { path: 'picksHeading', label: 'Section heading', type: 'text' },
+          { path: 'picks.archiveTitle', label: 'Link 1 title', type: 'text' },
+          { path: 'picks.archiveMeta', label: 'Link 1 subtitle', type: 'text' },
+          { path: 'picks.projectsTitle', label: 'Link 2 title', type: 'text' },
+          { path: 'picks.projectsMeta', label: 'Link 2 subtitle', type: 'text' },
+          { path: 'picks.resumeTitle', label: 'Link 3 title', type: 'text' },
+          { path: 'picks.resumeMeta', label: 'Link 3 subtitle', type: 'text' },
+        ] },
+      ],
+    },
+    subscribeError: {
+      label: 'Subscribe error', view: '/subscribe-error',
+      groups: [
+        { label: 'SEO', fields: [
+          { path: 'seo.title', label: 'SEO title', type: 'text' },
+          { path: 'seo.description', label: 'SEO description', type: 'text' },
+        ] },
+        { label: 'Content', fields: [
+          { path: 'heading', label: 'Heading', type: 'text' },
+          { path: 'body', label: 'Body', type: 'area' },
+          { path: 'home', label: 'Home link label', type: 'text' },
+        ] },
+      ],
+    },
+    subscribed: {
+      label: 'Subscribed', view: '/subscribed',
+      groups: [
+        { label: 'SEO', fields: [
+          { path: 'seo.title', label: 'SEO title', type: 'text' },
+          { path: 'seo.description', label: 'SEO description', type: 'text' },
+        ] },
+        { label: 'Content', fields: [
+          { path: 'heading', label: 'Heading', type: 'text' },
+          { path: 'body', label: 'Body', type: 'area' },
+          { path: 'cta', label: 'Link label', type: 'text' },
+        ] },
+      ],
+    },
+    unsubscribed: {
+      label: 'Unsubscribed', view: '/unsubscribed',
+      groups: [
+        { label: 'SEO', fields: [
+          { path: 'seo.title', label: 'SEO title', type: 'text' },
+          { path: 'seo.description', label: 'SEO description', type: 'text' },
+        ] },
+        { label: 'Content', fields: [
+          { path: 'heading', label: 'Heading', type: 'text' },
+          { path: 'body', label: 'Body', type: 'area' },
+          { path: 'home', label: 'Home link label', type: 'text' },
+        ] },
+      ],
+    },
+    checkInbox: {
+      label: 'Check inbox', view: '/check-inbox',
+      groups: [
+        { label: 'SEO', fields: [
+          { path: 'seo.title', label: 'SEO title', type: 'text' },
+          { path: 'seo.description', label: 'SEO description', type: 'text' },
+        ] },
+        { label: 'Content', fields: [
+          { path: 'heading', label: 'Heading', type: 'text' },
+          { path: 'body', label: 'Body', type: 'area' },
+          { path: 'home', label: 'Home link label', type: 'text' },
         ] },
       ],
     },
