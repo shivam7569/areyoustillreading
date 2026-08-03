@@ -1194,10 +1194,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       try { new MutationObserver(sync).observe(statusEl, { childList: true, characterData: true, subtree: true }); } catch {}
       sync();
     }
-    // Focus mode: hide the ENTIRE studio chrome (sidebar + topbar too, via a
-    // body-level class the layout CSS keys off) leaving only the editor column.
-    // ⌘\ toggles, Esc exits; the button lives in .wtop which focus hides, so those
-    // shortcuts (and the on-screen hint) are the way back out.
+    // Focus mode: shed the studio navigation (sidebar + topbar, via a body-level
+    // class the layout CSS keys off) but keep the writing instruments — the
+    // progress bar and the Outline/Notes/Post rail. ⌘\ toggles, Esc exits, and
+    // the Focus button (in the now-visible .wtop) or the on-screen hint also return.
     const focusBtn = document.getElementById('focusbtn');
     const setFocus = (on) => {
       const state = on == null ? !wrap.classList.contains('focus') : on;
