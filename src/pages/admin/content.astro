@@ -369,6 +369,29 @@ import site from '../../data/site.json';
         ] },
       ],
     },
+    post: {
+      label: 'Blog post (shared chrome)', view: '/blog',
+      groups: [
+        { label: 'Chrome', fields: [
+          { path: 'author', label: 'Author name (byline fallback)', type: 'text' },
+          { path: 'backlink', label: 'Back-to-blog link', type: 'text' },
+          { path: 'kicker', label: 'Kicker suffix (after the tag)', type: 'text' },
+        ] },
+        { label: 'Byline units', fields: [
+          { path: 'updatedLabel', label: '“updated” label', type: 'text' },
+          { path: 'wordsLabel', label: '“words” label', type: 'text' },
+          { path: 'minReadLabel', label: '“min read” label', type: 'text' },
+        ] },
+        { label: 'End of post', fields: [
+          { path: 'relatedHeading', label: 'Related-reading heading', type: 'text' },
+          { path: 'browseAllPrefix', label: '“Browse all” prefix', type: 'text' },
+          { path: 'essaySingular', label: 'Count word — one', type: 'text' },
+          { path: 'essayPlural', label: 'Count word — many', type: 'text' },
+          { path: 'newsletter.heading', label: 'Newsletter heading', type: 'text' },
+          { path: 'newsletter.blurb', label: 'Newsletter blurb', type: 'area' },
+        ] },
+      ],
+    },
   };
 
   let model = (() => { try { return JSON.parse($('#site-seed').textContent || '{}') || {}; } catch { return {}; } })();

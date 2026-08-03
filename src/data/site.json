@@ -198,5 +198,21 @@
       "heading": "Get the next part when it lands",
       "blurb": "Series instalments go out by email as they publish. No noise — unsubscribe from any email in one click."
     }
+  },
+  "post": {
+    "author": "Shivam Chaudhary",
+    "backlink": "Back to the blog",
+    "kicker": "Field notes",
+    "updatedLabel": "updated",
+    "wordsLabel": "words",
+    "minReadLabel": "min read",
+    "relatedHeading": "Related reading",
+    "browseAllPrefix": "Browse all",
+    "essaySingular": "essay",
+    "essayPlural": "essays",
+    "newsletter": {
+      "heading": "Read the next one first",
+      "blurb": "One considered essay every few weeks on LLM engineering and the systems underneath. No noise — unsubscribe in one click."
+    }
   }
 }
