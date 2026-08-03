@@ -109,7 +109,7 @@ if (!series && here !== -1) {
   <div class="wrap">
     <div class="measure">
       <header class="art-head">
-        <a class="backlink" href="/blog"><span class="a">&larr;</span> {c.backlink || 'Back to the blog'}</a>
+        <a class="backlink" href="/blog"><span class="a">&larr;</span> <span data-cms="post.backlink">{c.backlink || 'Back to the blog'}</span></a>
         <div class="kicker"><span class="line"></span><span class="eyebrow">{eyebrow}</span></div>
         <h1 class="title">{title}</h1>
         {description && <p class="standfirst">{description}</p>}
@@ -117,9 +117,9 @@ if (!series && here !== -1) {
           <div class="avatar" aria-hidden="true">{avatarInitial}</div>
           <div class="who">
             <b>{byline}</b>
-            <small><time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time>{updatedDate && <> &middot; {c.updatedLabel || 'updated'} {fmt(updatedDate)}</>}</small>
+            <small><time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time>{updatedDate && <> &middot; <span data-cms="post.updatedLabel">{c.updatedLabel || 'updated'}</span> {fmt(updatedDate)}</>}</small>
           </div>
-          <span class="nums">{wordCount} {c.wordsLabel || 'words'} &middot; {minutes} {c.minReadLabel || 'min read'}</span>
+          <span class="nums">{wordCount} <span data-cms="post.wordsLabel">{c.wordsLabel || 'words'}</span> &middot; {minutes} <span data-cms="post.minReadLabel">{c.minReadLabel || 'min read'}</span></span>
           {tags.length > 0 && (
             <div class="btags">{tags.map((t) => (<a class="tag" href={`/blog/tags/${t}`}>{t}</a>))}</div>
           )}
@@ -153,7 +153,7 @@ if (!series && here !== -1) {
           ? <SeriesNav data={series} placement="bottom" />
           : related.length > 0 && (
               <nav class="related" aria-label="Related reading">
-                <div class="related-head"><span class="line"></span><span class="eyebrow">{c.relatedHeading || 'Related reading'}</span></div>
+                <div class="related-head"><span class="line"></span><span class="eyebrow" data-cms="post.relatedHeading">{c.relatedHeading || 'Related reading'}</span></div>
                 <div class="related-grid">
                   {related.map((r) => (
                     <a class="rcard" href={`/blog/${r.id}`}>
@@ -176,10 +176,12 @@ if (!series && here !== -1) {
           <SubscribeForm
             heading={c.newsletter?.heading || 'Read the next one first'}
             blurb={c.newsletter?.blurb || 'One considered essay every few weeks on LLM engineering and the systems underneath. No noise — unsubscribe in one click.'}
+            headingKey="post.newsletter.heading"
+            blurbKey="post.newsletter.blurb"
           />
         </div>
 
-        <div class="all-link"><a href="/blog">{c.browseAllPrefix || 'Browse all'} {allPosts.length} {allPosts.length === 1 ? (c.essaySingular || 'essay') : (c.essayPlural || 'essays')} &rarr;</a></div>
+        <div class="all-link"><a href="/blog"><span data-cms="post.browseAllPrefix">{c.browseAllPrefix || 'Browse all'}</span> {allPosts.length} {allPosts.length === 1 ? (c.essaySingular || 'essay') : (c.essayPlural || 'essays')} &rarr;</a></div>
 
         {/* Interactive per-post islands (Supabase + RLS; keyed by post.id). */}
         <Highlights postId={post.id} author={byline} title={title} />

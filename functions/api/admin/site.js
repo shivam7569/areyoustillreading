@@ -14,6 +14,9 @@
  */
 import { requireAdmin, json } from '../../../lib/require-admin.js';
 import { toBase64Utf8, fromBase64Utf8 } from '../../../lib/base64.js';
+// INSTANT overlay: mirror the committed copy into KV so the root copy middleware
+// (functions/_middleware.js) reflects the edit in seconds, before the git rebuild.
+import { writeCopy } from '../../../lib/site-copy.js';
 
 const SITE_JSON = 'src/data/site.json';
 
@@ -88,5 +91,9 @@ export async function onRequestPost({ request, env }) {
   try {
     await putFile(env, SITE_JSON, { message: 'chore(site): update copy from Studio', contentBase64: toBase64Utf8(serialized), sha: existing ? existing.sha : undefined });
   } catch (e) { return json({ error: String((e && e.message) || e) }, 502); }
-  return json({ ok: true });
+  // Best-effort instant overlay: the commit above is the durable source of truth; a
+  // KV failure here just means the edit waits for the rebuild (instant:false), it
+  // never fails the save. `instant` lets the Studio say "live now" vs "~1 minute".
+  const instant = await writeCopy(env, 'copy:site', content);
+  return json({ ok: true, instant });
 }

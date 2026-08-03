@@ -134,9 +134,9 @@ const seriesList = [...bySeries.entries()]
 <BaseLayout title={c.seo?.title || 'Series — areyoustillreading'} description={c.seo?.description || 'Multi-part collections — each a single argument split across essays that build on each other.'} wide>
   <div class="wrap">
     <header class="page-head">
-      <div class="kicker"><span class="line"></span><span class="eyebrow">{c.eyebrow || 'Series'}</span></div>
-      <h1>{c.title || 'Some ideas'} <em>{c.titleEm || "don't fit in one sitting."}</em></h1>
-      <p class="lede">{c.lede || "Running collections — each one a single argument split across essays that build on each other. Start at part one, or don't; every part stands up alone."}</p>
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="series.eyebrow">{c.eyebrow || 'Series'}</span></div>
+      <h1><span data-cms="series.title">{c.title || 'Some ideas'}</span> <em data-cms="series.titleEm">{c.titleEm || "don't fit in one sitting."}</em></h1>
+      <p class="lede" data-cms="series.lede">{c.lede || "Running collections — each one a single argument split across essays that build on each other. Start at part one, or don't; every part stands up alone."}</p>
     </header>
 
     {seriesList.length > 0 ? seriesList.map((s) => (
@@ -156,7 +156,7 @@ const seriesList = [...bySeries.entries()]
           <div class="prog">
             <span class={`badge${s.status !== 'in-progress' ? ' quiet' : ''}`}>{STATUS_LABEL[s.status] || 'In progress'}</span>
             <span class="segs">{Array.from({ length: Math.min(s.total, 8) }).map((_, i) => (<i class={i < s.parts.length ? 'on' : ''}></i>))}</span>
-            <span><em>{s.parts.length}{s.total > s.parts.length ? ` of ${s.total}` : ''}</em> {c.publishedLabel || 'published'} · {fmtMonth(s.first)}{s.first.valueOf() !== s.latest.valueOf() ? ` – ${fmtMonth(s.latest)}` : ''}</span>
+            <span><em>{s.parts.length}{s.total > s.parts.length ? ` of ${s.total}` : ''}</em> <span data-cms="series.publishedLabel">{c.publishedLabel || 'published'}</span> · {fmtMonth(s.first)}{s.first.valueOf() !== s.latest.valueOf() ? ` – ${fmtMonth(s.latest)}` : ''}</span>
           </div>
           <ol class="parts">
             {s.parts.map((part, i) => (
@@ -172,19 +172,19 @@ const seriesList = [...bySeries.entries()]
                 <span class="n">{s.parts.length + i + 1}</span>
                 <span class="t">{title}</span>
                 <span class="lead"></span>
-                <span class="m">{c.toCome || 'To come'}</span>
+                <span class="m" data-cms="series.toCome">{c.toCome || 'To come'}</span>
               </span></li>
             ))}
           </ol>
         </div>
       </article>
     )) : (
-      <p class="empty">{c.empty || 'No multi-part series yet. When essays share a series, they gather here.'} <a class="link" href="/blog">{c.emptyLink || 'Browse all posts →'}</a></p>
+      <p class="empty"><span data-cms="series.empty">{c.empty || 'No multi-part series yet. When essays share a series, they gather here.'}</span> <a class="link" href="/blog" data-cms="series.emptyLink">{c.emptyLink || 'Browse all posts →'}</a></p>
     )}
 
     <div class="series-foot">
       <div class="sub-inner">
-        <SubscribeForm heading={c.newsletter?.heading || 'Get the next part when it lands'} blurb={c.newsletter?.blurb || 'Series instalments go out by email as they publish. No noise — unsubscribe from any email in one click.'} />
+        <SubscribeForm heading={c.newsletter?.heading || 'Get the next part when it lands'} blurb={c.newsletter?.blurb || 'Series instalments go out by email as they publish. No noise — unsubscribe from any email in one click.'} headingKey="series.newsletter.heading" blurbKey="series.newsletter.blurb" />
       </div>
     </div>
   </div>

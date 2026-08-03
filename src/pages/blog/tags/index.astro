@@ -87,10 +87,10 @@ const tags = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeComp
 <BaseLayout title={c.seo?.title || 'Topics — areyoustillreading'} description={c.seo?.description || 'Browse essays by topic.'} wide>
   <div class="wrap">
     <header class="page-head">
-      <a class="backlink" href="/blog"><span aria-hidden="true">&larr;</span> {c.backlink || 'All essays'}</a>
-      <div class="kicker"><span class="line"></span><span class="eyebrow">{c.eyebrow || 'Topics'}</span></div>
-      <h1>{c.title || 'Browse by'} <em>{c.titleEm || 'subject.'}</em></h1>
-      <p class="lede">{c.lede || 'Every subject across the archive, most-written first.'}</p>
+      <a class="backlink" href="/blog"><span aria-hidden="true">&larr;</span> <span data-cms="blogTopics.backlink">{c.backlink || 'All essays'}</span></a>
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="blogTopics.eyebrow">{c.eyebrow || 'Topics'}</span></div>
+      <h1><span data-cms="blogTopics.title">{c.title || 'Browse by'}</span> <em data-cms="blogTopics.titleEm">{c.titleEm || 'subject.'}</em></h1>
+      <p class="lede" data-cms="blogTopics.lede">{c.lede || 'Every subject across the archive, most-written first.'}</p>
     </header>
     <div class="topics">
       {tags.map(([tag, count]) => (

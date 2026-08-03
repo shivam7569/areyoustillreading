@@ -72,7 +72,7 @@ const c = (site as any).subscribed || {};
     no scripts, no client JS ships from this page.
 */}
 <BaseLayout title={c.seo?.title || 'Subscribed — areyoustillreading'} description={c.seo?.description || "You're subscribed."}>
-  <h1>{c.heading || 'You’re subscribed 🎉'}</h1>
-  <p>{c.body || "Thanks for confirming. You'll get new posts by email."}</p>
-  <p><a href="/blog">{c.cta || 'Read the blog →'}</a></p>
+  <h1 data-cms="subscribed.heading">{c.heading || 'You’re subscribed 🎉'}</h1>
+  <p data-cms="subscribed.body">{c.body || "Thanks for confirming. You'll get new posts by email."}</p>
+  <p><a href="/blog" data-cms="subscribed.cta">{c.cta || 'Read the blog →'}</a></p>
 </BaseLayout>

@@ -64,9 +64,9 @@ const c = (site as any).unsubscribed || {};
   page carries no subscriber-identifying text even if indexed or previewed.
 */}
 <BaseLayout title={c.seo?.title || 'Unsubscribed — areyoustillreading'} description={c.seo?.description || "You've been unsubscribed."}>
-  <h1>{c.heading || "You've been unsubscribed"}</h1>
+  <h1 data-cms="unsubscribed.heading">{c.heading || "You've been unsubscribed"}</h1>
   {/* Reassurance + a self-service path back: resubscribe lives on the homepage
       (the newsletter signup form), so we don't duplicate that form here. */}
-  <p>{c.body || "You won't receive any more emails. You can resubscribe anytime from the homepage."}</p>
-  <p><a href="/">{c.home || '← Home'}</a></p>
+  <p data-cms="unsubscribed.body">{c.body || "You won't receive any more emails. You can resubscribe anytime from the homepage."}</p>
+  <p><a href="/" data-cms="unsubscribed.home">{c.home || '← Home'}</a></p>
 </BaseLayout>

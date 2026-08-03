@@ -49,50 +49,50 @@ const emph = (s = '') =>
   <div class="wrap">
     <div class="about">
       <div>
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px"><span style="height:1px;width:48px;background:var(--accent);opacity:.6"></span><span class="eyebrow">{a.eyebrow || 'About'}</span></div>
-        <h1 set:html={emph(a.headline || 'The name is *a question I ask myself* while editing.')}></h1>
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px"><span style="height:1px;width:48px;background:var(--accent);opacity:.6"></span><span class="eyebrow" data-cms="about.eyebrow">{a.eyebrow || 'About'}</span></div>
+        <h1 data-cms="about.headline" data-cms-rich="emph" set:html={emph(a.headline || 'The name is *a question I ask myself* while editing.')}></h1>
         <div class="prose">
-          <p set:html={emph(body.p1)}></p>
-          <p set:html={emph(body.p2)}></p>
-          <p set:html={emph(body.p3)}></p>
-          <blockquote><p set:html={emph(body.quote)}></p></blockquote>
-          <p set:html={emph(body.p4)}></p>
-          <p set:html={emph(body.p5)}></p>
+          <p data-cms="about.body.p1" data-cms-rich="emph" set:html={emph(body.p1)}></p>
+          <p data-cms="about.body.p2" data-cms-rich="emph" set:html={emph(body.p2)}></p>
+          <p data-cms="about.body.p3" data-cms-rich="emph" set:html={emph(body.p3)}></p>
+          <blockquote><p data-cms="about.body.quote" data-cms-rich="emph" set:html={emph(body.quote)}></p></blockquote>
+          <p data-cms="about.body.p4" data-cms-rich="emph" set:html={emph(body.p4)}></p>
+          <p data-cms="about.body.p5" data-cms-rich="emph" set:html={emph(body.p5)}></p>
         </div>
       </div>
 
       <aside class="portrait">
-        <div class="ph"><span>{portrait.placeholder || 'Portrait — 4:5, desk or outdoors'}</span></div>
-        <p class="cap">{portrait.caption || 'A photo goes here — something plain and unstaged. Same warm paper tone as the rest of the site, nothing glossy.'}</p>
+        <div class="ph"><span data-cms="about.portrait.placeholder">{portrait.placeholder || 'Portrait — 4:5, desk or outdoors'}</span></div>
+        <p class="cap" data-cms="about.portrait.caption">{portrait.caption || 'A photo goes here — something plain and unstaged. Same warm paper tone as the rest of the site, nothing glossy.'}</p>
       </aside>
     </div>
 
     <section class="colophon">
-      <h2>{co.heading || 'Colophon'}</h2>
+      <h2 data-cms="about.colophon.heading">{co.heading || 'Colophon'}</h2>
       <div class="col-grid">
         <div>
-          <h4>{co.typeHeading || 'Type'}</h4>
-          <p>{co.typeBody}</p>
+          <h4 data-cms="about.colophon.typeHeading">{co.typeHeading || 'Type'}</h4>
+          <p data-cms="about.colophon.typeBody">{co.typeBody}</p>
         </div>
         <div>
-          <h4>{co.builtHeading || 'Built with'}</h4>
-          <p>{co.builtBody}</p>
+          <h4 data-cms="about.colophon.builtHeading">{co.builtHeading || 'Built with'}</h4>
+          <p data-cms="about.colophon.builtBody">{co.builtBody}</p>
         </div>
         <div>
-          <h4>{co.elsewhereHeading || 'Elsewhere'}</h4>
-          <p><a class="link" href="/rss.xml">{co.rssLabel || 'RSS'}</a> {co.rssDesc || '— the whole feed, full text.'}<br><a class="link" href={co.githubHref || 'https://github.com/shivam7569'}>{co.githubLabel || 'GitHub'}</a> {co.githubDesc || '— the code behind the essays.'}</p>
+          <h4 data-cms="about.colophon.elsewhereHeading">{co.elsewhereHeading || 'Elsewhere'}</h4>
+          <p><a class="link" href="/rss.xml" data-cms="about.colophon.rssLabel">{co.rssLabel || 'RSS'}</a> <span data-cms="about.colophon.rssDesc">{co.rssDesc || '— the whole feed, full text.'}</span><br><a class="link" href={co.githubHref || 'https://github.com/shivam7569'} data-cms="about.colophon.githubLabel">{co.githubLabel || 'GitHub'}</a> <span data-cms="about.colophon.githubDesc">{co.githubDesc || '— the code behind the essays.'}</span></p>
         </div>
       </div>
     </section>
 
     <section class="card contact">
       <div>
-        <h3>{contact.heading || 'Say something'}</h3>
-        <p>{contact.body}</p>
+        <h3 data-cms="about.contact.heading">{contact.heading || 'Say something'}</h3>
+        <p data-cms="about.contact.body">{contact.body}</p>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <a class="btn btn-primary" href={`mailto:${contact.email || 'hello@areyoustillreading.dev'}`}>{contact.email || 'hello@areyoustillreading.dev'}</a>
-        <a class="btn btn-ghost" href={contact.ctaHref || '/blog'}>{contact.cta || 'Read the archive'} <span class="arrow">&rarr;</span></a>
+        <a class="btn btn-primary" href={`mailto:${contact.email || 'hello@areyoustillreading.dev'}`} data-cms="about.contact.email">{contact.email || 'hello@areyoustillreading.dev'}</a>
+        <a class="btn btn-ghost" href={contact.ctaHref || '/blog'}><span data-cms="about.contact.cta">{contact.cta || 'Read the archive'}</span> <span class="arrow">&rarr;</span></a>
       </div>
     </section>
   </div>

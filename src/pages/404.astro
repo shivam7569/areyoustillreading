@@ -40,22 +40,22 @@ const picks = c.picks || {};
 <BaseLayout title={c.seo?.title || 'Not found — areyoustillreading'} description={c.seo?.description || 'Page not found.'} wide>
   <div class="wrap lost">
     <div>
-      <p class="num">{c.num || '404'}</p>
-      <h1>{c.heading || "You've read past the end of the page."}</h1>
-      <p>{c.body || 'Nothing lives at this address. The link was probably wrong before it reached you, or the page has since moved.'}</p>
+      <p class="num" data-cms="notFound.num">{c.num || '404'}</p>
+      <h1 data-cms="notFound.heading">{c.heading || "You've read past the end of the page."}</h1>
+      <p data-cms="notFound.body">{c.body || 'Nothing lives at this address. The link was probably wrong before it reached you, or the page has since moved.'}</p>
       {/* Escape hatches to KNOWN-GOOD, hard-coded same-origin routes. Never
           derive these from the requested URL or referrer — see security note. */}
       <div class="acts">
-        <a class="btn btn-primary" href="/blog">{c.ctaPrimary || 'Browse the archive'}</a>
-        <a class="btn btn-ghost" href="/">{c.ctaSecondary || 'Back to the front'} <span class="arrow">→</span></a>
+        <a class="btn btn-primary" href="/blog" data-cms="notFound.ctaPrimary">{c.ctaPrimary || 'Browse the archive'}</a>
+        <a class="btn btn-ghost" href="/"><span data-cms="notFound.ctaSecondary">{c.ctaSecondary || 'Back to the front'}</span> <span class="arrow">→</span></a>
       </div>
     </div>
 
     <div class="picks">
-      <h2>{c.picksHeading || 'Try one of these instead'}</h2>
-      <a class="pick" href="/blog"><span class="t">{picks.archiveTitle || 'The archive'}</span><span class="m">{picks.archiveMeta || 'Every essay · Newest first'}</span></a>
-      <a class="pick" href="/projects"><span class="t">{picks.projectsTitle || 'Projects'}</span><span class="m">{picks.projectsMeta || "Things I've built"}</span></a>
-      <a class="pick" href="/resume"><span class="t">{picks.resumeTitle || 'Resume'}</span><span class="m">{picks.resumeMeta || 'The short version'}</span></a>
+      <h2 data-cms="notFound.picksHeading">{c.picksHeading || 'Try one of these instead'}</h2>
+      <a class="pick" href="/blog"><span class="t" data-cms="notFound.picks.archiveTitle">{picks.archiveTitle || 'The archive'}</span><span class="m" data-cms="notFound.picks.archiveMeta">{picks.archiveMeta || 'Every essay · Newest first'}</span></a>
+      <a class="pick" href="/projects"><span class="t" data-cms="notFound.picks.projectsTitle">{picks.projectsTitle || 'Projects'}</span><span class="m" data-cms="notFound.picks.projectsMeta">{picks.projectsMeta || "Things I've built"}</span></a>
+      <a class="pick" href="/resume"><span class="t" data-cms="notFound.picks.resumeTitle">{picks.resumeTitle || 'Resume'}</span><span class="m" data-cms="notFound.picks.resumeMeta">{picks.resumeMeta || 'The short version'}</span></a>
     </div>
   </div>
 </BaseLayout>

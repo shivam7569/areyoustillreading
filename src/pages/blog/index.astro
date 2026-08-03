@@ -61,8 +61,8 @@ let n = 0;
 <BaseLayout title={c.seo?.title || 'Blog — areyoustillreading'} description={c.seo?.description || 'Every essay on LLM engineering and the systems underneath, grouped by year.'} wide>
   <div class="wrap">
     <header class="page-head">
-      <div class="kicker"><span class="line"></span><span class="eyebrow">{c.eyebrow || 'The blog'}</span></div>
-      <h1>{c.title || 'Every essay,'} <em>{c.titleEm || 'in the order it arrived.'}</em></h1>
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="blogIndex.eyebrow">{c.eyebrow || 'The blog'}</span></div>
+      <h1><span data-cms="blogIndex.title">{c.title || 'Every essay,'}</span> <em data-cms="blogIndex.titleEm">{c.titleEm || 'in the order it arrived.'}</em></h1>
       <p class="lede" set:html={ledeHtml}></p>
     </header>
 
@@ -75,7 +75,7 @@ let n = 0;
           </label>
           <span class="count" id="count" data-shown={c.shownLabel || 'shown'}>{posts.length} {c.shownLabel || 'shown'}</span>
           <div class="chips" id="chips">
-            <button class="chip" data-tag="all" aria-pressed="true" type="button">{c.allChip || 'All'}</button>
+            <button class="chip" data-tag="all" aria-pressed="true" type="button" data-cms="blogIndex.allChip">{c.allChip || 'All'}</button>
             {topTags.map((t) => (<button class="chip" data-tag={t} aria-pressed="false" type="button">{t}</button>))}
           </div>
         </div>
@@ -121,7 +121,7 @@ let n = 0;
         <p class="empty" id="empty" set:html={emptyFilterHtml}></p>
       </Fragment>
     ) : (
-      <p class="empty on" style="border:0">{c.emptyArchive || 'No essays yet — the first one is on its way.'}</p>
+      <p class="empty on" style="border:0" data-cms="blogIndex.emptyArchive">{c.emptyArchive || 'No essays yet — the first one is on its way.'}</p>
     )}
 
     <div class="archive-foot" data-hide-admin>
@@ -129,6 +129,8 @@ let n = 0;
         <SubscribeForm
           heading={c.newsletter?.heading || 'Read the next one first'}
           blurb={c.newsletter?.blurb || 'New essays on LLM engineering and the systems underneath, straight to your inbox. No noise — unsubscribe in one click.'}
+          headingKey="blogIndex.newsletter.heading"
+          blurbKey="blogIndex.newsletter.blurb"
         />
       </div>
     </div>

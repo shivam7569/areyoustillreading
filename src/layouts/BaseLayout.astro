@@ -124,15 +124,17 @@ const {
 // once its page is built). Data-driven so a link change is one line here.
 // The Blog item is a dropdown: its trigger goes to the full archive, and the
 // menu also surfaces Series (which otherwise lived only in the footer).
+// `key` is the site.json dot-path for that label — the shared address the Studio
+// editor writes and the `data-cms` anchor (+ instant copy overlay) reads.
 const nav = [
-  { href: '/', label: gnav.home || 'Home' },
-  { href: '/blog', label: gnav.blog || 'Blog', children: [
-    { href: '/blog', label: gnav.allPosts || 'All posts' },
-    { href: '/series', label: gnav.series || 'Series' },
+  { href: '/', label: gnav.home || 'Home', key: 'global.nav.home' },
+  { href: '/blog', label: gnav.blog || 'Blog', key: 'global.nav.blog', children: [
+    { href: '/blog', label: gnav.allPosts || 'All posts', key: 'global.nav.allPosts' },
+    { href: '/series', label: gnav.series || 'Series', key: 'global.nav.series' },
   ] },
-  { href: '/projects', label: gnav.projects || 'Projects' },
-  { href: '/resume', label: gnav.resume || 'Resume' },
-  { href: '/about', label: gnav.about || 'About' },
+  { href: '/projects', label: gnav.projects || 'Projects', key: 'global.nav.projects' },
+  { href: '/resume', label: gnav.resume || 'Resume', key: 'global.nav.resume' },
+  { href: '/about', label: gnav.about || 'About', key: 'global.nav.about' },
 ];
 
 // Current path, for marking the active nav item (aria-current="page"). Home
@@ -197,26 +199,27 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
     <header class="site-header">
       <div class="wrap">
         <div class="bar">
-          <a href="/" class="wordmark"><span class="are">{brandAccent}</span>{brandRest}</a>
+          <a href="/" class="wordmark"><span class="are" data-cms="global.brand.accent">{brandAccent}</span><span data-cms="global.brand.rest">{brandRest}</span></a>
           <nav class="nav-primary">
             {/* Data-driven primary links; aria-current marks (and styles) the active section.
-                An item with `children` renders as a hover/focus dropdown (Blog → Series). */}
+                An item with `children` renders as a hover/focus dropdown (Blog → Series).
+                Each label carries a data-cms anchor so a Studio copy edit patches it live. */}
             {nav.map((item) => (item.children ? (
               <div class={`nav-group${isGroupActive(item) ? ' is-active' : ''}`}>
                 <a href={item.href} class="nav-trigger" aria-current={isActive(item.href) ? 'page' : undefined} aria-haspopup="true">
-                  {item.label}
+                  <span data-cms={item.key}>{item.label}</span>
                   <svg class="caret" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                 </a>
                 <div class="nav-menu" role="menu">
                   {item.children.map((c) => (
-                    <a href={c.href} role="menuitem" aria-current={isActive(c.href) ? 'page' : undefined}>{c.label}</a>
+                    <a href={c.href} role="menuitem" aria-current={isActive(c.href) ? 'page' : undefined} data-cms={c.key}>{c.label}</a>
                   ))}
                 </div>
               </div>
             ) : (
-              <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>{item.label}</a>
+              <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined} data-cms={item.key}>{item.label}</a>
             )))}
-            <a href="/account" class="account" aria-current={isActive('/account') ? 'page' : undefined}>{gnav.account || 'Account'}</a>
+            <a href="/account" class="account" aria-current={isActive('/account') ? 'page' : undefined} data-cms="global.nav.account">{gnav.account || 'Account'}</a>
             {/* Studio (admin dashboard) entry — hidden by default; the script below reveals
                 it only for a signed-in admin. Link visibility is UX only; /admin and every
                 mutation are enforced by the gate + requireAdmin. */}
@@ -320,13 +323,13 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
     <footer class="site-footer">
       <div class="wrap">
         <div class="foot">
-          <a href="/" class="wordmark"><span class="are">{brandAccent}</span>{brandRest}</a>
+          <a href="/" class="wordmark"><span class="are" data-cms="global.brand.accent">{brandAccent}</span><span data-cms="global.brand.rest">{brandRest}</span></a>
           <nav>
-            <a href="/blog">{gnav.blog || 'Blog'}</a>
-            <a href="/series">{gnav.series || 'Series'}</a>
-            <a href="/projects">{gnav.projects || 'Projects'}</a>
-            <a href="/resume">{gnav.resume || 'Resume'}</a>
-            <a href="/rss.xml">{gfoot.rss || 'RSS'}</a>
+            <a href="/blog" data-cms="global.nav.blog">{gnav.blog || 'Blog'}</a>
+            <a href="/series" data-cms="global.nav.series">{gnav.series || 'Series'}</a>
+            <a href="/projects" data-cms="global.nav.projects">{gnav.projects || 'Projects'}</a>
+            <a href="/resume" data-cms="global.nav.resume">{gnav.resume || 'Resume'}</a>
+            <a href="/rss.xml" data-cms="global.footer.rss">{gfoot.rss || 'RSS'}</a>
           </nav>
           <div class="social">
             <a href="/rss.xml" aria-label="RSS feed" title="RSS feed">
@@ -335,7 +338,7 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
           </div>
         </div>
         {/* Copyright year computed at BUILD TIME (SSG): advances whenever anything next ships. */}
-        <p class="copyline">&copy; {new Date().getFullYear()} {brandAccent}{brandRest} &middot; {gfoot.tagline || 'Written to be finished.'}</p>
+        <p class="copyline">&copy; {new Date().getFullYear()} <span data-cms="global.brand.accent">{brandAccent}</span><span data-cms="global.brand.rest">{brandRest}</span> &middot; <span data-cms="global.footer.tagline">{gfoot.tagline || 'Written to be finished.'}</span></p>
       </div>
     </footer>
     {/* Cookieless first-party analytics beacon — public pages only. */}

@@ -65,10 +65,19 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
 interface Props {
   heading?: string;
   blurb?: string;
+  /** site.json dot-paths for the instant copy overlay's data-cms anchors. Optional:
+   *  when a key is omitted the element ships no anchor and the copy just refreshes on
+   *  the next rebuild. Passing them lets a newsletter-copy edit go live instantly like
+   *  the rest of the page. The resolved string still comes via heading/blurb (build +
+   *  fallback); the key only tells the edge overlay which node to patch. */
+  headingKey?: string;
+  blurbKey?: string;
 }
 const {
   heading = 'Subscribe',
   blurb = 'New posts by email. Double opt-in, one-click unsubscribe, no spam.',
+  headingKey,
+  blurbKey,
 } = Astro.props;
 ---
 
@@ -79,8 +88,8 @@ const {
   an inline status message instead of a full page navigation.
 */}
 <section class="subscribe">
-  <h2>{heading}</h2>
-  <p>{blurb}</p>
+  <h2 data-cms={headingKey}>{heading}</h2>
+  <p data-cms={blurbKey}>{blurb}</p>
   <form id="subscribe-form" method="POST" action="/api/subscribe">
     {/* required + type=email gives free browser-level validation before submit. */}
     <input

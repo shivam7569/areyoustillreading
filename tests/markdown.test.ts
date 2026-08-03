@@ -75,6 +75,9 @@ describe('markdown rendering', () => {
     // Regex (not an exact string) because the minute count is content-derived
     // and will drift as the post is edited — we only care that SOME numeric
     // "N min read" estimate is rendered, proving the metric is wired up.
-    expect(html).toMatch(/\d+ min read/);
+    // The unit label ("min read") is wrapped in an inline <span data-cms> so it
+    // is editable + instant-overlayable, so tolerate that optional tag between
+    // the number and the words (still one contiguous visual "N min read").
+    expect(html).toMatch(/\d+\s*(?:<[^>]+>)?\s*min read/);
   });
 });

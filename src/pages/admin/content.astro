@@ -535,7 +535,9 @@ import site from '../../data/site.json';
       const r = await adminFetch('/api/admin/site', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: model }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
-      status('Saved. The site rebuilds in ~1 minute.', 'ok');
+      // `instant` = the edit was mirrored to the edge overlay and is live now; if the
+      // KV write missed, it still lands on the next rebuild (~1 min) — say so honestly.
+      status(d.instant ? 'Saved — live now.' : 'Saved. Live on the next rebuild (~1 min).', 'ok');
     } catch (err) { status('Save failed: ' + err.message, 'err'); }
   });
 

@@ -74,11 +74,11 @@ const c = (site as any).subscribeError || {};
 <BaseLayout title={c.seo?.title || 'Something went wrong — areyoustillreading'} description={c.seo?.description || 'Subscription error.'}>
   {/* Deliberately warm, blame-free heading — this is often a legitimate user
       hitting an expired link, not an attacker. */}
-  <h1>{c.heading || "Hmm, that didn't work"}</h1>
+  <h1 data-cms="subscribeError.heading">{c.heading || "Hmm, that didn't work"}</h1>
   {/* Vague-by-design copy: lists the plausible causes without disclosing which
       check actually failed (see the SECURITY note in the frontmatter). Also
       gives the user a concrete next step: retry from the homepage. */}
-  <p>{c.body || 'That link may be invalid or expired, or the email was malformed. Try subscribing again from the homepage.'}</p>
+  <p data-cms="subscribeError.body">{c.body || 'That link may be invalid or expired, or the email was malformed. Try subscribing again from the homepage.'}</p>
   {/* Only escape hatch: a link back to the root so the user is never stranded. */}
-  <p><a href="/">{c.home || '← Home'}</a></p>
+  <p><a href="/" data-cms="subscribeError.home">{c.home || '← Home'}</a></p>
 </BaseLayout>

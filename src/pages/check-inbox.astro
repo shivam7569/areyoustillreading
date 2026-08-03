@@ -65,13 +65,13 @@ const c = (site as any).checkInbox || {};
   to the browser; only these {/* JSX comments are stripped at build.
 */}
 <BaseLayout title={c.seo?.title || 'Almost there — areyoustillreading'} description={c.seo?.description || 'Confirm your subscription.'}>
-  <h1>{c.heading || 'Almost there'}</h1>
+  <h1 data-cms="checkInbox.heading">{c.heading || 'Almost there'}</h1>
   {/* Instruction copy for the double opt-in: prompt the user to click the
       confirmation link we emailed. The spam-folder nudge is a deliverability
       fail-safe — confirmation mail (via Resend) is a common false-positive for
       spam filters, and a missed link silently strands the signup. */}
-  <p>{c.body || "Check your inbox for a confirmation link to finish subscribing. If it's not there in a minute, check your spam folder."}</p>
+  <p data-cms="checkInbox.body">{c.body || "Check your inbox for a confirmation link to finish subscribing. If it's not there in a minute, check your spam folder."}</p>
   {/* Escape hatch back to the homepage so a user who is done (or gave up)
       isn't dead-ended on this static page. */}
-  <p><a href="/">{c.home || '← Home'}</a></p>
+  <p><a href="/" data-cms="checkInbox.home">{c.home || '← Home'}</a></p>
 </BaseLayout>

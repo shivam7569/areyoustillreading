@@ -47,27 +47,27 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
   <script type="application/json" id="account-copy" set:html={JSON.stringify(accountCopy)} />
   <div class="wrap">
     {/* Loading state — replaced the moment the Supabase session resolves. */}
-    <div id="acct-checking" class="acct-checking"><p>{c.checking || 'Checking your session…'}</p></div>
+    <div id="acct-checking" class="acct-checking"><p data-cms="account.checking">{c.checking || 'Checking your session…'}</p></div>
 
     {/* ---------- SIGNED OUT: inline sign-in ---------- */}
     <section id="acct-signedout" class="signin" hidden>
       <header class="page-head">
-        <div class="kicker"><span class="line"></span><span class="eyebrow">{so.eyebrow || 'Account'}</span></div>
-        <h1>{so.title || 'Sign in to'} <em>{so.titleEm || 'your account.'}</em></h1>
-        <p class="lede">{so.lede || "One tap and you're in — for reading unlocked essays, saving highlights and notes, and managing the letter."}</p>
+        <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="account.signedOut.eyebrow">{so.eyebrow || 'Account'}</span></div>
+        <h1><span data-cms="account.signedOut.title">{so.title || 'Sign in to'}</span> <em data-cms="account.signedOut.titleEm">{so.titleEm || 'your account.'}</em></h1>
+        <p class="lede" data-cms="account.signedOut.lede">{so.lede || "One tap and you're in — for reading unlocked essays, saving highlights and notes, and managing the letter."}</p>
       </header>
       <div class="card signin-card">
-        <button class="btn btn-primary" id="si-github" type="button">{so.github || 'Continue with GitHub'}</button>
-        <div class="or">{so.or || 'or'}</div>
+        <button class="btn btn-primary" id="si-github" type="button" data-cms="account.signedOut.github">{so.github || 'Continue with GitHub'}</button>
+        <div class="or" data-cms="account.signedOut.or">{so.or || 'or'}</div>
         <form class="si-magic" id="si-magic">
           <input id="si-email" type="email" placeholder={so.emailPlaceholder || 'you@example.com'} aria-label="Email address" required />
-          <button class="btn btn-ghost" type="submit">{so.sendCode || 'Email me a code'}</button>
+          <button class="btn btn-ghost" type="submit" data-cms="account.signedOut.sendCode">{so.sendCode || 'Email me a code'}</button>
         </form>
         {/* Code step — verifying here finishes sign-in in THIS tab (no new tab). */}
         <form class="si-magic" id="si-code" hidden>
           <input id="si-token" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder={so.codePlaceholder || '6-digit code'} aria-label="Sign-in code" />
-          <button class="btn btn-ghost" type="submit">{so.verify || 'Verify & sign in'}</button>
-          <button class="btn btn-ghost" id="si-back" type="button">{so.useDifferent || 'Use a different email'}</button>
+          <button class="btn btn-ghost" type="submit" data-cms="account.signedOut.verify">{so.verify || 'Verify & sign in'}</button>
+          <button class="btn btn-ghost" id="si-back" type="button" data-cms="account.signedOut.useDifferent">{so.useDifferent || 'Use a different email'}</button>
         </form>
         <p class="si-status" id="si-status" role="status" aria-live="polite"></p>
       </div>
@@ -80,52 +80,52 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
           <div class="avatar" id="ac-initial" aria-hidden="true">·</div>
           <div class="who-main">
             <div class="nm-row">
-              <span class="nm" id="ac-name">{si.defaultName || 'Reader'}</span>
+              <span class="nm" id="ac-name" data-cms="account.signedIn.defaultName">{si.defaultName || 'Reader'}</span>
               <button class="nm-edit" id="ac-edit" type="button" title={si.editTooltip || 'Set your pen name'} aria-label={si.editTooltip || 'Set your pen name'}>
                 <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
               </button>
             </div>
             <form class="nm-form" id="ac-nm-form" hidden>
               <input id="ac-nm-input" type="text" maxlength="60" placeholder={si.penPlaceholder || 'Your pen name'} aria-label="Pen name" />
-              <button class="btn btn-sm btn-primary" type="submit">{si.save || 'Save'}</button>
-              <button class="nm-cancel" id="ac-nm-cancel" type="button">{si.cancel || 'Cancel'}</button>
+              <button class="btn btn-sm btn-primary" type="submit" data-cms="account.signedIn.save">{si.save || 'Save'}</button>
+              <button class="nm-cancel" id="ac-nm-cancel" type="button" data-cms="account.signedIn.cancel">{si.cancel || 'Cancel'}</button>
             </form>
             <div class="em" id="ac-email"></div>
           </div>
         </div>
         <nav>
-          <a href="#library">{si.navLibrary || 'Your library'}</a>
-          <a href="#letter" data-hide-admin>{si.navLetter || 'The letter'}</a>
-          <a href="#studio" id="ac-studio-nav" hidden>{si.navStudio || 'Studio'}</a>
+          <a href="#library" data-cms="account.signedIn.navLibrary">{si.navLibrary || 'Your library'}</a>
+          <a href="#letter" data-hide-admin data-cms="account.signedIn.navLetter">{si.navLetter || 'The letter'}</a>
+          <a href="#studio" id="ac-studio-nav" hidden data-cms="account.signedIn.navStudio">{si.navStudio || 'Studio'}</a>
         </nav>
-        <div class="out"><a href="#" id="ac-signout">{si.signOut || 'Sign out'}</a></div>
+        <div class="out"><a href="#" id="ac-signout" data-cms="account.signedIn.signOut">{si.signOut || 'Sign out'}</a></div>
       </aside>
 
       <div>
         <header class="acct-head">
-          <div class="kicker"><span class="line"></span><span class="eyebrow">{si.eyebrow || 'Your account'}</span></div>
-          <h1>{si.heading || "Everything you've unlocked"}</h1>
+          <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="account.signedIn.eyebrow">{si.eyebrow || 'Your account'}</span></div>
+          <h1 data-cms="account.signedIn.heading">{si.heading || "Everything you've unlocked"}</h1>
         </header>
 
         <section class="panel" id="library">
-          <h2 id="lib-heading">{si.libraryHeading || 'Your library'}</h2>
+          <h2 id="lib-heading" data-cms="account.signedIn.libraryHeading">{si.libraryHeading || 'Your library'}</h2>
           <div class="lib" id="lib-list"></div>
           <p class="lib-empty" id="lib-empty" hidden set:html={libEmptyHtml}></p>
         </section>
 
         <section class="panel" id="studio" hidden>
-          <h2>{si.studioHeading || 'Studio'}</h2>
+          <h2 data-cms="account.signedIn.studioHeading">{si.studioHeading || 'Studio'}</h2>
           <a class="card studio-card" href="/admin">
             <div>
-              <div class="sc-t">{si.studioCardTitle || 'Open the Studio'}</div>
-              <div class="sc-s">{si.studioCardSub || 'Write and publish, manage posts, the audience, analytics and revenue.'}</div>
+              <div class="sc-t" data-cms="account.signedIn.studioCardTitle">{si.studioCardTitle || 'Open the Studio'}</div>
+              <div class="sc-s" data-cms="account.signedIn.studioCardSub">{si.studioCardSub || 'Write and publish, manage posts, the audience, analytics and revenue.'}</div>
             </div>
-            <span class="sc-go">{si.studioCardCta || 'Enter →'}</span>
+            <span class="sc-go" data-cms="account.signedIn.studioCardCta">{si.studioCardCta || 'Enter →'}</span>
           </a>
         </section>
 
         <section class="panel" id="letter" data-hide-admin>
-          <h2>{si.letterHeading || 'The letter'}</h2>
+          <h2 data-cms="account.signedIn.letterHeading">{si.letterHeading || 'The letter'}</h2>
           <SubscribeForm
             heading={si.newsletter?.heading || 'Get the next essay by email'}
             blurb={si.newsletter?.blurb || 'New essays on LLM engineering and the systems underneath. No noise — and you can unsubscribe from any email in one click.'}

@@ -72,8 +72,8 @@ const msgs = {
 <BaseLayout title={c.seo?.title || 'Sign in — areyoustillreading'} description={c.seo?.description || 'Sign in to areyoustillreading.'}>
   {/* Client-side status strings, editable from Studio; the script below reads these. */}
   <script type="application/json" id="login-copy" set:html={JSON.stringify(msgs)} />
-  <h1>{c.heading || 'Sign in'}</h1>
-  <p>{c.lede || 'Sign in to comment, highlight, and keep private notes on posts.'}</p>
+  <h1 data-cms="login.heading">{c.heading || 'Sign in'}</h1>
+  <p data-cms="login.lede">{c.lede || 'Sign in to comment, highlight, and keep private notes on posts.'}</p>
 
   {/* Step 1 — email form. `id="magic-form"` is the hook the client script binds to.
       No `action`/`method`: submission is intercepted in JS (preventDefault) and
@@ -83,22 +83,22 @@ const msgs = {
         we ever call Supabase. aria-label supplies an accessible name since the
         visible label is only the placeholder. */}
     <input type="email" name="email" required placeholder={c.emailPlaceholder || 'you@example.com'} aria-label="Email address" />
-    <button type="submit">{c.sendCode || 'Email me a sign-in code'}</button>
+    <button type="submit" data-cms="login.sendCode">{c.sendCode || 'Email me a sign-in code'}</button>
   </form>
 
   {/* Step 2 — code entry. Verifying the emailed code finishes sign-in RIGHT HERE
       in this tab (no link click, so no second tab opens). Hidden until step 1 sends. */}
   <form id="code-form" class="auth-form" hidden>
     <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder={c.codePlaceholder || '6-digit code'} aria-label="Sign-in code" />
-    <button type="submit">{c.verify || 'Verify & sign in'}</button>
-    <button type="button" id="code-back" class="linkish">{c.useDifferent || 'Use a different email'}</button>
+    <button type="submit" data-cms="login.verify">{c.verify || 'Verify & sign in'}</button>
+    <button type="button" id="code-back" class="linkish" data-cms="login.useDifferent">{c.useDifferent || 'Use a different email'}</button>
   </form>
 
-  <p class="divider">{c.divider || 'or'}</p>
+  <p class="divider" data-cms="login.divider">{c.divider || 'or'}</p>
 
   {/* type="button" (NOT submit) so this GitHub button lives outside the form
       and never triggers the magic-link submit handler. */}
-  <button id="github-btn" class="oauth-btn" type="button">{c.github || 'Sign in with GitHub'}</button>
+  <button id="github-btn" class="oauth-btn" type="button" data-cms="login.github">{c.github || 'Sign in with GitHub'}</button>
 
   {/* Live status region. role="status" + aria-live="polite" announces
       "Sending…" / success / error text to screen readers without stealing

@@ -130,9 +130,9 @@ const ledeText = (c.ledeTemplate || '{count} {word} on {tag}.')
 <BaseLayout title={seoTitle} description={seoDesc} wide>
   <div class="wrap">
     <header class="page-head">
-      <a class="backlink" href="/blog/tags"><span aria-hidden="true">&larr;</span> {c.backlink || 'All topics'}</a>
-      <div class="kicker"><span class="line"></span><span class="eyebrow">{c.eyebrow || 'Topic'}</span></div>
-      <h1>{c.headingPrefix || 'Tagged'} <em>{tag}</em></h1>
+      <a class="backlink" href="/blog/tags"><span aria-hidden="true">&larr;</span> <span data-cms="blogTag.backlink">{c.backlink || 'All topics'}</span></a>
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="blogTag.eyebrow">{c.eyebrow || 'Topic'}</span></div>
+      <h1><span data-cms="blogTag.headingPrefix">{c.headingPrefix || 'Tagged'}</span> <em>{tag}</em></h1>
       <p class="lede">{ledeText}</p>
     </header>
     {/* Editorial post rows (getStaticPaths guarantees a non-empty list). */}

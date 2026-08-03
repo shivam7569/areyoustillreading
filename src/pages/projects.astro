@@ -42,9 +42,9 @@ const plateSvg = (p) => plate(p.art?.plateId || '01').svg;
 <BaseLayout title="Projects — areyoustillreading" description="Selected engineering and research projects by Shivam Chaudhary." wide>
   <div class="wrap">
     <header class="page-head">
-      <div class="kicker"><span class="line"></span><span class="eyebrow">{page.eyebrow || 'Things I built'}</span></div>
-      <h1>{page.title || 'Work that'} <em>{page.titleEm || 'earned its writing.'}</em></h1>
-      <p class="lede">{page.lede || "Selected engineering and research work — the kind of project I couldn't write about honestly until I'd built it first. One thing done properly, rather than a grid of repositories nobody opens."}</p>
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="projects.eyebrow">{page.eyebrow || 'Things I built'}</span></div>
+      <h1><span data-cms="projects.title">{page.title || 'Work that'}</span> <em data-cms="projects.titleEm">{page.titleEm || 'earned its writing.'}</em></h1>
+      <p class="lede" data-cms="projects.lede">{page.lede || "Selected engineering and research work — the kind of project I couldn't write about honestly until I'd built it first. One thing done properly, rather than a grid of repositories nobody opens."}</p>
     </header>
 
     {/* Owner-only shortcut to the editor. Revealed by the inline script below for a
@@ -123,13 +123,13 @@ const plateSvg = (p) => plate(p.art?.plateId || '01').svg;
     ))}
 
     <div class="writing">
-      <p><b>{writing.heading || 'This is where the essays come from'}</b>{writing.body || "The reimplementations are what make the writing possible — you can't explain an architecture honestly until you've had to make it train."}</p>
-      <a class="btn btn-ghost btn-sm" href={writing.href || '/blog'}>{writing.cta || 'Read the essays →'}</a>
+      <p><b data-cms="projects.writing.heading">{writing.heading || 'This is where the essays come from'}</b><span data-cms="projects.writing.body">{writing.body || "The reimplementations are what make the writing possible — you can't explain an architecture honestly until you've had to make it train."}</span></p>
+      <a class="btn btn-ghost btn-sm" href={writing.href || '/blog'} data-cms="projects.writing.cta">{writing.cta || 'Read the essays →'}</a>
     </div>
 
     <div class="oss-note">
-      <span>{oss.note || 'Everything here is open source — MIT unless the repository says otherwise.'}</span>
-      <a class="more" href={GITHUB}>{oss.link || 'More on GitHub · github.com/shivam7569 →'}</a>
+      <span data-cms="projects.oss.note">{oss.note || 'Everything here is open source — MIT unless the repository says otherwise.'}</span>
+      <a class="more" href={GITHUB} data-cms="projects.oss.link">{oss.link || 'More on GitHub · github.com/shivam7569 →'}</a>
     </div>
   </div>
 </BaseLayout>
