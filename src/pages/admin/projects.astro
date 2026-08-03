@@ -224,8 +224,12 @@ import { PLATES } from '../../lib/plates.mjs';
   .projectstudio .pv-fam li .n { color:var(--ink); font-weight:600; white-space:nowrap; }
   .projectstudio .pv-fam li .v { color:var(--ink-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .projectstudio .pv[data-fam-style="stacked"] .pv-fam li { grid-template-columns:1fr; gap:1px; }
-  .projectstudio .pv-list li { font-size:9px; color:var(--ink-soft); position:relative; padding-left:11px; }
-  .projectstudio .pv-list li::before { content:""; position:absolute; left:0; top:.38em; width:5px; height:5px; border:1px solid var(--accent); border-radius:1px; }
+  .projectstudio .pv-list li { font-size:9px; color:var(--ink-soft); position:relative; padding-left:13px; }
+  .projectstudio .pv-list li::before { content:"✓"; position:absolute; left:0; top:0; font-size:8px; line-height:1.45; color:var(--accent); }
+  .projectstudio .pv[data-build-marker="dash"] .pv-list li::before { content:""; top:.55em; width:7px; height:1px; background:var(--accent); }
+  .projectstudio .pv[data-build-marker="number"] .pv-list { counter-reset:bn; }
+  .projectstudio .pv[data-build-marker="number"] .pv-list li { counter-increment:bn; }
+  .projectstudio .pv[data-build-marker="number"] .pv-list li::before { content:counter(bn,decimal-leading-zero); top:0; font-size:7.5px; letter-spacing:.05em; }
   .projectstudio .pv[data-layout="case"][data-hero="left"] .pv-copy { order:2; }
   .projectstudio .pv[data-layout="case"][data-hero="left"] .pv-shot { order:1; border-left:0; border-right:1px solid var(--rule); }
   .projectstudio .pv[data-layout="case"][data-hero="top"] .pv-top { grid-template-columns:1fr; }
