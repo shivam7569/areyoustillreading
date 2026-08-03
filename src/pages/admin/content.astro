@@ -1,0 +1,158 @@
+---
+/**
+ * /admin/content — Studio "Content Management".
+ * =============================================================================
+ * One home for every editable word on the site. Each public page's copy lives
+ * in src/data/site.json (keyed by page); this screen edits it and commits via
+ * POST /api/admin/site → Cloudflare rebuild. Public pages import site.json at
+ * build time. Adding a page = add an entry to PAGES below + point that page at
+ * site.json — no new endpoint or screen.
+ *
+ * Client-rendered from the build-time seed (works instantly / in the sandbox),
+ * then refreshed from the committed copy on admin-ready. Same load/collect/save
+ * shape as the resume + projects Studios; component CSS in a .contentstudio
+ * <style is:global> (innerHTML-safe).
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import site from '../../data/site.json';
+---
+
+<AdminLayout title="Content Management — Studio" heading="Content Management" active="content">
+  <div class="contentstudio">
+    <script type="application/json" id="site-seed" set:html={JSON.stringify(site)} />
+
+    <div class="cm-top">
+      <div class="tabs" id="cm-tabs">
+        <button class="on" data-page="projects" type="button">Projects page</button>
+      </div>
+      <a class="btn btn-ghost btn-sm cm-view" id="cm-view" href="/projects" target="_blank" rel="noopener">View the page ↗</a>
+      <button class="btn btn-primary btn-sm" id="cm-save" type="button">Save changes</button>
+      <span class="cm-status" id="cm-status" role="status" aria-live="polite"></span>
+    </div>
+
+    <div class="panel">
+      <header><h2 id="cm-title">Projects page</h2><span class="hint">Every word on this page · changes go live on save</span></header>
+      <div class="pb"><div id="cm-editor"></div></div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style is:global>
+  .contentstudio { font-family: var(--sans); }
+  .contentstudio .cm-top { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  .contentstudio .cm-view { margin-left:auto; }
+  .contentstudio .cm-status { font-size:12.5px; color:var(--ink-faint); }
+  .contentstudio .cm-status.ok { color:var(--accent); }
+  .contentstudio .cm-status.err { color:var(--danger,#c2603f); }
+  .contentstudio .ctl + .ctl { margin-top:22px; padding-top:20px; border-top:1px solid var(--rule-soft); }
+  .contentstudio .fl { display:block; font-family:var(--sans); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:13px; font-weight:600; }
+  .contentstudio .cm-field { display:block; margin-bottom:12px; }
+  .contentstudio .cm-field:last-child { margin-bottom:0; }
+  .contentstudio .cm-lbl { display:block; font-size:11.5px; color:var(--ink-faint); margin-bottom:5px; }
+  .contentstudio .inp { font-family:var(--sans); font-size:13.5px; color:var(--ink); background:var(--paper); border:1px solid var(--rule); border-radius:2px; padding:9px 11px; width:100%; box-sizing:border-box; }
+  .contentstudio .inp:focus { outline:2px solid var(--accent); outline-offset:1px; border-color:transparent; }
+  .contentstudio textarea.inp { resize:none; overflow:hidden; min-height:70px; font-family:var(--serif-body); line-height:1.55; }
+</style>
+
+<script>
+  import { adminFetch, onAdminReady } from '../../lib/admin-gate';
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const attr = (s = '') => String(s).replace(/"/g, '&quot;');
+  const grow = (t) => { if (!t || !t.offsetParent) return; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; };
+  const getPath = (o, p) => p.split('.').reduce((x, k) => (x == null ? x : x[k]), o);
+  const setPath = (o, p, v) => { const ks = p.split('.'); let x = o; for (let i = 0; i < ks.length - 1; i++) { x[ks[i]] = x[ks[i]] || {}; x = x[ks[i]]; } x[ks[ks.length - 1]] = v; };
+
+  // The whole content map. Add a page here (+ point its public .astro at
+  // site.json) and it becomes editable — no other change needed.
+  const PAGES = {
+    projects: {
+      label: 'Projects page', view: '/projects',
+      groups: [
+        { label: 'Header', fields: [
+          { path: 'eyebrow', label: 'Eyebrow', type: 'text' },
+          { path: 'title', label: 'Headline', type: 'text' },
+          { path: 'titleEm', label: 'Headline — accent italic', type: 'text' },
+          { path: 'lede', label: 'Intro paragraph', type: 'area' },
+        ] },
+        { label: '“This is where the essays come from” block', fields: [
+          { path: 'writing.heading', label: 'Heading', type: 'text' },
+          { path: 'writing.body', label: 'Body', type: 'area' },
+          { path: 'writing.cta', label: 'Link label', type: 'text' },
+          { path: 'writing.href', label: 'Link URL', type: 'text' },
+        ] },
+        { label: 'Open-source note', fields: [
+          { path: 'oss.note', label: 'Note', type: 'text' },
+          { path: 'oss.link', label: 'Link label', type: 'text' },
+          { path: 'oss.href', label: 'Link URL', type: 'text' },
+        ] },
+      ],
+    },
+  };
+
+  let model = (() => { try { return JSON.parse($('#site-seed').textContent || '{}') || {}; } catch { return {}; } })();
+  let cur = 'projects';
+
+  function buildEditor(key) {
+    const spec = PAGES[key]; if (!spec) return;
+    const data = model[key] || {};
+    $('#cm-editor').innerHTML = spec.groups.map((g) =>
+      `<div class="ctl"><span class="fl">${esc(g.label)}</span>` +
+      g.fields.map((f) => {
+        const v = getPath(data, f.path) || '';
+        const ctl = f.type === 'area'
+          ? `<textarea class="inp cm-f" data-path="${attr(f.path)}" aria-label="${attr(f.label)}">${esc(v)}</textarea>`
+          : `<input class="inp cm-f" data-path="${attr(f.path)}" value="${attr(v)}" aria-label="${attr(f.label)}">`;
+        return `<label class="cm-field"><span class="cm-lbl">${esc(f.label)}</span>${ctl}</label>`;
+      }).join('') +
+      `</div>`
+    ).join('');
+    $('#cm-title').textContent = spec.label;
+    $('#cm-view').href = spec.view;
+    $$('#cm-editor textarea').forEach(grow);
+  }
+
+  function collect(key) {
+    const data = model[key] = model[key] || {};
+    $$('#cm-editor .cm-f').forEach((el) => setPath(data, el.dataset.path, el.value.trim()));
+  }
+
+  let statusTimer;
+  function status(msg, kind) {
+    const el = $('#cm-status'); el.textContent = msg;
+    el.className = 'cm-status' + (kind === 'err' ? ' err' : kind === 'ok' ? ' ok' : '');
+    clearTimeout(statusTimer);
+    if (kind === 'ok') statusTimer = setTimeout(() => { el.textContent = ''; el.className = 'cm-status'; }, 6000);
+  }
+
+  $('#cm-editor').addEventListener('input', (e) => { if (e.target.tagName === 'TEXTAREA') grow(e.target); });
+
+  $('#cm-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-page]'); if (!b) return;
+    collect(cur);
+    cur = b.dataset.page;
+    $$('#cm-tabs button').forEach((x) => x.classList.toggle('on', x === b));
+    buildEditor(cur);
+  });
+
+  $('#cm-save').addEventListener('click', async () => {
+    collect(cur);
+    status('Saving…');
+    try {
+      const r = await adminFetch('/api/admin/site', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: model }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      status('Saved. The site rebuilds in ~1 minute.', 'ok');
+    } catch (err) { status('Save failed: ' + err.message, 'err'); }
+  });
+
+  buildEditor(cur);
+  onAdminReady(async () => {
+    try {
+      const r = await adminFetch('/api/admin/site');
+      if (r.ok) { const d = await r.json(); if (d && d.content) { model = d.content; buildEditor(cur); } }
+    } catch (e) {}
+  });
+</script>

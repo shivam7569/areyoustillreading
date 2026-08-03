@@ -1,0 +1,19 @@
+{
+  "projects": {
+    "eyebrow": "Things I built",
+    "title": "Work that",
+    "titleEm": "earned its writing.",
+    "lede": "Selected engineering and research work — the kind of project I couldn't write about honestly until I'd built it first. One thing done properly, rather than a grid of repositories nobody opens.",
+    "writing": {
+      "heading": "This is where the essays come from",
+      "body": "The reimplementations are what make the writing possible — you can't explain an architecture honestly until you've had to make it train.",
+      "cta": "Read the essays →",
+      "href": "/blog"
+    },
+    "oss": {
+      "note": "Everything here is open source — MIT unless the repository says otherwise.",
+      "link": "More on GitHub · github.com/shivam7569 →",
+      "href": "https://github.com/shivam7569"
+    }
+  }
+}
