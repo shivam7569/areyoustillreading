@@ -232,5 +232,63 @@
     "msgSignedIn": "Signed in — taking you in…",
     "msgEnterCode": "Enter the code from your email.",
     "msgRedirecting": "Redirecting to GitHub…"
+  },
+  "account": {
+    "seo": { "title": "Your account — areyoustillreading", "description": "Your account." },
+    "checking": "Checking your session…",
+    "signedOut": {
+      "eyebrow": "Account",
+      "title": "Sign in to",
+      "titleEm": "your account.",
+      "lede": "One tap and you're in — for reading unlocked essays, saving highlights and notes, and managing the letter.",
+      "github": "Continue with GitHub",
+      "or": "or",
+      "emailPlaceholder": "you@example.com",
+      "sendCode": "Email me a code",
+      "codePlaceholder": "6-digit code",
+      "verify": "Verify & sign in",
+      "useDifferent": "Use a different email"
+    },
+    "signedIn": {
+      "defaultName": "Reader",
+      "editTooltip": "Set your pen name",
+      "penPlaceholder": "Your pen name",
+      "save": "Save",
+      "cancel": "Cancel",
+      "navLibrary": "Your library",
+      "navLetter": "The letter",
+      "navStudio": "Studio",
+      "signOut": "Sign out",
+      "eyebrow": "Your account",
+      "heading": "Everything you've unlocked",
+      "libraryHeading": "Your library",
+      "libraryEmpty": "You haven't unlocked any paid essays yet — most of the writing here is free. {browse}",
+      "libraryEmptyLink": "Browse the archive →",
+      "studioHeading": "Studio",
+      "studioCardTitle": "Open the Studio",
+      "studioCardSub": "Write and publish, manage posts, the audience, analytics and revenue.",
+      "studioCardCta": "Enter →",
+      "letterHeading": "The letter",
+      "newsletter": {
+        "heading": "Get the next essay by email",
+        "blurb": "New essays on LLM engineering and the systems underneath. No noise — and you can unsubscribe from any email in one click."
+      }
+    },
+    "msg": {
+      "redirecting": "Redirecting to GitHub…",
+      "sending": "Sending…",
+      "codeSent": "We emailed you a 6-digit code. Enter it here to finish signing in.",
+      "enterCode": "Enter the code from your email.",
+      "verifying": "Verifying…",
+      "signedIn": "Signed in."
+    },
+    "lib": {
+      "unlockedPrefix": "Unlocked",
+      "minLabel": "min",
+      "owned": "Owned",
+      "readAgain": "Read again →",
+      "essaySingular": "essay",
+      "essayPlural": "essays"
+    }
   }
 }
