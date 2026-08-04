@@ -59,7 +59,7 @@ const plateSvg = (p) => plate(p.art?.plateId || '01').svg;
       </span>
     </div>
 
-    {projects.map((p) => (
+    {projects.map((p, i) => (
       <article class="proj"
         data-layout={p.layout}
         data-hero={p.hero}
@@ -77,9 +77,9 @@ const plateSvg = (p) => plate(p.art?.plateId || '01').svg;
               {p.states?.maintained && <span class="state live">Maintained</span>}
               {p.states?.oss && <span class="state oss">Open source</span>}
             </div>
-            <h2>{p.name}</h2>
-            <p class="lead">{p.lead}</p>
-            <div class="tags-row">{p.tags?.map((t) => <span class="tag">{t}</span>)}</div>
+            <h2 data-cms={`projects.${i}.name`}>{p.name}</h2>
+            <p class="lead" data-cms={`projects.${i}.lead`}>{p.lead}</p>
+            <div class="tags-row">{p.tags?.map((t, j) => <span class="tag" data-cms={`projects.${i}.tags.${j}`}>{t}</span>)}</div>
             <div class="links">
               {p.links?.github && (
                 <a class="btn btn-primary btn-sm" href={p.links.github}>GitHub
@@ -100,21 +100,21 @@ const plateSvg = (p) => plate(p.art?.plateId || '01').svg;
           <div class="inside">
             {p.families?.on && (
               <div class="fam-block">
-                <h3>{p.families.heading}</h3>
+                <h3 data-cms={`projects.${i}.families.heading`}>{p.families.heading}</h3>
                 {p.families.count && (
-                  <div class="count"><b>{p.families.count.fig}</b><span>{p.families.count.cap}</span></div>
+                  <div class="count"><b data-cms={`projects.${i}.families.count.fig`}>{p.families.count.fig}</b><span data-cms={`projects.${i}.families.count.cap`}>{p.families.count.cap}</span></div>
                 )}
                 <ul class="fam">
-                  {p.families.rows?.map((r) => (
-                    <li><span class="n">{r.n}</span><span class="v">{r.v}{r.sub && <small>{r.sub}</small>}</span></li>
+                  {p.families.rows?.map((r, k) => (
+                    <li><span class="n" data-cms={`projects.${i}.families.rows.${k}.n`}>{r.n}</span><span class="v"><span data-cms={`projects.${i}.families.rows.${k}.v`}>{r.v}</span>{r.sub && <small data-cms={`projects.${i}.families.rows.${k}.sub`}>{r.sub}</small>}</span></li>
                   ))}
                 </ul>
               </div>
             )}
             {p.build?.on && (
               <div class="build-block">
-                <h3>{p.build.heading}</h3>
-                <ul class="practice">{p.build.items?.map((it) => <li><b>{it}</b></li>)}</ul>
+                <h3 data-cms={`projects.${i}.build.heading`}>{p.build.heading}</h3>
+                <ul class="practice">{p.build.items?.map((it, m) => <li><b data-cms={`projects.${i}.build.items.${m}`}>{it}</b></li>)}</ul>
               </div>
             )}
           </div>

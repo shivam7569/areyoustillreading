@@ -20,7 +20,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 // @ts-ignore — plain .js helper, no TypeScript declarations.
-import { flattenCopy, escapeHtml, emphHtml, readFreshCopy } from '../lib/site-copy.js';
+import { flattenCopy, escapeHtml, emphHtml, boldHtml, readFreshCopy, textOnlyEdit } from '../lib/site-copy.js';
 
 describe('flattenCopy — dot-path address space', () => {
   it('flattens nested objects to dot paths, string leaves only', () => {
@@ -59,6 +59,40 @@ describe('escapeHtml / emphHtml — safe text vs. inline emphasis', () => {
 
   it('emphHtml leaves a lone/unclosed asterisk untouched (escaped only)', () => {
     expect(emphHtml('2 * 3 = 6')).toBe('2 * 3 = 6');
+  });
+
+  it('boldHtml turns **double** into <b> (resume bullets) and escapes the rest', () => {
+    expect(boldHtml('cut latency **40%** on <prod>')).toBe('cut latency <b>40%</b> on &lt;prod&gt;');
+  });
+});
+
+describe('textOnlyEdit — instant only when changes stay inside anchored text paths', () => {
+  const RE = /^projects\.\d+\.(name|lead|tags\.\d+|build\.items\.\d+)$/;
+  const base = { projects: [{ id: 'a', name: 'Old', layout: 'case', tags: ['x', 'y'], build: { items: ['one', 'two'] } }] };
+
+  it('true when only an anchored text value changes', () => {
+    const next = { projects: [{ id: 'a', name: 'New name', layout: 'case', tags: ['x', 'y'], build: { items: ['one', 'two'] } }] };
+    expect(textOnlyEdit(base, next, RE)).toBe(true);
+  });
+
+  it('true for an anchored array-item text change (a tag reword)', () => {
+    const next = { projects: [{ id: 'a', name: 'Old', layout: 'case', tags: ['x', 'Z'], build: { items: ['one', 'two'] } }] };
+    expect(textOnlyEdit(base, next, RE)).toBe(true);
+  });
+
+  it('false when a row/tag is ADDED (structure changed → rebuild)', () => {
+    const next = { projects: [{ id: 'a', name: 'Old', layout: 'case', tags: ['x', 'y', 'w'], build: { items: ['one', 'two'] } }] };
+    expect(textOnlyEdit(base, next, RE)).toBe(false);
+  });
+
+  it('false when a NON-anchored value changes (layout swap → rebuild)', () => {
+    const next = { projects: [{ id: 'a', name: 'Old', layout: 'compact', tags: ['x', 'y'], build: { items: ['one', 'two'] } }] };
+    expect(textOnlyEdit(base, next, RE)).toBe(false);
+  });
+
+  it('false when a whole project is removed', () => {
+    const two = { projects: [base.projects[0], { id: 'b', name: 'B' }] };
+    expect(textOnlyEdit(two, base, RE)).toBe(false);
   });
 });
 
@@ -141,6 +175,14 @@ describe('build output — page-body copy ships its anchors', () => {
 
   it('the 404 page anchors its heading', () => {
     expect(read('404.html')).toContain('data-cms="notFound.heading"');
+  });
+
+  it('projects case-study data + resume fields ship their anchors', () => {
+    const projects = read('projects/index.html');
+    expect(projects).toContain('data-cms="projects.0.name"');
+    const resume = read('resume/index.html');
+    expect(resume).toContain('data-cms="header.name"');
+    expect(resume).toContain('data-cms-rich="bold"'); // experience bullets (**metric**)
   });
 
   it('every shipped data-cms path resolves to a real site.json key (no typos)', () => {

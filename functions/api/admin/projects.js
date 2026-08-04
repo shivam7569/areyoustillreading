@@ -16,8 +16,15 @@
  */
 import { requireAdmin, json } from '../../../lib/require-admin.js';
 import { toBase64Utf8, fromBase64Utf8 } from '../../../lib/base64.js';
+// INSTANT overlay: mirror text-only edits to KV so the copy middleware reflects them
+// in seconds. textOnlyEdit gates the "instant" claim — a layout/row change is NOT
+// overlay-able (the per-string text overlay can't add/remove/re-attribute DOM), so it
+// falls back to the rebuild. Keep this regex in lockstep with the data-cms anchors on
+// src/pages/projects.astro (the case-study body fields).
+import { writeCopy, textOnlyEdit } from '../../../lib/site-copy.js';
 
 const PROJECTS_JSON = 'src/data/projects.json';
+const PROJECTS_ANCHORED_RE = /^projects\.\d+\.(name|lead|tags\.\d+|families\.heading|families\.count\.(fig|cap)|families\.rows\.\d+\.(n|v|sub)|build\.heading|build\.items\.\d+)$/;
 const MAX_IMG_BYTES = 4 * 1024 * 1024; // 4 MB — a screenshot is far smaller
 const OK_EXT = { png: 'png', jpg: 'jpg', jpeg: 'jpg', webp: 'webp' };
 const ID_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
@@ -135,7 +142,17 @@ export async function onRequestPost({ request, env }) {
   try {
     await putFile(env, PROJECTS_JSON, { message: 'chore(projects): update from Studio', contentBase64: toBase64Utf8(serialized), sha: existing ? existing.sha : undefined });
   } catch (e) { return json({ error: String((e && e.message) || e) }, 502); }
-  return json({ ok: true });
+  // Instant overlay for a TEXT-ONLY edit; otherwise clear any stale overlay so the
+  // page serves the fresh static build once the rebuild lands (no partial overlay).
+  let oldContent = null;
+  if (existing) { try { oldContent = JSON.parse(fromBase64Utf8(existing.base64)); } catch {} }
+  let instant = false;
+  if (oldContent && textOnlyEdit(oldContent, content, PROJECTS_ANCHORED_RE)) {
+    instant = await writeCopy(env, 'copy:projects', content);
+  } else {
+    try { if (env.POSTS_HTML) await env.POSTS_HTML.delete('copy:projects'); } catch {}
+  }
+  return json({ ok: true, instant });
 }
 
 export async function onRequestDelete({ request, env }) {

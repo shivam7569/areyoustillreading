@@ -662,7 +662,9 @@ import { PLATES } from '../../lib/plates.mjs';
       const r = await adminFetch('/api/admin/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: model }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
-      status('Saved. The projects page rebuilds in ~1 minute.', 'ok');
+      // Text edits reflect instantly via the edge overlay; a layout/row change needs
+      // the rebuild (the text overlay can't add/remove/re-attribute the DOM).
+      status(d.instant ? 'Saved — live now.' : 'Saved. Layout/structure changes go live on the next rebuild (~1 min).', 'ok');
     } catch (err) { status('Save failed: ' + err.message, 'err'); }
   });
 

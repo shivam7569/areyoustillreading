@@ -45,7 +45,6 @@ const emailHref = (header.contacts.find((c) => c.href?.startsWith('mailto:')) ||
 // Split a bullet on **bold** markers into ordered segments (real <b>, scoped + escaped).
 const mark = (s) => s.split(/\*\*(.+?)\*\*/g).map((t, i) => ({ t, b: i % 2 === 1 }));
 
-const visibleRoles = experience.roles.filter((r) => r.show !== false);
 const roleBullets = (r) => (experience.density === 'tight' ? r.bullets.slice(0, 2) : r.bullets);
 
 // Download affordance: a real file link only when a PDF has been uploaded AND
@@ -68,7 +67,7 @@ const pdfReady = download.mode === 'file' && !!download.pdfName;
                 <span class="line"></span>
                 <span class="eyebrow">Curriculum vitae</span>
               </div>
-              <h1>{header.name}</h1>
+              <h1 data-cms="header.name">{header.name}</h1>
               <p class="role"><b>{roleParts[0]}</b>{roleParts.slice(1).map((p) => (<><span aria-hidden="true">·</span>{p}</>))}</p>
               <div class="facts">
                 {header.contacts.map((c) => (<a href={c.href}>{c.label}</a>))}
@@ -88,34 +87,34 @@ const pdfReady = download.mode === 'file' && !!download.pdfName;
 
         {key === 'figs' && shown.figs && (
           <div class="figs" style={`--fig-cols:${figCols}`}>
-            {figs.map((f) => (<div class="fig"><b>{f.n}</b><span>{f.l}</span></div>))}
+            {figs.map((f, fi) => (<div class="fig"><b data-cms={`figs.${fi}.n`}>{f.n}</b><span data-cms={`figs.${fi}.l`}>{f.l}</span></div>))}
           </div>
         )}
 
         {key === 'summary' && shown.summary && (
-          <div class="cv-summary"><p>{summary}</p></div>
+          <div class="cv-summary"><p data-cms="summary">{summary}</p></div>
         )}
 
         {key === 'experience' && shown.experience && (
           <section class="sect exp" data-layout={experience.layout}>
             <h2>Experience</h2>
-            {visibleRoles.map((job) => (
+            {experience.roles.map((job, ri) => (job.show === false ? null : (
               <article class="job">
                 <div class="when">
-                  {job.dates}
-                  <span class="place">{job.company}</span>
-                  {job.where && <span class="where">{job.where}</span>}
+                  <span data-cms={`experience.roles.${ri}.dates`}>{job.dates}</span>
+                  <span class="place" data-cms={`experience.roles.${ri}.company`}>{job.company}</span>
+                  {job.where && <span class="where" data-cms={`experience.roles.${ri}.where`}>{job.where}</span>}
                 </div>
                 <div>
-                  <h3>{job.title}</h3>
+                  <h3 data-cms={`experience.roles.${ri}.title`}>{job.title}</h3>
                   <ul>
-                    {roleBullets(job).map((p) => (
-                      <li>{mark(p).map((seg) => (seg.b ? <b>{seg.t}</b> : seg.t))}</li>
+                    {roleBullets(job).map((p, bi) => (
+                      <li data-cms={`experience.roles.${ri}.bullets.${bi}`} data-cms-rich="bold">{mark(p).map((seg) => (seg.b ? <b>{seg.t}</b> : seg.t))}</li>
                     ))}
                   </ul>
                 </div>
               </article>
-            ))}
+            )))}
           </section>
         )}
 
@@ -141,8 +140,8 @@ const pdfReady = download.mode === 'file' && !!download.pdfName;
           <section class="sect">
             <h2>Publications &amp; patents</h2>
             <div class="pubs" style={`--pub-cols:${pubs.cols}`}>
-              {pubs.items.map((p) => (
-                <div class="pub"><span class="k">{p.kicker}</span><p>{p.body}</p></div>
+              {pubs.items.map((p, pi) => (
+                <div class="pub"><span class="k" data-cms={`pubs.items.${pi}.kicker`}>{p.kicker}</span><p data-cms={`pubs.items.${pi}.body`}>{p.body}</p></div>
               ))}
             </div>
           </section>
@@ -152,15 +151,15 @@ const pdfReady = download.mode === 'file' && !!download.pdfName;
           <section class="sect">
             <h2>Education</h2>
             <div class="edu">
-              <span class="t">{education.degree}<small>{education.school}</small></span>
-              <span class="y">{education.dates}</span>
+              <span class="t"><span data-cms="education.degree">{education.degree}</span><small data-cms="education.school">{education.school}</small></span>
+              <span class="y" data-cms="education.dates">{education.dates}</span>
             </div>
           </section>
         )}
 
         {key === 'close' && shown.close && (
           <div class="cv-close">
-            <span>{closeText}</span>
+            <span data-cms="close">{closeText}</span>
             <div class="close-actions">
               <a class="btn btn-ghost btn-sm" href={emailHref}>Get in touch</a>
               <a class="btn btn-primary btn-sm proj-cta" href="/projects">See selected projects <span class="arrow" aria-hidden="true">→</span></a>

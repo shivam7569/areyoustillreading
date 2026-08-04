@@ -694,7 +694,9 @@ import seed from '../../data/resume.json';
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
       model = normalize(content);
-      status('Saved. The public page rebuilds in ~1 minute.', 'ok');
+      // Text edits reflect instantly via the edge overlay; reordering/showing-hiding a
+      // section or adding a row needs the rebuild (the overlay can't restructure DOM).
+      status(d.instant ? 'Saved — live now.' : 'Saved. Structure changes go live on the next rebuild (~1 min).', 'ok');
     } catch (err) { status('Save failed: ' + err.message, 'err'); }
   });
 

@@ -19,8 +19,14 @@
  */
 import { requireAdmin, json } from '../../../lib/require-admin.js';
 import { toBase64Utf8, fromBase64Utf8 } from '../../../lib/base64.js';
+// INSTANT overlay: mirror text-only edits to KV so the copy middleware reflects them
+// in seconds. textOnlyEdit gates the "instant" claim (a section reorder / show-hide /
+// added row is NOT overlay-able). Keep this regex in lockstep with the data-cms
+// anchors on src/pages/resume.astro. Bullets carry data-cms-rich="bold" (**metric**).
+import { writeCopy, textOnlyEdit } from '../../../lib/site-copy.js';
 
 const RESUME_JSON = 'src/data/resume.json';
+const RESUME_ANCHORED_RE = /^(header\.name|summary|close|experience\.roles\.\d+\.(dates|company|where|title)|experience\.roles\.\d+\.bullets\.\d+|pubs\.items\.\d+\.(kicker|body)|education\.(degree|school|dates)|figs\.\d+\.(n|l))$/;
 const RESUME_PDF = 'public/resume.pdf';
 const MAX_PDF_BYTES = 8 * 1024 * 1024; // 8 MB — a CV PDF is far smaller
 
@@ -168,7 +174,17 @@ export async function onRequestPost({ request, env }) {
   } catch (e) {
     return json({ error: String((e && e.message) || e) }, 502);
   }
-  return json({ ok: true });
+  // Instant overlay for a TEXT-ONLY edit; otherwise clear any stale overlay so the
+  // page serves the fresh static build once the rebuild lands (no partial overlay).
+  let oldContent = null;
+  if (existing) { try { oldContent = JSON.parse(fromBase64Utf8(existing.base64)); } catch {} }
+  let instant = false;
+  if (oldContent && textOnlyEdit(oldContent, content, RESUME_ANCHORED_RE)) {
+    instant = await writeCopy(env, 'copy:resume', content);
+  } else {
+    try { if (env.POSTS_HTML) await env.POSTS_HTML.delete('copy:resume'); } catch {}
+  }
+  return json({ ok: true, instant });
 }
 
 // ---- DELETE ?pdf: remove the served PDF ------------------------------------

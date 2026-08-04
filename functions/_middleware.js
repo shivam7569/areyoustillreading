@@ -48,7 +48,7 @@
  *   `copy:` key prefix avoids collision with post slugs / __index / early: / rl:).
  * ============================================================================
  */
-import { flattenCopy, readFreshCopy, emphHtml } from '../lib/site-copy.js';
+import { flattenCopy, readFreshCopy, emphHtml, boldHtml } from '../lib/site-copy.js';
 
 // Which requests are overlay candidates. Excludes: non-GET/HEAD; APIs (JSON); the
 // admin dashboard (its own AdminLayout, no data-cms anchors); gated paid bodies
@@ -106,8 +106,10 @@ export async function onRequest(context) {
         // Rich fields (headline/body with *emphasis*) reproduce the build-time
         // emph() so the overlay matches the baked markup; plain fields inject as
         // escaped text (HTMLRewriter's setInnerContent default is html:false).
-        if (el.getAttribute('data-cms-rich') === 'emph') el.setInnerContent(emphHtml(val), { html: true });
-        else el.setInnerContent(val);
+        const rich = el.getAttribute('data-cms-rich');
+        if (rich === 'emph') el.setInnerContent(emphHtml(val), { html: true }); // *italic*
+        else if (rich === 'bold') el.setInnerContent(boldHtml(val), { html: true }); // **bold** (resume bullets)
+        else el.setInnerContent(val); // plain text (escaped)
       },
     })
     .on('[data-cms-attr]', {
