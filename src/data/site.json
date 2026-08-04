@@ -1,6 +1,9 @@
 {
   "global": {
-    "brand": { "accent": "are", "rest": "youstillreading" },
+    "brand": {
+      "accent": "are",
+      "rest": "youstillreading"
+    },
     "nav": {
       "home": "Home",
       "blog": "Blog",
@@ -15,10 +18,14 @@
       "rss": "RSS",
       "tagline": "Written to be finished."
     },
-    "seo": { "description": "Notes on LLM engineering, plus the projects behind them." }
+    "seo": {
+      "description": "Notes on LLM engineering, plus the projects behind them."
+    }
   },
   "home": {
-    "seo": { "title": "areyoustillreading — LLM engineering notes" },
+    "seo": {
+      "title": "areyoustillreading — LLM engineering notes"
+    },
     "hero": {
       "eyebrow": "Deep dives & field notes",
       "title": "In-depth writing on LLM engineering — and the",
@@ -39,7 +46,9 @@
       "ctaSeries": "Continue the series"
     },
     "browse": "Browse the archive →",
-    "recent": { "heading": "Recent writing" },
+    "recent": {
+      "heading": "Recent writing"
+    },
     "newsletter": {
       "heading": "Get the next essay by email.",
       "blurb": "New posts on LLM engineering and the systems underneath — straight to your inbox. No spam, unsubscribe in one click."
@@ -103,7 +112,10 @@
     }
   },
   "notFound": {
-    "seo": { "title": "Not found — areyoustillreading", "description": "Page not found." },
+    "seo": {
+      "title": "Not found — areyoustillreading",
+      "description": "Page not found."
+    },
     "num": "404",
     "heading": "You've read past the end of the page.",
     "body": "Nothing lives at this address. The link was probably wrong before it reached you, or the page has since moved.",
@@ -120,31 +132,46 @@
     }
   },
   "subscribeError": {
-    "seo": { "title": "Something went wrong — areyoustillreading", "description": "Subscription error." },
+    "seo": {
+      "title": "Something went wrong — areyoustillreading",
+      "description": "Subscription error."
+    },
     "heading": "Hmm, that didn't work",
     "body": "That link may be invalid or expired, or the email was malformed. Try subscribing again from the homepage.",
     "home": "← Home"
   },
   "subscribed": {
-    "seo": { "title": "Subscribed — areyoustillreading", "description": "You're subscribed." },
+    "seo": {
+      "title": "Subscribed — areyoustillreading",
+      "description": "You're subscribed."
+    },
     "heading": "You're subscribed 🎉",
     "body": "Thanks for confirming. You'll get new posts by email.",
     "cta": "Read the blog →"
   },
   "unsubscribed": {
-    "seo": { "title": "Unsubscribed — areyoustillreading", "description": "You've been unsubscribed." },
+    "seo": {
+      "title": "Unsubscribed — areyoustillreading",
+      "description": "You've been unsubscribed."
+    },
     "heading": "You've been unsubscribed",
     "body": "You won't receive any more emails. You can resubscribe anytime from the homepage.",
     "home": "← Home"
   },
   "checkInbox": {
-    "seo": { "title": "Almost there — areyoustillreading", "description": "Confirm your subscription." },
+    "seo": {
+      "title": "Almost there — areyoustillreading",
+      "description": "Confirm your subscription."
+    },
     "heading": "Almost there",
     "body": "Check your inbox for a confirmation link to finish subscribing. If it's not there in a minute, check your spam folder.",
     "home": "← Home"
   },
   "blogIndex": {
-    "seo": { "title": "Blog — areyoustillreading", "description": "Every essay on LLM engineering and the systems underneath, grouped by year." },
+    "seo": {
+      "title": "Blog — areyoustillreading",
+      "description": "Every essay on LLM engineering and the systems underneath, grouped by year."
+    },
     "eyebrow": "The blog",
     "title": "Every essay,",
     "titleEm": "in the order it arrived.",
@@ -164,7 +191,10 @@
     }
   },
   "blogTopics": {
-    "seo": { "title": "Topics — areyoustillreading", "description": "Browse essays by topic." },
+    "seo": {
+      "title": "Topics — areyoustillreading",
+      "description": "Browse essays by topic."
+    },
     "backlink": "All essays",
     "eyebrow": "Topics",
     "title": "Browse by",
@@ -182,7 +212,10 @@
     "essayPlural": "essays"
   },
   "series": {
-    "seo": { "title": "Series — areyoustillreading", "description": "Multi-part collections — each a single argument split across essays that build on each other." },
+    "seo": {
+      "title": "Series — areyoustillreading",
+      "description": "Multi-part collections — each a single argument split across essays that build on each other."
+    },
     "eyebrow": "Series",
     "title": "Some ideas",
     "titleEm": "don't fit in one sitting.",
@@ -200,7 +233,7 @@
     }
   },
   "post": {
-    "author": "Shivam Chaudhary",
+    "author": "gradghost",
     "backlink": "Back to the blog",
     "kicker": "Field notes",
     "updatedLabel": "updated",
@@ -216,7 +249,10 @@
     }
   },
   "login": {
-    "seo": { "title": "Sign in — areyoustillreading", "description": "Sign in to areyoustillreading." },
+    "seo": {
+      "title": "Sign in — areyoustillreading",
+      "description": "Sign in to areyoustillreading."
+    },
     "heading": "Sign in",
     "lede": "Sign in to comment, highlight, and keep private notes on posts.",
     "emailPlaceholder": "you@example.com",
@@ -234,7 +270,10 @@
     "msgRedirecting": "Redirecting to GitHub…"
   },
   "account": {
-    "seo": { "title": "Your account — areyoustillreading", "description": "Your account." },
+    "seo": {
+      "title": "Your account — areyoustillreading",
+      "description": "Your account."
+    },
     "checking": "Checking your session…",
     "signedOut": {
       "eyebrow": "Account",
