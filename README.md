@@ -28,8 +28,12 @@ A personal platform with four jobs:
    **interactive Python/Plotly plots that also render for readers**. Archive, per-tag and
    per-topic pages, and **multi-part series** (`/series`).
 3. **Owned audience + monetization** — email list (double opt-in), reader accounts,
-   engagement features (comments, highlights + discussion, private notes), **first-party
-   cookieless analytics**, a **newsletter broadcast on publish**, and a **per-post paywall**.
+   engagement features (comments, highlights + discussion, private notes, a reader-facing
+   **Notes & highlights** panel on `/account` that deep-links back to each passage), a
+   **"Did it hold?" reader-feedback poll** on every post, **holistic author email
+   notifications** (a private email on every new comment / highlight / note / discussion /
+   upvote / verdict), **first-party cookieless analytics**, a **newsletter broadcast on
+   publish**, and a **per-post paywall**.
 4. **A world-class admin Studio** (`/admin`) — a control center for the whole site: a
    Medium-style WYSIWYG **editor** (`/admin/write`) that renders diagrams and runs Python
    plots live; dashboards for posts, drafts, audience, engagement, analytics and revenue;
@@ -153,7 +157,7 @@ areyoustillreading/
 │   │   └── AdminLayout.astro  ★ the Studio shell: grouped sidebar nav, gate, account row
 │   ├── components/
 │   │   ├── BaseHead.astro · SubscribeForm.astro · ShareBar.astro · Analytics.astro
-│   │   ├── SeriesNav.astro · PlotlyReader.astro
+│   │   ├── SeriesNav.astro · PlotlyReader.astro · Feedback.astro ("Did it hold?" poll)
 │   │   └── Comments.astro · Highlights.astro · Notes.astro · PaywallGate.astro
 │   └── pages/
 │       ├── index.astro · about.astro · blog/index.astro · blog/[...slug].astro
@@ -171,9 +175,12 @@ areyoustillreading/
 │   ├── api/subscribe · confirm · unsubscribe            (email list)
 │   ├── api/checkout · dodo-webhook                       (payments — price-only PWYW)
 │   ├── api/track                                         (cookieless analytics beacon)
+│   ├── api/feedback                                      ("Did it hold?" verdict upsert + crowd read)
+│   ├── api/notify                                        (author email hub; called by Postgres pg_net triggers)
 │   ├── api/publish.js · api/admin/post.js                (commit a post to GitHub)
 │   ├── api/admin/{resume,projects,site}.js              (★ commit the data files)
-│   ├── api/admin/{overview,posts,subscribers,analytics,sales,comments}.js  (dashboards, read)
+│   ├── api/admin/{overview,posts,subscribers,analytics,sales,comments,feedback}.js  (dashboards, read)
+│   ├── api/admin/admins.js                               (add/remove admins by email — service-role RPC)
 │   ├── api/admin/{broadcast,digest,early}.js            (newsletter broadcast / digest / early access)
 │   ├── blog/_middleware.js                               (instant-publish overlay on /blog/*)
 │   └── gated/_middleware.js                              (paywall enforcement on /gated/*)
@@ -205,9 +212,12 @@ admin — link/UI visibility is never the security boundary.
 - **Content Management** (`/admin/content`) ★ — one screen to edit **every page's copy**
   across the whole site (`src/data/site.json`), keyed by page, chosen from a page-picker.
   Schema-driven: adding a page is one entry + pointing that page at `site.json`. See §5a.
-- **Audience / Engagement / Analytics / Revenue** — subscribers, comments/highlights/notes,
-  first-party analytics, and sales.
-- **Series / Settings** — series management and site settings.
+- **Audience / Engagement / Analytics / Revenue** — subscribers, comments/highlights/notes
+  (with math rendering), first-party analytics **+ the "Did it hold?" reader-verdict panel**,
+  and sales.
+- **Series / Settings** — series management and site settings, including the **pen-name /
+  byline** editor and an **Admins** panel that grants/revokes Studio access **by email**
+  (backed by `/api/admin/admins` + service-role SQL helpers; the last admin can't be removed).
 
 **The editor** (`/admin/write`) — a Medium-inspired WYSIWYG built on **Milkdown "Crepe"**
 (ProseMirror). Everything serializes straight to the Markdown the site builds from.
@@ -350,9 +360,11 @@ A fresh clone must re-create `.env` before a local build (we bake these at build
 | --- | --- | --- |
 | `SUPABASE_URL` | all Functions | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | all Functions | Supabase **service-role** key (bypasses RLS — server only) |
-| `RESEND_API_KEY` | subscribe, broadcast | Resend API key (also Supabase SMTP password) |
-| `EMAIL_FROM` *(opt)* | subscribe, broadcast | sender address (default `hello@areyoustillreading.dev`) |
+| `RESEND_API_KEY` | subscribe, broadcast, notify | Resend API key (also Supabase SMTP password) |
+| `EMAIL_FROM` *(opt)* | subscribe, broadcast, notify | sender address (default `hello@areyoustillreading.dev`) |
 | `MAIL_ADDRESS` | broadcast | physical mailing address for the newsletter footer (CAN-SPAM); set before real sends |
+| **`AUTHOR_EMAIL`** | notify | where reader-activity notifications are sent (unset = notifications off) |
+| **`NOTIFY_SECRET`** | notify | shared secret the Postgres pg_net triggers send as `x-notify-secret`; must match `db/notify.sql` |
 | `TURNSTILE_SECRET_KEY` | subscribe | Turnstile secret (server-side verify) |
 | `DODO_API_KEY` | checkout | Dodo API key (test or live) |
 | `DODO_WEBHOOK_SECRET` | dodo-webhook | Dodo webhook signing secret |
@@ -380,12 +392,15 @@ needs **custom SMTP** (Authentication → SMTP) via Resend (`smtp.resend.com:465
 | `/api/confirm?token=` | GET | Confirm a subscription (idempotent). | SUPABASE_* |
 | `/api/unsubscribe?token=` | GET | One-click unsubscribe. | SUPABASE_* |
 | `/api/track` | POST | Cookieless analytics beacon → insert an `analytics_events` row. Rate-limited; `?noanalytics=1` opts out client-side. | SUPABASE_* |
+| `/api/feedback` | GET/POST | The "Did it hold?" poll: POST upserts a reader's verdict (held/skimmed/lost) into the deny-all `feedback` table (service-role); GET returns the crowd aggregate + the reader's own. Rate-limited; benign-empty on failure. | SUPABASE_* |
+| `/api/notify` | POST | Author notification hub. Postgres pg_net triggers POST each new interaction here (`x-notify-secret` gated) → emails the author via Resend. Best-effort (always 200 so a trigger never retry-storms). | NOTIFY_SECRET, AUTHOR_EMAIL, RESEND_API_KEY, SUPABASE_* |
 | `/api/checkout` | POST | Verify user token → read the post's `price_cents` → create a hosted **Pay-What-You-Want** checkout on `DODO_UNLOCK_PRODUCT_ID` for that amount, `metadata {post_id,user_id}` → return `{url}`. | SUPABASE_*, DODO_API_KEY, DODO_UNLOCK_PRODUCT_ID |
 | `/api/dodo-webhook` | POST | Verify Standard-Webhooks signature → on `payment.succeeded`, upsert an `entitlements` row. | DODO_WEBHOOK_SECRET, SUPABASE_* |
 | **`/api/publish`** | POST | **Verify admin session** → commit `src/content/blog/<slug>.md` to GitHub; optional newsletter broadcast. | GITHUB_TOKEN, SUPABASE_*, RESEND_API_KEY |
 | `/api/admin/post` | POST | Admin — edit a post's frontmatter (visibility, paywall, series, early access) → commit. | GITHUB_TOKEN, SUPABASE_* |
 | `/api/admin/{resume,projects,site}` | GET/POST | Admin — read + commit `src/data/{resume,projects,site}.json` (projects/resume also handle image/PDF assets). | GITHUB_TOKEN, SUPABASE_* |
-| `/api/admin/{overview,posts,subscribers,analytics,sales,comments}` | GET | Admin dashboards — read aggregates for the Studio. | SUPABASE_* |
+| `/api/admin/{overview,posts,subscribers,analytics,sales,comments,feedback}` | GET | Admin dashboards — read aggregates for the Studio (feedback = per-post verdict tallies). | SUPABASE_* |
+| `/api/admin/admins` | GET/POST/DELETE | Admin — list / add / remove admins **by email**; calls service-role-only SECURITY DEFINER SQL helpers that resolve email↔user via `auth.users` and write `public.admins`. Refuses to remove the last admin. | SUPABASE_* |
 | `/api/admin/{broadcast,digest,early}` | POST | Admin — send the newsletter broadcast / a digest / manage early access. | RESEND_API_KEY, MAIL_ADDRESS, SUPABASE_* |
 | `/blog/*` | middleware | Instant-publish: overlay a just-committed post into the archive/post page until the rebuild lands (from KV). | (KV) |
 | `/gated/*` | middleware | Gate full-content fragments: not paywalled → serve; else require a valid Supabase token AND (admin OR entitlement), else **403**. Fails safe (locked). | SUPABASE_* |
@@ -421,10 +436,19 @@ order (later files reuse `is_admin()`):
 7. `db/post_paywall.sql` — **post_paywall** `(post_id, is_paid, price_cents, currency, product_id)` — price is the source of truth (product is the shared PWYW one).
 8. `db/analytics.sql` — **analytics_events** (cookieless pageview/event rows) + a retention/purge routine; synthetic load-test rows tagged `lt_`.
 9. `db/drafts.sql` — **drafts** (per-user server-side editor drafts; own-or-admin).
+10. `db/feedback.sql` — **feedback** (one verdict per reader/post: held/skimmed/lost + read %); deny-all RLS, written only by the service-role `/api/feedback`.
+11. `db/notify.sql` — enables **pg_net** + a shared `notify_author()` trigger on comments / highlight_comments / highlights / notes / feedback / votes that POSTs each new row to `/api/notify`. Set the `NOTIFY_SECRET` placeholder inside the file to match the env var.
+12. `db/admins-manage.sql` — adds `created_at`/`added_by` to **admins** + three service-role-only SECURITY DEFINER helpers (`admin_list` / `admin_add_by_email` / `admin_remove_by_email`) behind `/api/admin/admins`.
 
 > `is_admin()` is deliberately **`language plpgsql`** — a `language sql` version fails to
 > create in the Supabase editor. **Your Supabase user must be in `public.admins`** to reach
-> the Studio and publish.
+> the Studio and publish (bootstrap the first admin with `insert into public.admins …`; after
+> that use Studio → Settings → Admins).
+>
+> **SECURITY DEFINER lockdown gotcha:** a Postgres function meant to be server-only must
+> `revoke … from public, anon, authenticated` — **not just `public`**. Supabase's default
+> privileges grant new `public` functions to `anon`+`authenticated` directly, so a bare
+> `revoke from public` leaves them callable straight through PostgREST (see `db/admins-manage.sql`).
 
 ---
 
@@ -434,7 +458,7 @@ order (later files reuse `is_admin()`):
 itself the first gate), then each `tests/*.test.ts` asserts on the emitted `dist/` — pages
 exist, markup markers present, feeds/sitemap correct, data-driven pages render their content,
 and crucially **paid bodies never leak** into public output. Nothing advances until `npm test`
-is green. Current: **43 tests / 22 files.**
+is green. Current: **69 tests / 23 files.**
 
 ---
 
@@ -472,6 +496,10 @@ is green. Current: **43 tests / 22 files.**
   session server-side — link visibility is never the boundary.
 - **Paywall is server-side** and fails safe (locked). **`/api/publish` + `/api/admin/*`** hold
   repo-write access and are gated by a verified admin Supabase session.
+- **Admin set is managed by email** via `/api/admin/admins`; the underlying SQL helpers are
+  SECURITY DEFINER and granted to the **service role only** (never `anon`/`authenticated`), so
+  the `requireAdmin` gate — not the database — is the trust boundary, and the last admin can't
+  be removed. **Author notifications** are secret-gated (`NOTIFY_SECRET`) and best-effort.
 - **Webhook** signatures are HMAC-verified before writing entitlements. **Subscribe** has a
   honeypot, per-email cooldown, no-enumeration responses, and Turnstile. Public endpoints are
   **rate-limited** (KV).
@@ -500,6 +528,13 @@ is green. Current: **43 tests / 22 files.**
 - **Pyodide/Plotly** are lazy-loaded and run **only in the editor**; concurrent plot cells must
   be **serialized** through the one interpreter. Reader plots are baked figure JSON.
 - **`onAuthStateChange` fires `SIGNED_IN` on every load + tab refocus** — never reload on it.
+- **Server-only Postgres functions:** `revoke … from public, anon, authenticated` — a bare
+  `revoke from public` leaves Supabase's default `anon`/`authenticated` grants intact and the
+  function stays callable via PostgREST. Guard check-then-act mutations with `pg_advisory_xact_lock`.
+- **Cloudflare masks a Function's 5xx** with its own "Bad gateway" page (the JSON body is lost)
+  → return **4xx** for handled application errors so the message reaches the client.
+- **KV: the Pages-bound `POSTS_HTML` namespace is invisible to `wrangler kv namespace list`**
+  (the CLI sees a different id) → seed/inspect that data only *through* a Function.
 - Deploy: follow `/x`→`/x/` redirects when polling; a CF `521` at asset upload is transient
   (retry via Wrangler direct upload); the production alias lags ~1 min.
 - Complex shell one-liners (`$(...)` capture, `;`-chains) can trigger permission prompts →
@@ -511,6 +546,10 @@ is green. Current: **43 tests / 22 files.**
 
 - **Phase 1 — Free site + owned subscribe.** ✅ live.
 - **Phase 2 — Auth + engagement (comments, highlights + discussion, private notes).** ✅
+  Later additions: a reader-facing **Notes & highlights** panel on `/account` that deep-links
+  to each passage ✅, a **"Did it hold?" reader-feedback poll** on every post ✅, **holistic
+  author email notifications** on every reader interaction (Postgres pg_net → `/api/notify`) ✅,
+  and **manage admins by email** from Studio → Settings ✅.
 - **Phase 3 — Per-post paywall (Dodo MoR, price-only PWYW).** ✅ (test mode; flip to live per §13).
 - **Phase 4 — Writing Studio.** ✅ WYSIWYG editor, D2 diagrams, interactive Python/Plotly
   cells + GIF export + notebook output, **reader-side interactive plots** ✅, server-side
@@ -522,4 +561,6 @@ is green. Current: **43 tests / 22 files.**
   across the whole site; ✅ **Content Management** makes every page's copy editable from the
   Studio (16 of the site's surfaces done; the shared reader widgets — subscribe form, share
   bar, series nav, paywall band, comments/notes/highlights — are the remaining batch).
-- **Pre-launch backlog:** remove test posts; flip Dodo test → live keys.
+- **Pre-launch backlog:** remove the scaffolding test posts (`src/content/blog/`); flip Dodo
+  test → live keys (§13). Activation steps for the newest features: run `db/feedback.sql`,
+  `db/notify.sql` (+ set `NOTIFY_SECRET`/`AUTHOR_EMAIL`) and `db/admins-manage.sql`.

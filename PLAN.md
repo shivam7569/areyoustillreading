@@ -3,8 +3,13 @@
 Living planning document. Supersedes the original brief where they differ. Updated as
 decisions are made.
 
-**Status (2026-07-27):** Phases 1–4 substantially built and live on the **`dev`**
-Cloudflare preview — **not yet promoted to production (`main`)**. Shipped since 2026-07-24:
+**Status (2026-08-04):** Phases 1–5 built and **live in production** at
+https://areyoustillreading.dev (deployed via Wrangler direct upload to the `main` Pages
+branch). See [`README.md`](README.md) for the current, exhaustive system reference — the
+sections below are the running decision history. **Remaining before a "real" launch:** just
+two — remove the scaffolding test posts in `src/content/blog/`, and flip Dodo from test →
+live keys/product. Activation SQL for the newest features (feedback / notifications / admin
+management) is noted in README §11. Shipped since 2026-07-24:
 - **Phase 1** — done and deployed: blog pipeline, Shiki, KaTeX, SEO/OG, RSS, sitemap,
   Pagefind search, resume + projects, owned email capture (double opt-in), custom domain.
 - **Phase 2 (auth + engagement)** — done: Supabase auth (magic-link + GitHub), comments,
@@ -21,10 +26,17 @@ Cloudflare preview — **not yet promoted to production (`main`)**. Shipped sinc
   `requireAdmin`; visual per-post **paywall toggle** on Posts; a "Studio" link on the
   public site shown only to admins.
 
-**Remaining for launch:** promote `dev` → `main` (production); swap Dodo **test → live**
-keys + a live PWYW product; re-confirm the admin gate before launch; move editor drafts
-from localStorage to per-user Supabase; add read-through analytics (Plausible); remove the
-demo `premium-example.md`. (Phase 5 — UI/UX design polish — still to come.)
+- **Phase 5 (design + Content Management)** — done: the **Editorial** design system across
+  the whole site (refined-minimal skin, self-hosted serifs, plate artwork); **Content
+  Management** makes every page's copy editable from the Studio (`site.json`). Plus, beyond
+  the original phases: a reader **Notes & highlights** panel with deep-linking, a **"Did it
+  hold?"** feedback poll, **author email notifications** (pg_net → `/api/notify`), and
+  **manage admins by email**.
+
+**Remaining for launch (only two):** remove the scaffolding test posts in
+`src/content/blog/`; swap Dodo **test → live** keys + a live PWYW product. (Everything else
+from the old list — admin gate, server-side drafts, first-party analytics replacing
+Plausible, demo-post removal — is done.)
 
 ---
 
