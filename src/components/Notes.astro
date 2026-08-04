@@ -103,6 +103,13 @@ const { postId } = Astro.props;
   #others-notes { margin-top: 1.25rem; }
   .other-note { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
   .other-note-body { margin: 0.1rem 0 0; white-space: pre-wrap; }
+  /* Deep-link target flash — when arriving via /account "Open" (#note). */
+  .notes[tabindex]:focus { outline: none; } /* scroll + flash are the cue; no box on a full-width panel */
+  .notes.flash { animation: note-flash 1.8s ease-out; }
+  @keyframes note-flash {
+    0%, 22% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 8px; }
+    100% { box-shadow: 0 0 0 3px transparent; border-radius: 8px; }
+  }
 </style>
 
 <script>
@@ -231,7 +238,26 @@ const { postId } = Astro.props;
       const { data: adm } = await supabase.rpc('is_admin');
       isAdmin = adm === true; // strict === true so a non-boolean never enables admin view
     } catch (e) { isAdmin = false; }
-    load();
+    await load();
+    maybeJump();
+  }
+
+  // Deep-link from /account "Notes & highlights": /blog/<slug>/#note scrolls the
+  // private-note panel into view (respecting the sticky header), moves focus to it,
+  // and flashes it once. Honors prefers-reduced-motion. Runs after the panel is
+  // revealed + loaded; no-op for any other hash.
+  let jumped = false;
+  function maybeJump() {
+    if (jumped || location.hash !== '#note' || section.hidden) return;
+    jumped = true;
+    const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    requestAnimationFrame(() => {
+      const top = section.getBoundingClientRect().top + window.scrollY - 120;
+      window.scrollTo({ top, behavior: reduce ? 'auto' : 'smooth' });
+      section.setAttribute('tabindex', '-1'); // focus the panel so keyboard/SR land here
+      try { section.focus({ preventScroll: true }); } catch (e) {}
+      if (!reduce) { section.classList.add('flash'); setTimeout(() => section.classList.remove('flash'), 1900); }
+    });
   }
 
   // Re-run init on login/logout/token-refresh events, then run once on mount.

@@ -333,7 +333,11 @@
       "essayPlural": "essays",
       "noteTag": "Note",
       "highlightTag": "Highlight",
-      "openLabel": "Open →"
+      "openLabel": "Open →",
+      "highlightWord": "highlight",
+      "highlightWordPlural": "highlights",
+      "noteWord": "note",
+      "noteWordPlural": "notes"
     }
   }
 }

@@ -63,6 +63,7 @@ const { postId, author = '', title = '' } = Astro.props;
   mark.hl:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); }
   mark.hl.note { box-shadow: inset 0 -2px 0 var(--accent); }
   mark.hl.flash { background: color-mix(in srgb, var(--accent) 38%, transparent); }
+  mark.hl:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; } /* deep-link target focus */
   .pop { position: relative; border-bottom: 2px dotted color-mix(in srgb, var(--accent) 50%, transparent); cursor: help; }
   .pop::after { content: "Many readers marked this one"; position: absolute; left: 50%; bottom: calc(100% + 9px); transform: translateX(-50%); white-space: nowrap; font-family: var(--sans); font-size: 11px; letter-spacing: .05em; color: var(--on-accent); background: var(--accent); padding: 4px 9px; border-radius: 3px; opacity: 0; pointer-events: none; transition: opacity .18s; z-index: 5; }
   .pop:hover::after { opacity: 1; }
@@ -534,6 +535,29 @@ const { postId, author = '', title = '' } = Astro.props;
       indexBlocks();
       await loadStore();
       await paintPips();
+      jumpToHash();     // deep-link from /account ("Open") → scroll to & flash the passage
+    }
+
+    // If the URL carries #hl-<id> (a link from the reader's account "Notes &
+    // highlights"), scroll that exact highlight into view, move focus to it, and flash
+    // it — mirroring the drawer's "Jump to it". If the passage no longer anchors (the
+    // essay's prose was edited since), fall back to opening the highlights drawer so
+    // the reader still lands on their list rather than silently at the top. Honors
+    // prefers-reduced-motion. Runs once, after the marks are painted.
+    function jumpToHash() {
+      const m = /^#hl-(.+)$/.exec(location.hash || '');
+      if (!m) return;
+      let id = m[1]; try { id = decodeURIComponent(id); } catch (e) {}
+      const sel = (window.CSS && CSS.escape) ? CSS.escape(id) : id.replace(/["\\]/g, '\\$&');
+      const mk = body!.querySelector('mark.hl[data-id="' + sel + '"]') as HTMLElement | null;
+      if (!mk) { if (all().length) open(); return; } // exact passage gone → show their highlights
+      const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+      requestAnimationFrame(() => {
+        scrollTo({ top: mk.getBoundingClientRect().top + scrollY - 140, behavior: reduce ? 'auto' : 'smooth' });
+        mk.setAttribute('tabindex', '-1'); // make the <mark> focusable so keyboard/SR land on it
+        try { mk.focus({ preventScroll: true }); } catch (e) { mk.focus(); }
+        if (!reduce) { mk.classList.add('flash'); setTimeout(() => mk.classList.remove('flash'), 1800); }
+      });
     }
     // Popular-passage marks are PUBLIC (everyone sees them) and must land before the
     // signed-in engine caches each block's original HTML — so kick it off once here.

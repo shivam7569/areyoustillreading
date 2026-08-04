@@ -220,9 +220,11 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
     }
   }
 
-  // Build "Notes & highlights" from the reader's OWN notes + highlights (RLS reads-own).
-  // Each row links to the post it lives on; a highlight shows its quote (+ any private
-  // note the reader attached), a note shows its text.
+  // Build "Notes & highlights" from the reader's OWN notes + highlights (RLS reads-own),
+  // GROUPED BY BLOG and sorted by time. Each row deep-links to the exact mark on the
+  // post: a highlight → /blog/<slug>/#hl-<id> (the post's Highlights script scrolls to
+  // & flashes that passage); a note → /blog/<slug>/#note (scrolls the private-note
+  // panel into view). A highlight also shows any private note the reader attached.
   async function loadMarks(my) {
     const list = document.getElementById('marks-list');
     const empty = document.getElementById('marks-empty');
@@ -231,45 +233,87 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
     try {
       const [n, h] = await Promise.all([
         supabase.from('notes').select('post_id, body, updated_at').order('updated_at', { ascending: false }),
-        supabase.from('highlights').select('post_id, quote, note, created_at').order('created_at', { ascending: false }),
+        supabase.from('highlights').select('id, post_id, quote, note, created_at').order('created_at', { ascending: false }),
       ]);
       notes = n.data || [];
       highlights = h.data || [];
     } catch { notes = []; highlights = []; }
     if (my !== seq) return; // superseded by a newer render
+    const when = (d) => new Date(d).valueOf() || 0;
     const items = [
-      ...notes.map((r) => ({ kind: 'note', post_id: r.post_id, text: r.body, sub: '', date: r.updated_at })),
-      ...highlights.map((r) => ({ kind: 'highlight', post_id: r.post_id, text: r.quote, sub: r.note || '', date: r.created_at })),
-    ].sort((a, b) => new Date(b.date).valueOf() - new Date(a.date).valueOf());
+      ...notes.map((r) => ({ kind: 'note', post_id: r.post_id, text: r.body, sub: '', date: r.updated_at, href: `/blog/${r.post_id}/#note` })),
+      ...highlights.map((r) => ({ kind: 'highlight', post_id: r.post_id, text: r.quote, sub: r.note || '', date: r.created_at, href: `/blog/${r.post_id}/#hl-${encodeURIComponent(r.id)}` })),
+    ];
+    // Group by post; sort groups by most-recent activity, rows within a group by time (newest first).
+    const groups = new Map();
+    for (const it of items) {
+      let g = groups.get(it.post_id);
+      if (!g) { g = { post_id: it.post_id, items: [], latest: 0 }; groups.set(it.post_id, g); }
+      g.items.push(it);
+      const t = when(it.date); if (t > g.latest) g.latest = t;
+    }
+    // Only surface posts that still have a live page. If an essay was later drafted or
+    // deleted, its page 404s and its title/slug isn't in postsMeta — showing it would
+    // leak the raw slug and hand the reader dead links. Skip it (the marks still live
+    // in the reader's account and reappear if the essay is republished).
+    const ordered = [...groups.values()].filter((g) => postsMeta[g.post_id]).sort((a, b) => b.latest - a.latest);
+    for (const g of ordered) g.items.sort((a, b) => when(b.date) - when(a.date));
+
     list.textContent = '';
     const H = AC.marksHeading || 'Notes & highlights';
-    if (!items.length) { empty.hidden = false; heading.textContent = H; return; }
+    if (!ordered.length) { empty.hidden = false; heading.textContent = H; return; }
     empty.hidden = true;
-    heading.textContent = `${H} — ${items.length}`;
-    for (const it of items) {
-      const meta = postsMeta[it.post_id];
-      const a = document.createElement('a');
-      a.className = 'mark-row';
-      a.href = `/blog/${it.post_id}`;
-      const tag = document.createElement('span');
-      tag.className = 'mk-tag ' + it.kind;
-      tag.textContent = it.kind === 'note' ? (ACL.noteTag || 'Note') : (ACL.highlightTag || 'Highlight');
-      const body = document.createElement('span');
-      body.className = 'mk-body';
-      const txt = document.createElement('span');
-      txt.className = 'mk-text';
-      txt.textContent = it.kind === 'highlight' ? `“${it.text || ''}”` : (it.text || ''); // textContent = XSS-safe
-      body.appendChild(txt);
-      if (it.sub) { const s = document.createElement('span'); s.className = 'mk-sub'; s.textContent = it.sub; body.appendChild(s); }
-      const src = document.createElement('small');
-      src.className = 'mk-src';
-      src.textContent = `${meta ? meta.title : it.post_id} · ${fmt(it.date)}`;
-      body.appendChild(src);
-      const go = document.createElement('span');
-      go.className = 'go';
-      go.textContent = ACL.openLabel || 'Open →';
-      a.append(tag, body, go);
-      list.appendChild(a);
+    // Count essays (groups) — mirrors the library panel's "— N essays" heading.
+    heading.textContent = `${H} — ${ordered.length} ${ordered.length === 1 ? (ACL.essaySingular || 'essay') : (ACL.essayPlural || 'essays')}`;
+
+    for (const g of ordered) {
+      const meta = postsMeta[g.post_id];
+      const grp = document.createElement('div');
+      grp.className = 'mkgroup';
+
+      const head = document.createElement('a');
+      head.className = 'mkg-head';
+      head.href = `/blog/${g.post_id}/`;
+      const gt = document.createElement('span');
+      gt.className = 'mkg-title';
+      gt.textContent = meta.title; // textContent = XSS-safe (meta guaranteed by the filter above)
+      // Reader-vocabulary count (never the internal "marks"), by kind — e.g. "2 highlights · 1 note".
+      const nH = g.items.reduce((n, x) => n + (x.kind === 'highlight' ? 1 : 0), 0);
+      const nN = g.items.length - nH;
+      const parts = [];
+      if (nH) parts.push(`${nH} ${nH === 1 ? (ACL.highlightWord || 'highlight') : (ACL.highlightWordPlural || 'highlights')}`);
+      if (nN) parts.push(`${nN} ${nN === 1 ? (ACL.noteWord || 'note') : (ACL.noteWordPlural || 'notes')}`);
+      const gm = document.createElement('span');
+      gm.className = 'mkg-meta';
+      gm.textContent = parts.join(' · ');
+      head.append(gt, gm);
+      grp.appendChild(head);
+
+      for (const it of g.items) {
+        const a = document.createElement('a');
+        a.className = 'mark-row';
+        a.href = it.href;
+        const tag = document.createElement('span');
+        tag.className = 'mk-tag ' + it.kind;
+        tag.textContent = it.kind === 'note' ? (ACL.noteTag || 'Note') : (ACL.highlightTag || 'Highlight');
+        const body = document.createElement('span');
+        body.className = 'mk-body';
+        const txt = document.createElement('span');
+        txt.className = 'mk-text';
+        txt.textContent = it.kind === 'highlight' ? `“${it.text || ''}”` : (it.text || ''); // textContent = XSS-safe
+        body.appendChild(txt);
+        if (it.sub) { const s = document.createElement('span'); s.className = 'mk-sub'; s.textContent = it.sub; body.appendChild(s); }
+        const src = document.createElement('small');
+        src.className = 'mk-src';
+        src.textContent = fmt(it.date);
+        body.appendChild(src);
+        const go = document.createElement('span');
+        go.className = 'go';
+        go.textContent = ACL.openLabel || 'Open →';
+        a.append(tag, body, go);
+        grp.appendChild(a);
+      }
+      list.appendChild(grp);
     }
   }
 
@@ -454,9 +498,16 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
   :global(.lib-row:hover .go) { color: var(--accent); }
   .lib-empty { color: var(--ink-faint); font-family: var(--sans); font-size: 15px; padding: 8px 0; }
 
-  /* Notes & highlights rows — JS-created, so :global (data-astro-cid can't reach them). */
-  .marks { border-top: 1px solid var(--rule); }
-  :global(.mark-row) { display: grid; grid-template-columns: 82px minmax(0, 1fr) 76px; gap: 18px; align-items: start; padding: 17px 6px; border-bottom: 1px solid var(--rule); transition: background 0.22s; }
+  /* Notes & highlights — grouped by blog. JS-created, so :global (data-astro-cid can't reach them). */
+  .marks { display: flex; flex-direction: column; gap: 22px; }
+  :global(.mkgroup) { border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--card); }
+  :global(.mkg-head) { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 14px 16px; background: var(--paper-2); border-bottom: 1px solid var(--rule); text-decoration: none; transition: background 0.2s; }
+  :global(.mkg-head:hover) { background: var(--paper-3, var(--paper-2)); }
+  :global(.mkg-head .mkg-title) { font-family: var(--serif-display); font-size: 17px; line-height: 1.3; color: var(--ink); font-weight: 600; }
+  :global(.mkg-head:hover .mkg-title) { color: var(--accent); }
+  :global(.mkg-head .mkg-meta) { flex: none; font-family: var(--sans); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  :global(.mark-row) { display: grid; grid-template-columns: 82px minmax(0, 1fr) 76px; gap: 18px; align-items: start; padding: 15px 16px; border-top: 1px solid var(--rule-soft, var(--rule)); transition: background 0.22s; }
+  :global(.mkg-head + .mark-row) { border-top: 0; }
   :global(.mark-row:hover) { background: var(--paper-2); }
   @media (max-width: 760px) { :global(.mark-row) { grid-template-columns: 1fr; gap: 8px; } }
   :global(.mark-row .mk-tag) { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; padding-top: 5px; }
@@ -464,7 +515,7 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
   :global(.mark-row .mk-tag.highlight) { color: var(--accent); }
   :global(.mark-row .mk-body) { min-width: 0; }
   :global(.mark-row .mk-text) { display: block; font-family: var(--serif-display); font-size: 17px; line-height: 1.4; color: var(--ink); overflow-wrap: anywhere; }
-  :global(.mark-row .mk-sub) { display: block; font-family: var(--sans); font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); margin-top: 6px; }
+  :global(.mark-row .mk-sub) { display: block; font-family: var(--sans); font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); margin-top: 6px; overflow-wrap: anywhere; }
   :global(.mark-row .mk-src) { display: block; font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); margin-top: 8px; letter-spacing: 0.02em; }
   :global(.mark-row .go) { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); text-align: right; }
   :global(.mark-row:hover .go) { color: var(--accent); }
