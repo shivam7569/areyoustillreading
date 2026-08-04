@@ -29,6 +29,7 @@ import Notes from '../components/Notes.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
 import SeriesNav from '../components/SeriesNav.astro';
 import ShareBar from '../components/ShareBar.astro';
+import Feedback from '../components/Feedback.astro';
 import PlotlyReader from '../components/PlotlyReader.astro';
 import { getSeriesNav } from '../lib/series';
 import { getCollection } from 'astro:content';
@@ -167,6 +168,9 @@ if (!series && here !== -1) {
               </nav>
             )
         }
+
+        {/* "Did it hold?" — anonymous reader-feedback poll (one tap, no account). */}
+        <Feedback postId={post.id} />
 
         {/* Manual share row (web-intent links + copy; nothing auto-posts). */}
         <ShareBar url={shareUrl} title={title} />

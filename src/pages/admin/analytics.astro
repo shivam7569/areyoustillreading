@@ -51,6 +51,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     </div>
 
     <div class="panel">
+      <header><h2>Did it hold?</h2><span class="hint" id="fb-hint">Reader verdict &middot; where they lose it</span></header>
+      <div class="pb flush" id="verdicts"><div class="card-pad muted">Loading…</div></div>
+    </div>
+
+    <div class="panel">
       <header><h2>Data</h2><span class="hint">Housekeeping — deletes are permanent</span></header>
       <div class="pb" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
         <button class="btn btn-sm btn-ghost" id="purge-synthetic" type="button">Clear load-test data</button>
@@ -155,6 +160,50 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     host.innerHTML = all.length ? all.join('') : '<div class="card-pad muted">No referrers yet.</div>';
   }
 
+  // --- "Did it hold?" reader verdicts (in sync with the reader poll) ---------
+  let lastFeedback: any = null;
+  function pctOf(n: number, t: number) { return t ? Math.round((n / t) * 100) : 0; }
+  function verdictBar(p: any) {
+    const t = p.total || 1;
+    const seg = (n: number, color: string) => `<span style="width:${((n / t) * 100).toFixed(1)}%;background:${color}"></span>`;
+    return `<span title="${p.held} held · ${p.skimmed} skimmed · ${p.lost} lost" style="flex:0 0 132px;display:flex;height:8px;border-radius:999px;overflow:hidden;background:var(--border)">` +
+      seg(p.held, 'var(--accent)') +
+      seg(p.skimmed, 'color-mix(in srgb, var(--accent) 42%, transparent)') +
+      seg(p.lost, 'color-mix(in srgb, var(--fg) 20%, transparent)') + '</span>';
+  }
+  function renderVerdicts(d: any) {
+    const host = $('verdicts');
+    if (d && d.setup) {
+      host.innerHTML = '<div class="card-pad muted">Run <code>db/feedback.sql</code> in the Supabase SQL editor once, then reload — reader verdicts will show here.</div>';
+      $('fb-hint').textContent = '';
+      return;
+    }
+    const posts = (d && d.posts) || [];
+    const T = (d && d.totals) || { held: 0, skimmed: 0, lost: 0, total: 0 };
+    $('fb-hint').innerHTML = T.total
+      ? `${pctOf(T.held, T.total)}% held &middot; ${pctOf(T.skimmed, T.total)}% skimmed &middot; ${pctOf(T.lost, T.total)}% lost &middot; ${fmtNum(T.total)} answer${T.total === 1 ? '' : 's'}`
+      : 'Where readers land';
+    if (!posts.length) {
+      host.innerHTML = '<div class="card-pad muted">No verdicts yet. When readers answer &ldquo;Did it hold?&rdquo; at the end of a post, it shows here.</div>';
+      return;
+    }
+    host.innerHTML = posts.map((p: any) => {
+      const title = titles[p.slug] || p.slug;
+      const held = pctOf(p.held, p.total);
+      const lostp = (p.lost && p.lostMedian) ? `lost &para;${p.lostMedian}` : '';
+      return `<div style="${ROW}">
+          <span style="${NAME}"><a href="/blog/${encodeURIComponent(p.slug)}" target="_blank" rel="noopener" style="color:var(--fg);text-decoration:none">${esc(title)}</a></span>
+          ${verdictBar(p)}
+          <span style="flex:0 0 54px;font-size:0.75rem;color:var(--muted);text-align:right">${held}% held</span>
+          <span style="flex:0 0 58px;font-size:0.75rem;color:var(--muted);text-align:right">${lostp}</span>
+          <span style="${NUM}">${fmtNum(p.total)}</span>
+        </div>`;
+    }).join('');
+  }
+  function loadFeedback() {
+    return swrFetch('/api/admin/feedback', (d: any) => { if (d && !d.__error) { lastFeedback = d; renderVerdicts(d); } });
+  }
+
   function loadTitles() {
     return swrFetch('/api/admin/posts', (d: any) => {
       if (d && !d.__error && Array.isArray(d.posts)) {
@@ -162,6 +211,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         for (const p of d.posts) titles[p.slug] = p.title;
         // If the analytics data already painted (with slugs), relabel with real titles.
         if (lastData && Array.isArray(lastData.topPosts)) renderPosts(lastData.topPosts);
+        if (lastFeedback) renderVerdicts(lastFeedback);
       }
     });
   }
@@ -224,5 +274,5 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   $('purge-synthetic').addEventListener('click', () => purge('purge-synthetic', 'Delete all load-test rows'));
   $('purge-old').addEventListener('click', () => purge('purge-old', 'Delete analytics older than 90 days'));
 
-  onAdminReady(() => { loadTitles(); load(); }); // both fire in parallel; SWR paints instantly
+  onAdminReady(() => { loadTitles(); load(); loadFeedback(); }); // fire in parallel; SWR paints instantly
 </script>

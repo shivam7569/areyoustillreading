@@ -1,0 +1,296 @@
+---
+/**
+ * Feedback.astro — "Did it hold?" the reader verdict (one per post).
+ * =============================================================================
+ * An objective counterpart to comments/notes and an explicit exchange: one honest
+ * tap (Held me / Skimmed it / Lost me) buys the crowd distribution PLUS the reader's
+ * own reading receipt — time, pace, how far they truly held — measured while they
+ * were reading it. "Lost me" captures the paragraph where attention broke, estimated
+ * from per-paragraph DWELL (not scroll depth: the panel sits below the article, so
+ * by the time it's clickable scroll has saturated at the last paragraph).
+ *
+ * Markup + styling are ported verbatim from the Claude Design "Essay" (editorial/
+ * post.html → .verdict). ANONYMOUS ("one tap, no account"): the browser is a single
+ * opaque localStorage id (aysr:fid); the crowd numbers come from /api/feedback (a
+ * Pages Function → the deny-all public.feedback table, service role), never Supabase
+ * from the browser. The reading receipt is computed entirely client-side. Fully
+ * resilient: if the endpoint/table is absent the poll still works, just without crowd.
+ *
+ * INPUT: postId — the post slug. Placement: end of the essay, before the ShareBar.
+ */
+interface Props {
+  postId: string;
+}
+const { postId } = Astro.props;
+---
+
+<section class="verdict" id="verdict" data-slug={postId}>
+  <div class="vd-head">
+    <span class="vd-eyebrow">One tap, no account</span>
+    <h2>Did it hold?</h2>
+    <p>Answer and you&rsquo;ll see where <b><span id="vothers">other readers</span></b> landed &mdash; and what your own read looked like. Measured while you were reading it.</p>
+  </div>
+  <div class="vd-opts" id="vopts">
+    <button class="vopt" type="button" data-v="held" aria-pressed="false">
+      <span class="dot"></span>
+      <span class="txt"><b>Held me</b><small>Read it start to finish, and stayed with it</small></span>
+      <span class="pct"></span>
+      <span class="bar"><i></i></span>
+    </button>
+    <button class="vopt" type="button" data-v="skimmed" aria-pressed="false">
+      <span class="dot"></span>
+      <span class="txt"><b>Skimmed it</b><small>Took the argument, didn&rsquo;t read every line</small></span>
+      <span class="pct"></span>
+      <span class="bar"><i></i></span>
+    </button>
+    <button class="vopt" type="button" data-v="lost" aria-pressed="false">
+      <span class="dot"></span>
+      <span class="txt"><b>Lost me</b><small>Attention broke somewhere &mdash; tell me where</small></span>
+      <span class="pct"></span>
+      <span class="bar"><i></i></span>
+    </button>
+    <div class="vwhere" id="vwhere">
+      <span>Attention broke around</span><b id="vpara">&para;1</b>
+      <span class="step"><button type="button" id="vless" aria-label="Earlier paragraph">&minus;</button><button type="button" id="vmore" aria-label="Later paragraph">+</button></span>
+      <span style="color:var(--ink-faint)">estimated from your reading pace &mdash; nudge it if I guessed wrong</span>
+    </div>
+  </div>
+  <div class="vd-receipt" id="vreceipt">
+    <div><span class="k">You read for</span><span class="val" id="rTime">&mdash;</span><span class="cmp" id="rTimeC"></span></div>
+    <div><span class="k">Your pace</span><span class="val" id="rPace">&mdash;</span><span class="cmp" id="rPaceC"></span></div>
+    <div><span class="k">You held to</span><span class="val" id="rHeld">&mdash;</span><span class="cmp" id="rHeldC"></span></div>
+  </div>
+  <div class="vd-foot">
+    <span class="n"><b id="vtotal">&mdash;</b> answers &middot; <span id="vlostat"></span></span>
+    <span id="vprompt">Nothing is published under your name.</span>
+    <button class="undo" type="button" id="vundo">Change my answer</button>
+  </div>
+</section>
+
+<style>
+  .verdict{position:relative;border:1px solid var(--rule);border-radius:6px;background:var(--card);overflow:hidden;margin:clamp(40px,6vw,64px) 0 clamp(26px,3.4vw,38px)}
+  .verdict::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 90% at 8% 0%,color-mix(in srgb,var(--accent) 9%,transparent),transparent 62%);opacity:1;transition:opacity .5s}
+  .verdict.voted::before{opacity:.35}
+  .vd-head{position:relative;display:flex;flex-direction:column;gap:9px;padding:clamp(20px,2.6vw,26px) clamp(18px,2.6vw,26px) 0}
+  .vd-eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);font-size:10.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  .vd-eyebrow::before{content:"";width:16px;height:1px;background:var(--accent);display:block}
+  .vd-head h2{font-family:var(--serif-display);font-weight:600;font-size:clamp(24px,3.2vw,32px);letter-spacing:-.02em;margin:0;color:var(--ink);line-height:1.1}
+  .vd-head p{margin:0;font-family:var(--serif-body);font-size:15.5px;line-height:1.6;color:var(--ink-soft);max-width:52ch}
+  .vd-head p b{color:var(--ink);font-weight:600}
+  .vd-opts{position:relative;display:flex;flex-direction:column;padding:clamp(16px,2vw,22px) clamp(18px,2.6vw,26px) 0}
+  .vopt{position:relative;display:flex;align-items:center;gap:14px;padding:15px 13px;margin:0 -13px;border:0;border-radius:4px;background:none;text-align:left;font:inherit;color:inherit;cursor:pointer;transition:background .16s}
+  .vopt+.vopt{box-shadow:0 -1px 0 var(--rule-soft)}
+  .vopt:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}
+  .verdict.voted .vopt:hover{background:none}
+  .vopt .dot{position:relative;width:17px;height:17px;flex:none;border-radius:999px;border:1px solid var(--rule);transition:border-color .18s,box-shadow .18s}
+  .vopt:hover .dot{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+  .vopt.on .dot{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+  .vopt.on .dot::after{content:"";position:absolute;inset:3px;border-radius:999px;background:var(--accent)}
+  .vopt .txt{min-width:0;flex:1}
+  .vopt .txt b{display:block;font-family:var(--serif-display);font-size:17.5px;font-weight:600;line-height:1.25;letter-spacing:-.01em;color:var(--ink)}
+  .vopt .txt small{display:block;font-family:var(--sans);font-size:12.5px;line-height:1.5;color:var(--ink-faint);margin-top:3px}
+  .vopt.on .txt b{color:var(--accent)}
+  .vopt .pct{flex:none;font-family:var(--sans);font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink-faint);opacity:0}
+  .verdict.voted .vopt .pct{opacity:1}
+  .vopt .bar{position:absolute;left:31px;right:13px;bottom:7px;height:2px;border-radius:2px;background:color-mix(in srgb,var(--ink) 10%,transparent);opacity:0}
+  .vopt .bar i{display:block;height:100%;width:0;border-radius:2px;background:color-mix(in srgb,var(--accent) 42%,transparent)}
+  .vopt.on .bar i{background:var(--accent)}
+  .verdict.voted .vopt .bar{opacity:1}
+  /* animation enabled only once a frame has run — a hidden/embedded doc suspends frames,
+     and a transition that never advances would leave the reveal at zero. */
+  .verdict.anim .vopt .bar i{transition:width .55s cubic-bezier(.4,0,.2,1)}
+  .verdict.anim .vopt .bar,.verdict.anim .vopt .pct{transition:opacity .3s}
+  /* the paragraph capture — only for the answer that needs a location */
+  .vwhere{display:none;align-items:center;gap:11px;flex-wrap:wrap;margin:2px 0 6px 31px;padding:11px 13px;border-left:2px solid var(--accent);background:var(--paper-2);font-family:var(--sans);font-size:12.5px;color:var(--ink-soft)}
+  .vopt.on[data-v="lost"]+.vwhere{display:flex}
+  .vwhere b{font-family:var(--serif-display);font-size:15px;color:var(--accent);font-variant-numeric:tabular-nums}
+  .vwhere .step{display:inline-flex;border:1px solid var(--rule);border-radius:3px;overflow:hidden;background:var(--card)}
+  .vwhere .step button{background:none;border:0;color:var(--ink-soft);font:inherit;padding:3px 9px;cursor:pointer;line-height:1.4}
+  .vwhere .step button:hover{color:var(--accent)}
+  .vwhere .step button+button{border-left:1px solid var(--rule)}
+  /* what the reader gets back for answering — their own read, measured while they read it */
+  .vd-receipt{display:none;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin:clamp(16px,2vw,20px) 0 0;background:var(--rule);border-top:1px solid var(--rule)}
+  .verdict.voted .vd-receipt{display:grid}
+  .vd-receipt div{background:var(--card);padding:14px clamp(14px,2vw,18px)}
+  .vd-receipt .k{display:block;font-family:var(--sans);font-size:9.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)}
+  .vd-receipt .val{display:block;font-family:var(--serif-display);font-size:clamp(19px,2.4vw,23px);font-weight:600;letter-spacing:-.015em;color:var(--accent);margin-top:7px;line-height:1}
+  .vd-receipt .cmp{display:block;font-family:var(--sans);font-size:11.5px;line-height:1.45;color:var(--ink-faint);margin-top:6px}
+  .vd-foot{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin-top:0;padding:13px clamp(18px,2.6vw,26px);border-top:1px solid var(--rule);background:var(--paper-2);font-family:var(--sans);font-size:12px;color:var(--ink-faint)}
+  .verdict:not(.voted) .vd-foot{margin-top:clamp(16px,2vw,20px)}
+  .vd-foot .n{color:var(--ink-soft)}
+  .vd-foot .n b{color:var(--accent);font-weight:600;font-variant-numeric:tabular-nums}
+  .vd-foot .undo{margin-left:auto;background:none;border:0;font:inherit;color:var(--ink-faint);cursor:pointer;text-decoration:underline;text-underline-offset:2px;display:none}
+  .verdict.voted .vd-foot .undo{display:inline}
+  .verdict:not(.voted) .vd-foot .n{display:none}
+</style>
+
+<script>
+  /* The verdict controller. Crowd numbers come from /api/feedback (server-authoritative,
+     anonymous); the reading receipt + the "lost" paragraph are measured client-side from
+     per-paragraph dwell. Ported from the Claude Design essay, with the fake static crowd
+     swapped for the live backend. */
+  (function () {
+    var vd = document.getElementById('verdict');
+    if (!vd) return;
+    var slug = vd.getAttribute('data-slug') || '';
+    var KEY = 'aysr.verdict.' + slug;
+
+    var opts = [].slice.call(vd.querySelectorAll('.vopt')),
+        paraEl = document.getElementById('vpara'), totalEl = document.getElementById('vtotal'),
+        lostEl = document.getElementById('vlostat'), promptEl = document.getElementById('vprompt'),
+        othersEl = document.getElementById('vothers'), undo = document.getElementById('vundo');
+
+    // Live crowd, from the server. counts include everyone (the reader too, after they vote).
+    var crowd = { total: 0, counts: { held: 0, skimmed: 0, lost: 0 }, lostMedian: null };
+
+    // stable, opaque per-browser id for the server (dedup); not PII.
+    function rand() {
+      try { var a = new Uint8Array(12); crypto.getRandomValues(a); return Array.from(a, function (b) { return b.toString(36); }).join('').replace(/[^a-z0-9]/g, '').slice(0, 20).padEnd(12, '0'); }
+      catch (e) { return (Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/[^a-z0-9]/g, '').slice(0, 20); }
+    }
+    var fid = '';
+    try { fid = localStorage.getItem('aysr:fid') || ''; if (!/^[a-z0-9]{6,64}$/.test(fid)) { fid = rand(); localStorage.setItem('aysr:fid', fid); } } catch (e) { fid = rand(); }
+
+    // --- reading pace, measured per paragraph (dwell, not scroll) ------------
+    var paras = [].slice.call(document.querySelectorAll('.post-body p')).filter(function (p) {
+      return !p.closest('.paywall,.demo,figure') && p.textContent.trim().length > 40;
+    });
+    var dwell = paras.map(function () { return 0; }),
+        words = paras.map(function (p) { return p.textContent.trim().split(/\s+/).length; }),
+        active = Date.now(), cur = -1, since = Date.now();
+    ['scroll', 'mousemove', 'keydown', 'touchstart', 'click'].forEach(function (ev) {
+      addEventListener(ev, function () { active = Date.now(); commit(); }, { passive: true });
+    });
+    function nearest() {
+      var line = innerHeight * 0.38, best = -1, bestD = Infinity;
+      paras.forEach(function (p, i) {
+        var r = p.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > innerHeight) return;
+        var d = Math.abs((r.top + r.bottom) / 2 - line);
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      return best;
+    }
+    function commit() {
+      var now = Date.now();
+      if (cur > -1) { var end = Math.min(now, active + 60000); if (end > since) dwell[cur] += end - since; }
+      since = now;
+      var n = nearest();
+      if (n !== cur) cur = n;
+    }
+    setInterval(commit, 1000); commit();
+    function readMs() { return dwell.reduce(function (a, b) { return a + b; }, 0); }
+    function breakPoint() { for (var i = 0; i < paras.length; i++) { if (dwell[i] < (words[i] / 140) * 60000 * 0.4) return i + 1; } return paras.length; }
+    function heldTo() { var n = 0; for (var i = 0; i < paras.length; i++) { if (dwell[i] >= (words[i] / 240) * 60000 * 0.5) n = i + 1; } return n; }
+    function wpm() { var ms = readMs(), w = 0; paras.forEach(function (p, i) { if (dwell[i] > 200) w += words[i]; }); return ms > 4000 ? Math.round(w / (ms / 60000)) : 0; }
+
+    var saved = null; try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+
+    function paint() {
+      var mine = saved && saved.v, sum = crowd.total;
+      opts.forEach(function (o) {
+        var k = o.getAttribute('data-v'), pc = sum ? Math.round((crowd.counts[k] || 0) / sum * 100) : 0;
+        o.classList.toggle('on', mine === k);
+        o.querySelector('.pct').textContent = pc + '%';
+        o.setAttribute('aria-pressed', mine === k ? 'true' : 'false');
+        o.querySelector('.bar i').style.width = pc + '%';
+      });
+      vd.classList.toggle('voted', !!mine);
+      if (othersEl) othersEl.textContent = (sum ? sum.toLocaleString() : 'no') + ' other reader' + (sum === 1 ? '' : 's');
+      totalEl.textContent = sum ? sum.toLocaleString() : '0';
+      var med = crowd.lostMedian;
+      if (mine === 'lost' && saved.p) {
+        paraEl.innerHTML = '&para;' + saved.p;
+        lostEl.innerHTML = 'you: &para;' + saved.p + (med ? ' &middot; most others: &para;' + med : '');
+      } else {
+        lostEl.innerHTML = med ? 'most who lost it stopped near &para;' + med : 'no one has said they lost it';
+      }
+      promptEl.textContent = mine ? 'Recorded. Nothing is published under your name.' : 'Nothing is published under your name.';
+      var rc = document.getElementById('vreceipt');
+      var measured = mine && saved.ms != null && saved.ms > 3000;
+      if (rc) rc.style.display = (mine && !measured) ? 'none' : '';
+      if (measured) receipt();
+    }
+
+    function meta() {
+      var el = document.querySelector('.nums'), txt = el ? el.textContent : '',
+          w = txt.match(/([\d,]+)\s*words/), m = txt.match(/(\d+)\s*min/);
+      return { words: w ? +w[1].replace(/,/g, '') : 0, mins: m ? +m[1] : 0 };
+    }
+    function receipt() {
+      var M = meta(),
+          ms = (saved && saved.ms != null) ? saved.ms : readMs(),
+          pace = (saved && saved.wpm != null) ? saved.wpm : wpm(),
+          held = (saved && saved.held != null) ? saved.held : heldTo(),
+          mins = ms / 60000,
+          typical = M.words && M.mins ? Math.round(M.words / M.mins) : 210;
+      var t = document.getElementById('rTime'), tc = document.getElementById('rTimeC'),
+          p = document.getElementById('rPace'), pc = document.getElementById('rPaceC'),
+          hd = document.getElementById('rHeld'), hc = document.getElementById('rHeldC');
+      t.textContent = mins < 1 ? Math.max(1, Math.round(mins * 60)) + ' sec' : Math.round(mins) + ' min';
+      tc.textContent = mins < M.mins * 0.25 ? 'this one runs ' + M.mins + ' minutes' : 'of a ' + M.mins + ' minute essay';
+      p.textContent = pace ? pace + ' wpm' : '—';
+      pc.textContent = !pace ? 'too short to measure'
+        : pace > typical * 1.25 ? 'quicker than most here'
+        : pace < typical * 0.85 ? 'slower than most — the good kind'
+        : 'about typical (' + typical + ' wpm here)';
+      hd.textContent = held ? '¶' + held : '—';
+      hc.textContent = !held ? 'no paragraph got a full read'
+        : held >= paras.length ? 'the whole thing'
+        : held > Math.round(paras.length * 0.7) ? 'further than most' : 'most readers reach ¶' + Math.round(paras.length * 0.7);
+    }
+
+    function save() { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} }
+
+    // --- server sync ----------------------------------------------------------
+    function applyAgg(a) {
+      if (!a || typeof a !== 'object') return;
+      crowd.total = a.total || 0;
+      crowd.counts = a.counts || { held: 0, skimmed: 0, lost: 0 };
+      crowd.lostMedian = (typeof a.lostMedian === 'number') ? a.lostMedian : null;
+    }
+    var postTimer;
+    function pushVote() {
+      clearTimeout(postTimer);
+      postTimer = setTimeout(function () {
+        if (!saved || !saved.v) return;
+        var readPct = paras.length ? Math.round(((saved.held || 0) / paras.length) * 100) : null;
+        fetch('/api/feedback', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ slug: slug, fid: fid, choice: saved.v, lostPara: saved.v === 'lost' ? (saved.p || null) : null, readPct: readPct, dwellMs: saved.ms || null })
+        }).then(function (r) { return r.json(); }).then(function (a) { applyAgg(a); paint(); }).catch(function () {});
+      }, 400);
+    }
+
+    opts.forEach(function (o) {
+      o.addEventListener('click', function () {
+        var k = o.getAttribute('data-v');
+        commit();
+        saved = { v: k, ms: readMs(), wpm: wpm(), held: heldTo() };
+        if (k === 'lost') saved.p = breakPoint();
+        save(); paint(); pushVote();
+      });
+    });
+    function nudge(d) {
+      if (!saved || saved.v !== 'lost') return;
+      saved.p = Math.max(1, Math.min(paras.length || 40, (saved.p || breakPoint()) + d));
+      save(); paint(); pushVote();
+    }
+    document.getElementById('vless').addEventListener('click', function (e) { e.stopPropagation(); nudge(-1); });
+    document.getElementById('vmore').addEventListener('click', function (e) { e.stopPropagation(); nudge(1); });
+    undo.addEventListener('click', function () { saved = null; try { localStorage.removeItem(KEY); } catch (e) {} paint(); });
+
+    // --- boot: paint local state, then hydrate crowd from the server ----------
+    paint();
+    fetch('/api/feedback?slug=' + encodeURIComponent(slug) + '&fid=' + encodeURIComponent(fid))
+      .then(function (r) { return r.json(); })
+      .then(function (a) {
+        applyAgg(a);
+        // A server-side answer we don't have locally (e.g. cleared storage) restores the vote.
+        if (!saved && a && a.own && a.own.choice) { saved = { v: a.own.choice, p: a.own.lostPara || null, ms: null }; }
+        paint();
+      })
+      .catch(function () {});
+    requestAnimationFrame(function () { vd.classList.add('anim'); });
+  })();
+</script>
