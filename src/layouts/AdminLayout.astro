@@ -26,6 +26,10 @@
  * =============================================================================
  */
 import '@fontsource-variable/inter';
+// Self-hosted editorial serifs (Source Serif 4 display + Charis SIL). The admin uses
+// var(--serif-display) for headings + KPI numbers; without these @font-faces it fell
+// back to Georgia/Times and read foreign to the site. BaseLayout imports these too.
+import '../styles/fonts.css';
 import '../styles/global.css';
 import '../styles/admin.css';
 import BaseHead from '../components/BaseHead.astro';

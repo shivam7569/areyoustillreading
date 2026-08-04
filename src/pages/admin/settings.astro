@@ -18,7 +18,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       <header><h2>Account</h2></header>
       <div class="pb flush">
         <div class="setrow"><div class="k">Signed in as<small id="acct">…</small></div><div class="f"><button class="btn btn-sm" id="signout" type="button">Sign out</button></div></div>
-        <div class="setrow"><div class="k">Pen name<small>Your byline on published posts — edit it on your Account page.</small></div><div class="f"><a class="btn btn-ghost btn-sm" href="/account">Edit on Account →</a></div></div>
+        <div class="setrow"><div class="k">Pen name<small>Your byline on every published post. Changes go live instantly — every post, new and old.</small></div><div class="f" style="gap:0.5rem;flex-wrap:wrap"><input id="pen-input" class="inp" type="text" placeholder="Your name" autocomplete="off" spellcheck="false" style="width:220px" aria-label="Pen name" /><button class="btn btn-sm" id="pen-save" type="button">Save</button><span class="muted" id="pen-status" style="font-size:0.85rem"></span></div></div>
       </div>
     </div>
 
@@ -70,12 +70,42 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
 <script>
   import { supabase } from '../../lib/supabase';
-  import { onAdminReady } from '../../lib/admin-gate';
+  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
 
   onAdminReady(async () => {
     const { data } = await supabase.auth.getSession();
     const el = document.getElementById('acct');
     if (el) el.textContent = data.session?.user?.email ? data.session.user.email : 'Signed in';
+
+    // Pen name — the blog byline (site.json.post.author). Editing it here writes
+    // site.json via /api/admin/site, which the copy overlay reflects on EVERY post's
+    // byline in seconds (bylines are anchored data-cms="post.author"), no rebuild.
+    const penInput = document.getElementById('pen-input') as HTMLInputElement | null;
+    const penSave = document.getElementById('pen-save');
+    const penStatus = document.getElementById('pen-status');
+    let siteContent: any = null;
+    if (penInput && penSave && penStatus) {
+      try {
+        const r = await adminFetch('/api/admin/site');
+        const d = await r.json();
+        if (r.ok && d && d.content) { siteContent = d.content; penInput.value = (d.content.post && d.content.post.author) || ''; }
+        else penStatus.textContent = 'Could not load.';
+      } catch { penStatus.textContent = 'Could not load.'; }
+      penSave.addEventListener('click', async () => {
+        const name = penInput.value.trim();
+        if (!name) { penStatus.textContent = 'Enter a name.'; return; }
+        if (!siteContent) { penStatus.textContent = 'Not loaded — reload the page.'; return; }
+        penStatus.textContent = 'Saving…';
+        siteContent.post = siteContent.post || {};
+        siteContent.post.author = name;
+        try {
+          const r = await adminFetch('/api/admin/site', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: siteContent }) });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+          penStatus.textContent = d.instant ? 'Saved — live now.' : 'Saved. Live on the next rebuild.';
+        } catch (e: any) { penStatus.textContent = 'Save failed: ' + (e?.message || e); }
+      });
+    }
   });
   document.getElementById('signout')!.addEventListener('click', async () => {
     await supabase.auth.signOut();

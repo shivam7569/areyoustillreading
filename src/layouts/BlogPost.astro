@@ -42,10 +42,11 @@ type Props = { post: CollectionEntry<'blog'> };
 const { post } = Astro.props;
 const { title, description, pubDate, updatedDate, tags } = post.data;
 
-// Byline author: the publisher's pen name (baked into frontmatter at publish
-// time); legacy posts without an `author` fall back to the site author.
-const SITE_AUTHOR = c.author || 'Shivam Chaudhary';
-const byline = (post.data.author ?? '').trim() || SITE_AUTHOR;
+// Byline author = the account PEN NAME (site.json.post.author), edited in Studio →
+// Settings. Read LIVE (not the per-post frontmatter `author`, which is now ignored for
+// display) and anchored with data-cms="post.author" below, so changing the pen name
+// re-bylines EVERY post — new and old — instantly via the copy overlay, no rebuild.
+const byline = c.author || 'Shivam Chaudhary';
 
 // Human-readable date (stable 'en-US' locale for deterministic build output).
 const fmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -116,7 +117,7 @@ if (!series && here !== -1) {
         <div class="byline">
           <div class="avatar" aria-hidden="true">{avatarInitial}</div>
           <div class="who">
-            <b>{byline}</b>
+            <b data-cms="post.author">{byline}</b>
             <small><time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time>{updatedDate && <> &middot; <span data-cms="post.updatedLabel">{c.updatedLabel || 'updated'}</span> {fmt(updatedDate)}</>}</small>
           </div>
           <span class="nums">{wordCount} <span data-cms="post.wordsLabel">{c.wordsLabel || 'words'}</span> &middot; {minutes} <span data-cms="post.minReadLabel">{c.minReadLabel || 'min read'}</span></span>
