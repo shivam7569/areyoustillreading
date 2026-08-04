@@ -23,6 +23,15 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     </div>
 
     <div class="panel">
+      <header><h2>Admins</h2></header>
+      <div class="pb flush">
+        <div class="setrow"><div class="k">Who can open the Studio<small>Admins can publish, moderate discussions, and see every reader&rsquo;s private notes. Add someone by the email they sign in with — they must have signed in at least once first. The last admin can&rsquo;t be removed.</small></div><div class="f"></div></div>
+        <div id="admins-list"><div class="setrow"><div class="k muted">Loading…</div></div></div>
+        <div class="setrow"><div class="k">Add an admin<small id="admin-status">Enter the email address they sign in with.</small></div><div class="f" style="gap:0.5rem;flex-wrap:wrap"><input id="admin-email" class="inp" type="email" placeholder="name@email.com" autocomplete="off" spellcheck="false" style="width:240px" aria-label="New admin email" /><button class="btn btn-sm" id="admin-add" type="button">Add admin</button></div></div>
+      </div>
+    </div>
+
+    <div class="panel">
       <header><h2>Site</h2></header>
       <div class="pb flush">
         <div class="setrow"><div class="k">Domain</div><div class="f"><span class="mono" style="color:var(--ink-soft)">areyoustillreading.dev</span><span class="pill live">Live</span></div></div>
@@ -106,6 +115,110 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           penStatus.textContent = d.instant ? 'Saved — live now.' : 'Saved. Live on the next rebuild.';
         } catch (e: any) { penStatus.textContent = 'Save failed: ' + (e?.message || e); }
       });
+    }
+
+    // Admins — add/remove Studio access by email. Backed by /api/admin/admins
+    // (requireAdmin + service-role SQL helpers in db/admins-manage.sql). The server
+    // resolves email↔user via auth.users and refuses to remove the last admin.
+    const adminsList = document.getElementById('admins-list');
+    const adminEmail = document.getElementById('admin-email') as HTMLInputElement | null;
+    const adminAdd = document.getElementById('admin-add') as HTMLButtonElement | null;
+    const adminStatus = document.getElementById('admin-status');
+    if (adminsList && adminEmail && adminAdd && adminStatus) {
+      const fmtDate = (iso: string) => { const d = new Date(iso); return isNaN(d.valueOf()) ? '' : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); };
+
+      const renderAdmins = (data: any) => {
+        adminsList.textContent = '';
+        if (data && data.setup) {
+          const row = document.createElement('div'); row.className = 'setrow';
+          const k = document.createElement('div'); k.className = 'k muted';
+          k.textContent = 'Run db/admins-manage.sql in Supabase to enable admin management.';
+          row.appendChild(k); adminsList.appendChild(row);
+          return;
+        }
+        const admins = (data && data.admins) || [];
+        if (!admins.length) {
+          const row = document.createElement('div'); row.className = 'setrow';
+          const k = document.createElement('div'); k.className = 'k muted'; k.textContent = 'No admins yet.';
+          row.appendChild(k); adminsList.appendChild(row);
+          return;
+        }
+        const sole = admins.length === 1;
+        for (const a of admins) {
+          const row = document.createElement('div'); row.className = 'setrow';
+          const k = document.createElement('div'); k.className = 'k';
+          k.textContent = a.email || a.userId;
+          const small = document.createElement('small');
+          small.textContent = (a.createdAt ? `Admin since ${fmtDate(a.createdAt)}` : 'Admin') + (a.self ? ' · You' : '');
+          k.appendChild(small);
+          const f = document.createElement('div'); f.className = 'f';
+          if (sole) {
+            // Only admin — the server refuses to remove the last one, so don't offer a
+            // button whose confirm would promise access loss it can't deliver.
+            const hint = document.createElement('span'); hint.className = 'muted'; hint.style.fontSize = '0.8rem';
+            hint.textContent = 'Only admin'; f.appendChild(hint);
+          } else {
+            const rm = document.createElement('button');
+            rm.className = 'btn btn-ghost btn-sm'; rm.type = 'button';
+            rm.textContent = 'Remove'; rm.setAttribute('data-remove', a.email || '');
+            if (a.self) rm.setAttribute('data-self', '1');
+            f.appendChild(rm);
+          }
+          row.append(k, f); adminsList.appendChild(row);
+        }
+      };
+
+      const showListMsg = (msg: string) => {
+        adminsList.textContent = '';
+        const row = document.createElement('div'); row.className = 'setrow';
+        const k = document.createElement('div'); k.className = 'k muted'; k.textContent = msg;
+        row.appendChild(k); adminsList.appendChild(row);
+      };
+      const loadAdmins = async () => {
+        try {
+          const r = await adminFetch('/api/admin/admins');
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) { adminStatus.textContent = d.error || `Could not load (${r.status}).`; showListMsg('Couldn’t load admins.'); return; }
+          renderAdmins(d);
+        } catch { adminStatus.textContent = 'Could not load admins.'; showListMsg('Couldn’t load admins.'); }
+      };
+
+      adminAdd.addEventListener('click', async () => {
+        const email = adminEmail.value.trim();
+        if (!email) { adminStatus.textContent = 'Enter an email address.'; adminEmail.focus(); return; }
+        adminAdd.disabled = true; adminStatus.textContent = 'Adding…';
+        try {
+          const r = await adminFetch('/api/admin/admins', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) });
+          const d = await r.json().catch(() => ({}));
+          if (r.ok && d.ok) { adminEmail.value = ''; adminStatus.textContent = d.message || 'Added.'; if (Array.isArray(d.admins)) renderAdmins(d); else loadAdmins(); }
+          else { adminStatus.textContent = d.error || d.message || `Failed (${r.status}).`; }
+        } catch { adminStatus.textContent = 'Add failed — try again.'; }
+        finally { adminAdd.disabled = false; }
+      });
+      adminEmail.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); adminAdd.click(); } });
+
+      adminsList.addEventListener('click', async (e) => {
+        const btn = (e.target as HTMLElement).closest('[data-remove]') as HTMLButtonElement | null;
+        if (!btn) return;
+        const email = btn.getAttribute('data-remove') || '';
+        const self = btn.hasAttribute('data-self');
+        const ok = confirm(self
+          ? `Remove yourself (${email}) as an admin? You'll lose Studio access immediately.`
+          : `Remove ${email} as an admin?`);
+        if (!ok) return;
+        btn.disabled = true; adminStatus.textContent = 'Removing…';
+        try {
+          const r = await adminFetch('/api/admin/admins', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) });
+          const d = await r.json().catch(() => ({}));
+          if (r.ok && d.ok) {
+            adminStatus.textContent = d.message || 'Removed.';
+            if (self) { window.location.href = '/'; return; } // demoted self → leave the Studio
+            if (Array.isArray(d.admins)) renderAdmins(d); else loadAdmins();
+          } else { adminStatus.textContent = d.error || `Failed (${r.status}).`; btn.disabled = false; }
+        } catch { adminStatus.textContent = 'Remove failed — try again.'; btn.disabled = false; }
+      });
+
+      loadAdmins();
     }
   });
   document.getElementById('signout')!.addEventListener('click', async () => {
