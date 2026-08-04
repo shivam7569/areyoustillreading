@@ -30,8 +30,22 @@ const clip = (s, n = 320) => { const t = String(s || '').trim(); return t.length
 
 const CHOICE_LABEL = { held: 'Held me', skimmed: 'Skimmed it', lost: 'Lost me' };
 
-// Build { subject, lead, body } for a webhook record, or null to skip.
-function describe(table, rec) {
+// Service-role single-row GET (best-effort). Used to resolve a vote's target — the
+// votes table has no post_id/author, so we look up the comment/reply it points at.
+async function sbGet(env, path) {
+  const sb = env.SUPABASE_URL, key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!sb || !key) return null;
+  try {
+    const r = await fetch(`${sb}/rest/v1/${path}`, { headers: { Authorization: `Bearer ${key}`, apikey: key }, signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return Array.isArray(j) ? (j[0] || null) : j;
+  } catch { return null; }
+}
+
+// Build { subject, lead, body, slug? } for a webhook record, or null to skip. Async
+// because a vote must resolve its target row to know which post/author it concerns.
+async function describe(table, rec, env) {
   const who = esc(rec.author_name || 'A reader');
   const slug = rec.post_id || '';
   switch (table) {
@@ -51,6 +65,25 @@ function describe(table, rec) {
       const label = CHOICE_LABEL[rec.choice] || rec.choice;
       const where = rec.choice === 'lost' && rec.lost_para ? ` — attention broke around ¶${rec.lost_para}` : '';
       return { subject: `A reader’s verdict on ${slug}: ${label}`, lead: `A reader answered “Did it hold?”`, body: `${label}${where}` };
+    }
+    case 'votes': {
+      // An upvote on a comment (kind='comment') or a highlight-discussion reply
+      // ('hlcomment'). Resolve the target to find the post + the comment's author,
+      // and skip a reader upvoting their OWN comment (not worth an email).
+      const tid = rec.target_id;
+      if (rec.kind === 'comment') {
+        const c = await sbGet(env, `comments?id=eq.${tid}&select=post_id,user_id,author_name,body`);
+        if (!c || (c.user_id && c.user_id === rec.user_id)) return null;
+        return { subject: `${c.author_name || 'A reader'}’s comment on ${c.post_id} was upvoted`, lead: `Someone upvoted ${esc(c.author_name || 'a reader')}’s comment`, body: c.body ? clip(c.body, 200) : '', slug: c.post_id || '' };
+      }
+      if (rec.kind === 'hlcomment') {
+        const hc = await sbGet(env, `highlight_comments?id=eq.${tid}&select=user_id,author_name,body,highlight_id`);
+        if (!hc || (hc.user_id && hc.user_id === rec.user_id)) return null;
+        const h = hc.highlight_id ? await sbGet(env, `highlights?id=eq.${hc.highlight_id}&select=post_id`) : null;
+        const s = h ? (h.post_id || '') : '';
+        return { subject: `A highlight-discussion reply${s ? ' on ' + s : ''} was upvoted`, lead: `Someone upvoted ${esc(hc.author_name || 'a reader')}’s reply in a highlight discussion`, body: hc.body ? clip(hc.body, 200) : '', slug: s };
+      }
+      return null;
     }
     default:
       return null;
@@ -100,11 +133,11 @@ export async function onRequestPost({ request, env }) {
   const apiKey = env.RESEND_API_KEY;
   if (!to || !apiKey) return OK(); // not configured yet → silently no-op
 
-  const info = describe(table, rec);
+  const info = await describe(table, rec, env);
   if (!info) return OK();
 
   const site = env.SITE_URL || 'https://areyoustillreading.dev';
-  const slug = rec.post_id || '';
+  const slug = info.slug != null ? info.slug : (rec.post_id || '');
   const postUrl = slug ? `${site}/blog/${encodeURIComponent(slug)}/` : site;
   const engageUrl = `${site}/admin/engagement`;
   const { html, text } = renderEmail({ lead: info.lead, body: info.body, postUrl, engageUrl, slug });

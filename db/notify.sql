@@ -78,3 +78,9 @@ create trigger notify_on_note after insert on public.notes
 drop trigger if exists notify_on_feedback on public.feedback;
 create trigger notify_on_feedback after insert on public.feedback
   for each row execute function public.notify_author();
+
+-- upvotes on a comment or a highlight-discussion reply (the endpoint resolves the
+-- target row to name the post/author, and skips a reader upvoting their own comment)
+drop trigger if exists notify_on_vote on public.votes;
+create trigger notify_on_vote after insert on public.votes
+  for each row execute function public.notify_author();
