@@ -295,6 +295,7 @@
       "save": "Save",
       "cancel": "Cancel",
       "navLibrary": "Your library",
+      "navMarks": "Notes & highlights",
       "navLetter": "The letter",
       "navStudio": "Studio",
       "signOut": "Sign out",
@@ -303,6 +304,8 @@
       "libraryHeading": "Your library",
       "libraryEmpty": "You haven't unlocked any paid essays yet — most of the writing here is free. {browse}",
       "libraryEmptyLink": "Browse the archive →",
+      "marksHeading": "Notes & highlights",
+      "marksEmpty": "You haven't saved any notes or highlights yet — while reading, select a passage to highlight it or keep a private note. {browse}",
       "studioHeading": "Studio",
       "studioCardTitle": "Open the Studio",
       "studioCardSub": "Write and publish, manage posts, the audience, analytics and revenue.",
@@ -327,7 +330,10 @@
       "owned": "Owned",
       "readAgain": "Read again →",
       "essaySingular": "essay",
-      "essayPlural": "essays"
+      "essayPlural": "essays",
+      "noteTag": "Note",
+      "highlightTag": "Highlight",
+      "openLabel": "Open →"
     }
   }
 }

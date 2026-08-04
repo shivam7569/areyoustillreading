@@ -28,9 +28,11 @@ import { getCollection } from 'astro:content';
 const c = (site as any).account || {};
 const so = c.signedOut || {};
 const si = c.signedIn || {};
-const accountCopy = { msg: c.msg || {}, lib: c.lib || {}, libraryHeading: si.libraryHeading || 'Your library' };
+const accountCopy = { msg: c.msg || {}, lib: c.lib || {}, libraryHeading: si.libraryHeading || 'Your library', marksHeading: si.marksHeading || 'Notes & highlights' };
 const esc = (s = '') => String(s).replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] as string));
 const libEmptyHtml = esc(si.libraryEmpty || "You haven't unlocked any paid essays yet — most of the writing here is free. {browse}")
+  .replace('{browse}', `<a class="link" href="/blog">${esc(si.libraryEmptyLink || 'Browse the archive →')}</a>`);
+const marksEmptyHtml = esc(si.marksEmpty || "You haven't saved any notes or highlights yet — while reading, select a passage to highlight it or keep a private note. {browse}")
   .replace('{browse}', `<a class="link" href="/blog">${esc(si.libraryEmptyLink || 'Browse the archive →')}</a>`);
 
 // Build-time slug → {title, mins} map so the client can label entitlement rows
@@ -95,6 +97,7 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
         </div>
         <nav>
           <a href="#library" data-cms="account.signedIn.navLibrary">{si.navLibrary || 'Your library'}</a>
+          <a href="#marks" data-cms="account.signedIn.navMarks">{si.navMarks || 'Notes & highlights'}</a>
           <a href="#letter" data-hide-admin data-cms="account.signedIn.navLetter">{si.navLetter || 'The letter'}</a>
           <a href="#studio" id="ac-studio-nav" hidden data-cms="account.signedIn.navStudio">{si.navStudio || 'Studio'}</a>
         </nav>
@@ -111,6 +114,12 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
           <h2 id="lib-heading" data-cms="account.signedIn.libraryHeading">{si.libraryHeading || 'Your library'}</h2>
           <div class="lib" id="lib-list"></div>
           <p class="lib-empty" id="lib-empty" hidden set:html={libEmptyHtml}></p>
+        </section>
+
+        <section class="panel" id="marks">
+          <h2 id="marks-heading" data-cms="account.signedIn.marksHeading">{si.marksHeading || 'Notes & highlights'}</h2>
+          <div class="marks" id="marks-list"></div>
+          <p class="lib-empty" id="marks-empty" hidden set:html={marksEmptyHtml}></p>
         </section>
 
         <section class="panel" id="studio" hidden>
@@ -165,7 +174,7 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
   // duplicated library rows + the content-length flicker); `lastUid` skips re-renders
   // when the signed-in user hasn't actually changed.
   let seq = 0;
-  let lastUid = ' ';
+  let lastUid = '';
 
   // Build the "Your library" rows from the reader's entitlements (RLS reads-own).
   async function loadLibrary(my) {
@@ -211,6 +220,59 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
     }
   }
 
+  // Build "Notes & highlights" from the reader's OWN notes + highlights (RLS reads-own).
+  // Each row links to the post it lives on; a highlight shows its quote (+ any private
+  // note the reader attached), a note shows its text.
+  async function loadMarks(my) {
+    const list = document.getElementById('marks-list');
+    const empty = document.getElementById('marks-empty');
+    const heading = document.getElementById('marks-heading');
+    let notes = [], highlights = [];
+    try {
+      const [n, h] = await Promise.all([
+        supabase.from('notes').select('post_id, body, updated_at').order('updated_at', { ascending: false }),
+        supabase.from('highlights').select('post_id, quote, note, created_at').order('created_at', { ascending: false }),
+      ]);
+      notes = n.data || [];
+      highlights = h.data || [];
+    } catch { notes = []; highlights = []; }
+    if (my !== seq) return; // superseded by a newer render
+    const items = [
+      ...notes.map((r) => ({ kind: 'note', post_id: r.post_id, text: r.body, sub: '', date: r.updated_at })),
+      ...highlights.map((r) => ({ kind: 'highlight', post_id: r.post_id, text: r.quote, sub: r.note || '', date: r.created_at })),
+    ].sort((a, b) => new Date(b.date).valueOf() - new Date(a.date).valueOf());
+    list.textContent = '';
+    const H = AC.marksHeading || 'Notes & highlights';
+    if (!items.length) { empty.hidden = false; heading.textContent = H; return; }
+    empty.hidden = true;
+    heading.textContent = `${H} — ${items.length}`;
+    for (const it of items) {
+      const meta = postsMeta[it.post_id];
+      const a = document.createElement('a');
+      a.className = 'mark-row';
+      a.href = `/blog/${it.post_id}`;
+      const tag = document.createElement('span');
+      tag.className = 'mk-tag ' + it.kind;
+      tag.textContent = it.kind === 'note' ? (ACL.noteTag || 'Note') : (ACL.highlightTag || 'Highlight');
+      const body = document.createElement('span');
+      body.className = 'mk-body';
+      const txt = document.createElement('span');
+      txt.className = 'mk-text';
+      txt.textContent = it.kind === 'highlight' ? `“${it.text || ''}”` : (it.text || ''); // textContent = XSS-safe
+      body.appendChild(txt);
+      if (it.sub) { const s = document.createElement('span'); s.className = 'mk-sub'; s.textContent = it.sub; body.appendChild(s); }
+      const src = document.createElement('small');
+      src.className = 'mk-src';
+      src.textContent = `${meta ? meta.title : it.post_id} · ${fmt(it.date)}`;
+      body.appendChild(src);
+      const go = document.createElement('span');
+      go.className = 'go';
+      go.textContent = ACL.openLabel || 'Open →';
+      a.append(tag, body, go);
+      list.appendChild(a);
+    }
+  }
+
   const currentName = (user) => {
     const email = user.email ?? '';
     return user.user_metadata?.name || user.user_metadata?.full_name || user.user_metadata?.user_name || (email ? email.split('@')[0] : 'Reader');
@@ -231,6 +293,7 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
     show(signedin);
 
     loadLibrary(my);
+    loadMarks(my);
 
     // Admins get the Studio panel + sidebar link.
     try {
@@ -390,6 +453,22 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
   @media (max-width: 760px) { :global(.lib-row .go) { text-align: left; } }
   :global(.lib-row:hover .go) { color: var(--accent); }
   .lib-empty { color: var(--ink-faint); font-family: var(--sans); font-size: 15px; padding: 8px 0; }
+
+  /* Notes & highlights rows — JS-created, so :global (data-astro-cid can't reach them). */
+  .marks { border-top: 1px solid var(--rule); }
+  :global(.mark-row) { display: grid; grid-template-columns: 82px minmax(0, 1fr) 76px; gap: 18px; align-items: start; padding: 17px 6px; border-bottom: 1px solid var(--rule); transition: background 0.22s; }
+  :global(.mark-row:hover) { background: var(--paper-2); }
+  @media (max-width: 760px) { :global(.mark-row) { grid-template-columns: 1fr; gap: 8px; } }
+  :global(.mark-row .mk-tag) { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; padding-top: 5px; }
+  :global(.mark-row .mk-tag.note) { color: var(--ink-faint); }
+  :global(.mark-row .mk-tag.highlight) { color: var(--accent); }
+  :global(.mark-row .mk-body) { min-width: 0; }
+  :global(.mark-row .mk-text) { display: block; font-family: var(--serif-display); font-size: 17px; line-height: 1.4; color: var(--ink); overflow-wrap: anywhere; }
+  :global(.mark-row .mk-sub) { display: block; font-family: var(--sans); font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); margin-top: 6px; }
+  :global(.mark-row .mk-src) { display: block; font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); margin-top: 8px; letter-spacing: 0.02em; }
+  :global(.mark-row .go) { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); text-align: right; }
+  :global(.mark-row:hover .go) { color: var(--accent); }
+  @media (max-width: 760px) { :global(.mark-row .go) { text-align: left; } }
 
   .studio-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: clamp(22px, 2.6vw, 28px); }
   .studio-card .sc-t { font-family: var(--serif-display); font-size: 21px; color: var(--ink); }
