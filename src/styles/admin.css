@@ -100,7 +100,12 @@
 /* The public site's body font is the editorial body SERIF (Charis SIL). The
    dashboard is a tool, not a reading surface, so keep it on the UI sans stack.
    Guards both the authenticated shell (.admin) and the pre-auth gate view. */
-.admin, .admin-gate { font-family: var(--font-sans); }
+/* The Studio's UI font = the editorial --sans (system stack), matching the Claude
+   Design studio.css (.app { font-family: var(--sans) }) AND the 8 components already
+   on --sans (.pill/.tabs/.table/.railtabs/…). Was --font-sans (Inter), which made the
+   shell — and everything inheriting it, e.g. the Analytics rows — read in a different
+   sans than those components. One source of truth now. */
+.admin, .admin-gate { font-family: var(--sans); }
 /* Display headings keep the editorial serif so the Studio reads as the same family
    as the public site; body text, form labels, table headers and micro-caps (none of
    which are h1–h4) stay on the UI sans stack. */
@@ -135,7 +140,7 @@
 .admin-tagrow .sync { display: flex; align-items: center; gap: 5px; margin-left: auto; font-size: 11px; color: var(--ink-faint); }
 .admin-tagrow .dot { width: 5px; height: 5px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); flex: none; }
 /* Write is the app's verb — an action above the list, not the sixth link. */
-.admin-write { display: flex; align-items: center; gap: 9px; margin-top: 15px; padding: 9px 12px; border-radius: 4px; background: var(--accent); color: var(--on-accent); font-family: var(--font-sans); font-size: 13.5px; font-weight: 600; text-decoration: none; transition: filter 0.16s ease; }
+.admin-write { display: flex; align-items: center; gap: 9px; margin-top: 15px; padding: 9px 12px; border-radius: 4px; background: var(--accent); color: var(--on-accent); font-family: var(--sans); font-size: 13.5px; font-weight: 600; text-decoration: none; transition: filter 0.16s ease; }
 .admin-write:hover { filter: brightness(1.08); color: var(--on-accent); text-decoration: none; }
 .admin-write svg { width: 15px; height: 15px; flex: none; }
 

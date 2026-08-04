@@ -65,6 +65,7 @@ const { postId } = Astro.props;
 
 <script>
   import { supabase } from '../lib/supabase';
+  import { commentMd, renderMathIn } from '../lib/comment-md';
 
   const root = document.querySelector('.comments') as HTMLElement | null;
   if (root) initComments(root);
@@ -87,30 +88,10 @@ const { postId } = Astro.props;
     // Grow a textarea to fit its content (design ask: expand, don't scroll).
     const grow = (ta: HTMLTextAreaElement) => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
 
-    function md(s: string) {
-      let e = esc(s);
-      const math: string[] = [];
-      const stash = (m: string) => { math.push(m); return '@@KMATH' + (math.length - 1) + 'X@@'; };
-      e = e.replace(/\$\$([\s\S]+?)\$\$/g, (m) => stash(m));
-      e = e.replace(/\$([^$\n]+?)\$/g, (m) => stash(m));
-      e = e.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]*)\)/g, (_m, t, u) => '<a href="' + u.replace(/"/g, '%22') + '" rel="nofollow noopener" target="_blank">' + t + '</a>');
-      e = e.replace(/`([^`]+)`/g, '<code class="inl">$1</code>');
-      e = e.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-      e = e.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
-      e = e.replace(/(^|[^\w])_([^_\n]+)_/g, '$1<em>$2</em>');
-      e = e.replace(/\n/g, '<br>');
-      e = e.replace(/@@KMATH([0-9]+)X@@/g, (_m, i) => math[+i]);
-      return e;
-    }
-    let renderMathInElement: any = null;
-    async function renderMath() {
-      const nodes = list.querySelectorAll('.comment > .b > p');
-      if (!nodes.length) return;
-      try {
-        if (!renderMathInElement) { const mod: any = await import('katex/contrib/auto-render'); renderMathInElement = mod.default || mod; }
-        nodes.forEach((n) => renderMathInElement(n, { delimiters: [{ left: '$$', right: '$$', display: true }, { left: '$', right: '$', display: false }], throwOnError: false }));
-      } catch (e) {}
-    }
+    // Comment body rendering (safe tiny-Markdown + KaTeX) is shared with the Studio
+    // Engagement list — see src/lib/comment-md.ts.
+    const md = commentMd;
+    const renderMath = () => renderMathIn(list.querySelectorAll('.comment > .b > p'));
     function timeAgo(iso: string) {
       const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
       if (s < 60) return 'just now';

@@ -112,6 +112,18 @@ export async function onRequest(context) {
         else el.setInnerContent(val); // plain text (escaped)
       },
     })
+    .on('[data-cms-initial]', {
+      // Avatar-style INITIAL: set the element's text to the first letter (lowercased)
+      // of the copy value — matches the build-time avatarInitial so a pen-name change
+      // re-letters the byline disc instantly, in lockstep with the name text.
+      element(el) {
+        const path = el.getAttribute('data-cms-initial');
+        if (!path || !(path in map)) return;
+        const val = map[path];
+        if (typeof val !== 'string' || !val.trim()) return;
+        el.setInnerContent(val.trim().charAt(0).toLowerCase());
+      },
+    })
     .on('[data-cms-attr]', {
       element(el) {
         // data-cms-attr="content=global.seo.description" → set an ATTRIBUTE from copy

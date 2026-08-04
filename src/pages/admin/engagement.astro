@@ -11,6 +11,8 @@
  *   • Notes      — same model (private reader notes; admin sees all).
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
+// KaTeX styles so math in reader comments/notes renders here as it does on the post.
+import 'katex/dist/katex.min.css';
 ---
 
 <AdminLayout title="Engagement — Studio" heading="Engagement" active="engagement">
@@ -46,6 +48,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   import { supabase } from '../../lib/supabase';
   import { onAdminReady, adminFetch } from '../../lib/admin-gate';
   import { fmtNum, fmtDate, relTime, esc } from '../../lib/admin-format';
+  import { commentMd, renderMathIn } from '../../lib/comment-md';
 
   const $ = (id: string) => document.getElementById(id)!;
   const host = $('eng-host');
@@ -116,7 +119,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (!r.ok) throw new Error(d.error || 'Failed');
       const rows = d.rows || [];
       if (!rows.length) return emptyBox('No comments yet', 'Reader comments will show up here.');
-      list(rows.map((c: any) => engItem(c.author_name, `on ${postLink(c.post_id)} · ${esc(relTime(c.created_at))}`, `<p class="body">${esc(c.body)}</p>`, 'comment:' + c.id)));
+      list(rows.map((c: any) => engItem(c.author_name, `on ${postLink(c.post_id)} · ${esc(relTime(c.created_at))}`, `<p class="body">${commentMd(c.body)}</p>`, 'comment:' + c.id)));
+      renderMathIn(host.querySelectorAll('.body'));
     } catch (e: any) { errBox("Couldn't load comments: " + (e.message || e)); }
   }
   async function loadHighlights() {
@@ -136,7 +140,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (error) throw error;
       const rows = data || [];
       if (!rows.length) return emptyBox('No notes yet', "Readers' private notes will appear here.");
-      list(rows.map((n: any) => engItem(n.author_name, `on ${postLink(n.post_id)} · ${esc(fmtDate(n.updated_at))}`, `<p class="body">${esc(n.body)}</p>`, 'note:' + n.id)));
+      list(rows.map((n: any) => engItem(n.author_name, `on ${postLink(n.post_id)} · ${esc(fmtDate(n.updated_at))}`, `<p class="body">${commentMd(n.body)}</p>`, 'note:' + n.id)));
+      renderMathIn(host.querySelectorAll('.body'));
     } catch (e: any) { errBox("Couldn't load notes: " + (e.message || e)); }
   }
   function loadTab() { armed = null; if (tab === 'comments') return loadComments(); if (tab === 'highlights') return loadHighlights(); return loadNotes(); }

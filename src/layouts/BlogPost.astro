@@ -116,7 +116,7 @@ if (!series && here !== -1) {
         <h1 class="title">{title}</h1>
         {description && <p class="standfirst">{description}</p>}
         <div class="byline">
-          <div class="avatar" aria-hidden="true">{avatarInitial}</div>
+          <div class="avatar" aria-hidden="true" data-cms-initial="post.author">{avatarInitial}</div>
           <div class="who">
             <b data-cms="post.author">{byline}</b>
             <small><time datetime={pubDate.toISOString()}>{fmt(pubDate)}</time>{updatedDate && <> &middot; <span data-cms="post.updatedLabel">{c.updatedLabel || 'updated'}</span> {fmt(updatedDate)}</>}</small>
