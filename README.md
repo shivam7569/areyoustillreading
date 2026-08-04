@@ -464,12 +464,21 @@ is green. Current: **69 tests / 23 files.**
 
 ## 13. Deployment
 
-- **Cloudflare Pages Git-integration** (primary): production branch `main`, build command
-  `npm run build`, output `dist/`. A push (or a `/api/publish` / `/api/admin/*` commit) to
-  `main` → production build; a push to `dev` → preview build. **No Chromium in the build.**
-- **Wrangler direct upload** (also available): `npm run deploy` (production) / `npm run
-  deploy:preview` (preview) build locally and upload `dist/`. Env vars set in the Pages
-  project apply to both deploy paths.
+- **GitHub Actions → Cloudflare Pages (PRIMARY, reliable):** `.github/workflows/deploy.yml`
+  builds on GitHub's runners and deploys `dist/` to Pages via **Wrangler direct upload** on
+  every push to `main` (production) / `dev` (preview), and is invoked by
+  `scheduled-publish.yml` after a scheduled post goes live. This is the source-of-truth
+  pipeline: production always reflects `main` with **no local machine in the loop**.
+  Requires repo secrets `CLOUDFLARE_API_TOKEN` + the three `PUBLIC_*` build vars (see the
+  workflow header). **No Chromium in the build.**
+  > **Why not Cloudflare's own git-build?** It is connected but INTERMITTENTLY fails with a
+  > generic "internal error"; on failure the production alias stays on the last good build,
+  > so a Studio publish/delete can land in GitHub yet never reach the live site. The Actions
+  > pipeline removes that dependency (it uses the reliable direct-upload deploy). CF's
+  > git-build can stay on as a harmless redundant attempt, or be disabled in the dashboard.
+- **Wrangler direct upload** (manual fallback): `npm run deploy` / `npm run deploy:preview`
+  build locally and upload `dist/`. **Caveat:** this deploys your LOCAL tree — always
+  `git pull` first so it can't re-ship content the Studio changed on GitHub.
 - Custom domain `areyoustillreading.dev` is attached in the Pages dashboard.
 
 ### Going live on payments (from test mode)

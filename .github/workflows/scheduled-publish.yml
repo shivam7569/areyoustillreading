@@ -1,9 +1,11 @@
 # Publish scheduled posts.
 # A post scheduled in the Studio is committed as `draft: true` + `publishAt: <ISO>`
 # (hidden, out of the build). This workflow runs on a cron, flips any post now due to
-# `draft: false`, and commits — which triggers the normal Cloudflare Pages rebuild, so
-# the post goes live automatically. GitHub cron can lag a few minutes under load; that
-# is fine for a blog (posts appear within ~15 min of their time).
+# `draft: false`, and commits — then calls the deploy workflow so the post goes live.
+# (The bot commit is pushed with the default GITHUB_TOKEN, which by design does NOT
+# trigger deploy.yml's `push` event, so we invoke deploy.yml explicitly instead of
+# relying on Cloudflare's flaky git-build.) GitHub cron can lag a few minutes under
+# load; that is fine for a blog (posts appear within ~15 min of their time).
 name: Publish scheduled posts
 
 on:
@@ -23,6 +25,8 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.commit.outputs.published }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,6 +37,7 @@ jobs:
       - name: Flip any due scheduled posts to published
         run: node scripts/publish-scheduled.mjs
       - name: Commit + push if anything went live
+        id: commit
         run: |
           if [ -n "$(git status --porcelain src/content/blog)" ]; then
             git config user.name "scheduled-publish[bot]"
@@ -40,6 +45,16 @@ jobs:
             git add src/content/blog
             git commit -m "chore(schedule): publish scheduled post(s)"
             git push origin main
+            echo "published=true" >> "$GITHUB_OUTPUT"
           else
             echo "Nothing due — no posts published."
+            echo "published=false" >> "$GITHUB_OUTPUT"
           fi
+
+  # A post went live → build + deploy through the reliable path (the bot's push above
+  # can't trigger deploy.yml on its own, so call it explicitly).
+  deploy:
+    needs: publish
+    if: ${{ needs.publish.outputs.published == 'true' }}
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit

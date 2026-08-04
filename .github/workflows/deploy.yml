@@ -1,0 +1,68 @@
+# Build + deploy the site to Cloudflare Pages — the reliable, cloud, local-independent
+# deploy path.
+#
+# WHY THIS EXISTS
+#   Cloudflare Pages' own git-build is connected but INTERMITTENTLY FAILS with a
+#   generic "internal error". When it fails, the production alias stays on the last
+#   successful build — so a commit (e.g. a Studio publish/delete) can land in GitHub
+#   yet never reach the live site. This workflow removes that dependency: it builds on
+#   GitHub's runners and deploys the built `dist/` via Wrangler DIRECT UPLOAD (the
+#   reliable path), so production always reflects `main` with no machine in the loop
+#   and no reliance on Cloudflare's builder.
+#
+# TRIGGERS
+#   - push to main → production deploy; push to dev → a preview deploy.
+#   - workflow_call → invoked by scheduled-publish.yml after it flips a due post.
+#   - workflow_dispatch → manual run from the Actions tab.
+#
+# REQUIRED REPO SECRETS (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN         — a token with the "Cloudflare Pages: Edit" permission
+#   PUBLIC_SUPABASE_URL          — same value as your local .env / Pages build vars
+#   PUBLIC_SUPABASE_ANON_KEY     — (public by design; baked into the client at build)
+#   PUBLIC_TURNSTILE_SITE_KEY    — (public)
+# Until CLOUDFLARE_API_TOKEN is set, the job still builds but SKIPS the deploy (no red X).
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_call: {}
+  workflow_dispatch: {}
+
+# Newest push for a branch wins; cancel an in-flight deploy for the same branch.
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build (astro build + pagefind)
+        run: npm run build
+        env:
+          PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
+          PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
+          PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.PUBLIC_TURNSTILE_SITE_KEY }}
+      - name: Deploy to Cloudflare Pages (direct upload)
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: afb180f49d4706385fbba779b25594b1
+          # `dist` = static assets; the repo-root functions/ dir is bundled automatically.
+          command: pages deploy dist --project-name=areyoustillreading --branch=${{ github.ref_name }}
+      - name: Not configured yet
+        if: ${{ env.CLOUDFLARE_API_TOKEN == '' }}
+        run: echo "::warning::CLOUDFLARE_API_TOKEN not set — built but did NOT deploy. Add the repo secrets (see this file's header) to enable auto-deploy."
