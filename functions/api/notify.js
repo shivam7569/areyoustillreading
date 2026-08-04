@@ -3,9 +3,10 @@
  * =============================================================================
  * Reader interactions are written browser → Supabase directly (no server in the
  * path), so the reliable, server-authoritative way to notify the author of EVERY
- * one is a Supabase Database Webhook on INSERT into each table, all pointed here.
- * This endpoint receives the standard webhook payload { type, table, record, ... },
- * verifies a shared secret, and emails the author a summary via Resend.
+ * one is a Postgres AFTER INSERT trigger (pg_net) on each table, all POSTing here
+ * — see db/notify.sql. This endpoint receives the webhook-style payload
+ * { type, table, record, ... }, verifies a shared secret, and emails the author a
+ * summary via Resend.
  *
  * COVERS (one webhook per table → this endpoint — see db/notify.sql):
  *   comments            → a new comment (or, when parent_id is set, a reply/discussion)
