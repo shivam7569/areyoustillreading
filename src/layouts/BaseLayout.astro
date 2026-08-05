@@ -337,8 +337,13 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
             </a>
           </div>
         </div>
-        {/* Copyright year computed at BUILD TIME (SSG): advances whenever anything next ships. */}
-        <p class="copyline">&copy; {new Date().getFullYear()} <span data-cms="global.brand.accent">{brandAccent}</span><span data-cms="global.brand.rest">{brandRest}</span> &middot; <span data-cms="global.footer.tagline">{gfoot.tagline || 'Written to be finished.'}</span></p>
+        {/* Copyright year: rendered at BUILD TIME (correct for no-JS + SEO), then reconciled to
+            the visitor's actual current year on load — so it stays right even if the site isn't
+            rebuilt across a New Year. */}
+        <p class="copyline">&copy; <span id="ays-year">{new Date().getFullYear()}</span> <span data-cms="global.brand.accent">{brandAccent}</span><span data-cms="global.brand.rest">{brandRest}</span> &middot; <span data-cms="global.footer.tagline">{gfoot.tagline || 'Written to be finished.'}</span></p>
+        <script is:inline>
+          (function () { var y = document.getElementById('ays-year'); if (y) y.textContent = new Date().getFullYear(); })();
+        </script>
       </div>
     </footer>
     {/* Cookieless first-party analytics beacon — public pages only. */}
