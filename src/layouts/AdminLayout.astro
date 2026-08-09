@@ -51,6 +51,7 @@ const icon = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11 12 4l8 7"/><path d="M6 10v10h12V10"/></svg>',
   posts: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
   drafts: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h4"/></svg>',
+  series: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 7.5 12 12 3 7.5 12 3Z"/><path d="m3 12 9 4.5L21 12"/><path d="M3 16.5 12 21l9-4.5"/></svg>',
   projects: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m6 16 4-4 3 3 2-2 3 3"/><circle cx="9" cy="9.5" r="1.2"/></svg>',
   resume: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6Z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>',
   content: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>',
@@ -75,6 +76,7 @@ const navGroups = [
   { label: 'Writing', items: [
     { key: 'posts', href: '/admin/posts', label: 'Posts', icon: icon.posts, count: 'posts' },
     { key: 'drafts', href: '/admin/drafts', label: 'Drafts', icon: icon.drafts, count: 'drafts', countAccent: true },
+    { key: 'series', href: '/admin/series', label: 'Series', icon: icon.series },
   ] },
   { label: 'Pages', items: [
     { key: 'projects', href: '/admin/projects', label: 'Projects', icon: icon.projects, count: 'projects' },
