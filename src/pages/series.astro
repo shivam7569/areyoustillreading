@@ -18,11 +18,16 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
 import site from '../data/site.json';
+import seriesDefsData from '../data/series.json';
 import { getCollection } from 'astro:content';
 import { bySeriesOrder } from '../lib/series';
 
 // Editable copy from Studio → Content Management → Series page.
 const c = (site as any).series || {};
+// Studio-defined series knobs (title / total / status / planned), keyed by slug —
+// the source of truth for the plate, edited at /admin/series. Falls back to the
+// author's post frontmatter below for any series not (yet) in series.json.
+const seriesDefs = new Map<string, any>(((seriesDefsData as any).series || []).map((d: any) => [d.slug, d]));
 
 const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).filter(Boolean).length ?? 0) / 200));
 const prettify = (slug: string) => { const w = slug.replace(/[-_]+/g, ' ').trim(); return w.charAt(0).toUpperCase() + w.slice(1); };
@@ -106,11 +111,12 @@ const WASH = [
 const seriesList = [...bySeries.entries()]
   .map(([slug, members]) => {
     members.sort(bySeriesOrder);
-    const title = members.map((p) => p.data.seriesTitle).find((t) => t && t.trim())?.trim() || prettify(slug);
+    const def = seriesDefs.get(slug);
+    const title = (def?.title && String(def.title).trim()) || members.map((p) => p.data.seriesTitle).find((t) => t && t.trim())?.trim() || prettify(slug);
     const parts = members.map((p) => ({ id: p.id, title: p.data.title, date: p.data.pubDate, mins: readMins(p.body) }));
     let h = 0; for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
-    const planned = (firstOf<string[]>(members, 'seriesPlanned') || []).filter((t) => t && t.trim());
-    const declaredTotal = firstOf<number>(members, 'seriesTotal');
+    const planned = ((def?.planned && def.planned.length ? def.planned : firstOf<string[]>(members, 'seriesPlanned')) || []).filter((t) => t && t.trim());
+    const declaredTotal = (def && typeof def.total === 'number' ? def.total : undefined) ?? firstOf<number>(members, 'seriesTotal');
     const total = Math.max(parts.length, declaredTotal || parts.length, parts.length + planned.length);
     // Status: author-declared (editor field) wins. When left on "auto" we INFER it
     // from the author's own declared total — if they said the series has N parts and
@@ -118,7 +124,7 @@ const seriesList = [...bySeries.entries()]
     // In progress. We only claim "complete" off a total the author actually set — no
     // declared total, no fabricated finality (a bare pile of parts stays In progress).
     const allDeclaredPublished = !!declaredTotal && parts.length >= declaredTotal && planned.length === 0;
-    const status = firstOf<string>(members, 'seriesStatus') || (allDeclaredPublished ? 'complete' : 'in-progress');
+    const status = (def?.status && String(def.status)) || firstOf<string>(members, 'seriesStatus') || (allDeclaredPublished ? 'complete' : 'in-progress');
     return {
       slug, title, parts, planned, total, status,
       description: members[0].data.description,
