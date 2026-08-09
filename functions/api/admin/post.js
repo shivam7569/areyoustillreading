@@ -164,7 +164,9 @@ export async function onRequestPost({ request, env }) {
   }
   if (hasSeries) {
     if (body.series === null) {
-      updated = removeFields(updated, ['series', 'seriesTitle', 'seriesOrder']);
+      // Drop the plate knobs too, so an unassigned post can't resurrect a stale
+      // total/status/planned tail if it's later re-added to a different series.
+      updated = removeFields(updated, ['series', 'seriesTitle', 'seriesOrder', 'seriesTotal', 'seriesStatus', 'seriesPlanned']);
       actions.push('series-clear');
     } else {
       const title = String(body.series.title).trim();

@@ -82,11 +82,14 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
   function card(slug: string, members: any[]) {
     members.sort((a, b) => (a.seriesOrder ?? 1e9) - (b.seriesOrder ?? 1e9) || String(a.pubDate || '').localeCompare(String(b.pubDate || '')));
-    const def = defs.find((d) => d.slug === slug) || {};
+    const rawDef = defs.find((d) => d.slug === slug);
+    const hasDef = !!rawDef; const def: any = rawDef || {};
+    // A definition, once it exists, is authoritative — its empty values mean "cleared",
+    // so don't fall back to post frontmatter for a defined series (only for post-only ones).
     const title = def.title || firstOf(members, 'seriesTitle') || prettify(slug);
-    const total = (typeof def.total === 'number' ? def.total : firstOf(members, 'seriesTotal')) || '';
-    const status = def.status || firstOf(members, 'seriesStatus') || '';
-    const planned: string[] = (def.planned && def.planned.length ? def.planned : firstOf(members, 'seriesPlanned')) || [];
+    const total = (hasDef ? (typeof def.total === 'number' ? def.total : '') : (firstOf(members, 'seriesTotal') || ''));
+    const status = (hasDef ? (def.status || '') : (firstOf(members, 'seriesStatus') || ''));
+    const planned: string[] = (hasDef ? (def.planned || []) : (firstOf(members, 'seriesPlanned') || []));
     const published = members.filter((m: any) => !m.draft).length;
     const partsRows = members.length
       ? members.map((m: any) => `<div class="fr"><span>${m.seriesOrder ? '<b style="color:var(--ink);font-weight:600">' + esc(String(m.seriesOrder)) + '</b> · ' : ''}${esc(m.title)}${m.draft ? ' <span class="pill" style="margin-left:4px">Draft</span>' : ''}</span><a class="v act" href="/admin/write?slug=${encodeURIComponent(m.slug)}">Edit</a></div>`).join('')

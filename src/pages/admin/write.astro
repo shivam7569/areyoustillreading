@@ -1529,9 +1529,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         // when Part is empty — never overwrite a number the author set. Optional/editable.
         const orderEl = $('pm-series-order') as HTMLInputElement;
         if (name && orderEl && !orderEl.value.trim()) {
+          // Suggest one past the highest EXISTING part number (drafts included), so we
+          // never collide with an already-drafted or out-of-order part.
           const slug = seriesSlugify(name);
-          const published = seriesPosts.filter((p: any) => !p.draft && seriesSlugify(String(p.seriesTitle || p.series || '')) === slug).length;
-          orderEl.value = String(published + 1);
+          const members = seriesPosts.filter((p: any) => seriesSlugify(String(p.seriesTitle || p.series || '')) === slug);
+          const maxOrder = members.reduce((m: number, p: any) => Math.max(m, Number(p.seriesOrder) || 0), 0);
+          orderEl.value = String(maxOrder + 1);
         } else if (!name && orderEl) {
           orderEl.value = ''; // clearing the series clears the suggested part
         }
@@ -1774,7 +1777,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       // grouping (`series`), the raw name for display (`seriesTitle`), and the part
       // number (`seriesOrder`). Omitted entirely when the field is blank.
       const seriesTitleRaw = $('pm-series').value.trim();
-      const seriesSlug = seriesTitleRaw ? slugify(seriesTitleRaw) : '';
+      // Uncapped slugify for the series GROUPING key (must byte-match the def store +
+      // post.js). The 80-char cap on `slugify` is only for the post's own permalink.
+      const seriesSlug = seriesTitleRaw ? seriesSlugify(seriesTitleRaw) : '';
       const seriesOrderNum = parseInt($('pm-series-order').value, 10);
       const seriesOrder = Number.isFinite(seriesOrderNum) && seriesOrderNum > 0 ? seriesOrderNum : null;
       // Richer series metadata for the /series plate (all optional).

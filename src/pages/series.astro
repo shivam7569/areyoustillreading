@@ -112,11 +112,16 @@ const seriesList = [...bySeries.entries()]
   .map(([slug, members]) => {
     members.sort(bySeriesOrder);
     const def = seriesDefs.get(slug);
+    // A series.json definition, when present, is the SOLE source for the knobs — its
+    // empty values (null total / '' status / [] planned) mean "cleared", so we do NOT
+    // fall back to post frontmatter for a defined series. Only slugs with no def read
+    // the author's frontmatter (legacy / publish-sheet-set series).
+    const hasDef = !!def;
     const title = (def?.title && String(def.title).trim()) || members.map((p) => p.data.seriesTitle).find((t) => t && t.trim())?.trim() || prettify(slug);
     const parts = members.map((p) => ({ id: p.id, title: p.data.title, date: p.data.pubDate, mins: readMins(p.body) }));
     let h = 0; for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
-    const planned = ((def?.planned && def.planned.length ? def.planned : firstOf<string[]>(members, 'seriesPlanned')) || []).filter((t) => t && t.trim());
-    const declaredTotal = (def && typeof def.total === 'number' ? def.total : undefined) ?? firstOf<number>(members, 'seriesTotal');
+    const planned = ((hasDef ? (def!.planned || []) : firstOf<string[]>(members, 'seriesPlanned')) || []).filter((t) => t && t.trim());
+    const declaredTotal = hasDef ? (typeof def!.total === 'number' ? def!.total : undefined) : firstOf<number>(members, 'seriesTotal');
     const total = Math.max(parts.length, declaredTotal || parts.length, parts.length + planned.length);
     // Status: author-declared (editor field) wins. When left on "auto" we INFER it
     // from the author's own declared total — if they said the series has N parts and
@@ -124,7 +129,7 @@ const seriesList = [...bySeries.entries()]
     // In progress. We only claim "complete" off a total the author actually set — no
     // declared total, no fabricated finality (a bare pile of parts stays In progress).
     const allDeclaredPublished = !!declaredTotal && parts.length >= declaredTotal && planned.length === 0;
-    const status = (def?.status && String(def.status)) || firstOf<string>(members, 'seriesStatus') || (allDeclaredPublished ? 'complete' : 'in-progress');
+    const status = (hasDef ? (def!.status || '') : firstOf<string>(members, 'seriesStatus')) || (allDeclaredPublished ? 'complete' : 'in-progress');
     return {
       slug, title, parts, planned, total, status,
       description: members[0].data.description,
