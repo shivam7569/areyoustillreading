@@ -103,7 +103,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
               <div class="gl" style="font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:7px">Parts still to come</div>
               <textarea class="input sr-planned" rows="3" placeholder="One title per line — shown greyed on the series page" style="width:100%;resize:vertical">${esc(planned.join('\n'))}</textarea>
             </div>
-            <div style="margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <div class="sr-actions" style="margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
               <button class="btn btn-primary btn-sm sr-save" type="button">Save</button>
               <button class="btn btn-ghost btn-sm del sr-del" type="button">Delete</button>
               <span class="muted sr-msg" style="font-size:12.5px"></span>
@@ -142,17 +142,26 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     catch (e: any) { msg.textContent = 'Error: ' + (e.message || e); }
   }
 
-  async function deleteCard(panel: HTMLElement) {
+  const ACTIONS_HTML = '<button class="btn btn-primary btn-sm sr-save" type="button">Save</button><button class="btn btn-ghost btn-sm del sr-del" type="button">Delete</button><span class="muted sr-msg" style="font-size:12.5px"></span>';
+
+  // Click Delete → swap the actions row for an inline confirm (no native confirm()).
+  function askDelete(panel: HTMLElement) {
+    const slug = panel.dataset.slug!;
+    const n = posts.filter((p) => p.series === slug).length;
+    const actions = panel.querySelector('.sr-actions') as HTMLElement;
+    actions.innerHTML =
+      `<span class="muted" style="font-size:12.5px">Delete this series?${n ? ` Its ${n} post${n > 1 ? 's' : ''} stay — just ungrouped.` : ''}</span>` +
+      '<button class="btn btn-sm sr-del-yes" type="button" style="background:#b4453a;border-color:#b4453a;color:#fff">Delete</button>' +
+      '<button class="btn btn-ghost btn-sm sr-del-no" type="button">Cancel</button>' +
+      '<span class="muted sr-msg" style="font-size:12.5px"></span>';
+  }
+
+  async function runDelete(panel: HTMLElement) {
     const slug = panel.dataset.slug!;
     const members = posts.filter((p) => p.series === slug);
-    const n = members.length;
-    const ok = confirm(n
-      ? `Delete this series? Its ${n} post${n > 1 ? 's' : ''} will become independent — the post${n > 1 ? 's are' : ' is'} kept, just no longer grouped.`
-      : 'Delete this series?');
-    if (!ok) return;
     const msg = panel.querySelector('.sr-msg') as HTMLElement;
-    const delBtn = panel.querySelector('.sr-del') as HTMLButtonElement;
-    delBtn.disabled = true; msg.textContent = 'Deleting…';
+    const yes = panel.querySelector('.sr-del-yes') as HTMLButtonElement;
+    if (yes) yes.disabled = true; if (msg) msg.textContent = 'Deleting…';
     try {
       // Unassign each member post (drops series / seriesTitle / seriesOrder → standalone).
       for (const m of members) {
@@ -163,32 +172,56 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       await persist();
       await load(); // posts' series changed → refetch + re-render
     } catch (e: any) {
-      msg.textContent = 'Error: ' + (e.message || e); delBtn.disabled = false;
+      if (msg) msg.textContent = 'Error: ' + (e.message || e);
+      if (yes) yes.disabled = false;
     }
   }
 
-  newBtn.addEventListener('click', async () => {
-    const name = (prompt('Name the new series') || '').trim();
-    if (!name) return;
-    const slug = slugify(name);
-    if (!slug) { alert('Please use letters or numbers in the name.'); return; }
-    if (defs.some((d) => d.slug === slug) || posts.some((p) => p.series === slug)) { alert('A series with that name already exists.'); return; }
-    defs.push({ slug, title: name, total: null, status: '', planned: [] });
-    try {
-      await persist();
-      render();
-      (host.querySelector(`.panel[data-slug="${slug}"] .sr-total`) as HTMLElement | null)?.focus();
-    } catch (e: any) {
-      defs = defs.filter((d) => d.slug !== slug);
-      alert('Could not create the series: ' + (e.message || e));
-    }
-  });
+  // "New series" opens an inline, on-brand create card — never a native prompt.
+  function openCreate() {
+    const existing = document.getElementById('sr-create');
+    if (existing) { (existing.querySelector('#sr-new-name') as HTMLElement | null)?.focus(); return; }
+    const el = document.createElement('div');
+    el.className = 'panel'; el.id = 'sr-create';
+    el.innerHTML = `<div class="pb" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:18px 20px">
+      <input id="sr-new-name" class="input" type="text" placeholder="Name this series…" autocomplete="off" spellcheck="false" style="flex:1 1 260px;min-width:200px;font-size:16px">
+      <button class="btn btn-primary btn-sm" id="sr-new-go" type="button">Create</button>
+      <button class="btn btn-ghost btn-sm" id="sr-new-x" type="button">Cancel</button>
+      <span class="muted" id="sr-new-msg" style="font-size:12.5px;flex-basis:100%"></span>
+    </div>`;
+    host.prepend(el);
+    const input = el.querySelector('#sr-new-name') as HTMLInputElement;
+    const msg = el.querySelector('#sr-new-msg') as HTMLElement;
+    const create = async () => {
+      const name = input.value.trim();
+      if (!name) { input.focus(); return; }
+      const slug = slugify(name);
+      if (!slug) { msg.textContent = 'Please use letters or numbers.'; return; }
+      if (defs.some((d) => d.slug === slug) || posts.some((p) => p.series === slug)) { msg.textContent = 'A series with that name already exists.'; return; }
+      const go = el.querySelector('#sr-new-go') as HTMLButtonElement; go.disabled = true; msg.textContent = 'Creating…';
+      defs.push({ slug, title: name, total: null, status: '', planned: [] });
+      try {
+        await persist();
+        render(); // replaces host content (removes this create card) and shows the new series
+        (host.querySelector(`.panel[data-slug="${slug}"] .sr-total`) as HTMLElement | null)?.focus();
+      } catch (e: any) {
+        defs = defs.filter((d) => d.slug !== slug);
+        msg.textContent = 'Could not create: ' + (e.message || e); go.disabled = false;
+      }
+    };
+    el.querySelector('#sr-new-go')!.addEventListener('click', create);
+    el.querySelector('#sr-new-x')!.addEventListener('click', () => el.remove());
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } else if (e.key === 'Escape') { el.remove(); } });
+    input.focus();
+  }
+  newBtn.addEventListener('click', openCreate);
 
   host.addEventListener('click', (e) => {
-    const save = (e.target as HTMLElement).closest('.sr-save') as HTMLElement | null;
-    if (save) { saveCard(save.closest('.panel') as HTMLElement); return; }
-    const del = (e.target as HTMLElement).closest('.sr-del') as HTMLElement | null;
-    if (del) { deleteCard(del.closest('.panel') as HTMLElement); return; }
+    const t = e.target as HTMLElement;
+    if (t.closest('.sr-save')) { saveCard(t.closest('.panel') as HTMLElement); return; }
+    if (t.closest('.sr-del-yes')) { runDelete(t.closest('.panel') as HTMLElement); return; }
+    if (t.closest('.sr-del-no')) { const a = t.closest('.sr-actions') as HTMLElement; if (a) a.innerHTML = ACTIONS_HTML; return; }
+    if (t.closest('.sr-del')) { askDelete(t.closest('.panel') as HTMLElement); return; }
   });
 
   onAdminReady(() => load());
