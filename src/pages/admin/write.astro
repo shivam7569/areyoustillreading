@@ -1510,6 +1510,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     }
     // The series field is now a custom on-brand combobox (matches the schedule pickers):
     // a searchable list of the site's existing series + a "Create …" row for a new one.
+    // Same slugify as functions/api/admin/post.js — a series' grouping key.
+    const seriesSlugify = (s: string) => String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    let seriesPosts: any[] = []; // the post catalog, kept so we can suggest the next part number
     const seriesPicker = mountSeriesPicker($('pm-series-pick'), {
       loadNames: async () => {
         const { data } = await supabase.auth.getSession();
@@ -1517,9 +1520,23 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         if (!token) return [];
         const r = await fetch('/api/admin/posts', { headers: { Authorization: 'Bearer ' + token } });
         const d = await r.json();
-        return [...new Set((d.posts || []).map((p: any) => String(p.seriesTitle || p.series || '').trim()).filter(Boolean))].sort() as string[];
+        seriesPosts = d.posts || [];
+        return [...new Set(seriesPosts.map((p: any) => String(p.seriesTitle || p.series || '').trim()).filter(Boolean))].sort() as string[];
       },
-      onChange: (name) => { seriesInput.value = name; syncSeriesUI(); refreshSheet(); },
+      onChange: (name) => {
+        seriesInput.value = name;
+        // Suggest the next part = (published parts already in this series) + 1, but only
+        // when Part is empty — never overwrite a number the author set. Optional/editable.
+        const orderEl = $('pm-series-order') as HTMLInputElement;
+        if (name && orderEl && !orderEl.value.trim()) {
+          const slug = seriesSlugify(name);
+          const published = seriesPosts.filter((p: any) => !p.draft && seriesSlugify(String(p.seriesTitle || p.series || '')) === slug).length;
+          orderEl.value = String(published + 1);
+        } else if (!name && orderEl) {
+          orderEl.value = ''; // clearing the series clears the suggested part
+        }
+        syncSeriesUI(); refreshSheet();
+      },
     });
     function loadSeriesOptions() { seriesPicker.refresh(); }
     specsBtn.addEventListener('click', () => {
