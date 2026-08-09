@@ -3,7 +3,7 @@
     {
       "slug": "test-series-2",
       "title": "Test Series 2",
-      "total": null,
+      "total": 5,
       "status": "",
       "planned": []
     }
