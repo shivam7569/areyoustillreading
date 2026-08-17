@@ -4,7 +4,7 @@ description: "A deliberately over-built essay that puts every rendering feature 
 pubDate: 2026-07-31
 author: "Shivam Chaudhary"
 tags: ["Meta", "Systems", "Testing"]
-draft: false
+draft: true
 series: "test-series"
 seriesTitle: "Test Series"
 seriesOrder: 3
