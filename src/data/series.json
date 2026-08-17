@@ -1,11 +1,3 @@
 {
-  "series": [
-    {
-      "slug": "test-series-2",
-      "title": "Test Series 2",
-      "total": 5,
-      "status": "",
-      "planned": []
-    }
-  ]
+  "series": []
 }
