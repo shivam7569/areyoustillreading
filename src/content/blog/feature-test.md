@@ -5,9 +5,6 @@ pubDate: 2026-07-31
 author: "Shivam Chaudhary"
 tags: ["Meta", "Systems", "Testing"]
 draft: true
-series: "test-series"
-seriesTitle: "Test Series"
-seriesOrder: 3
 ---
 
 This post exists to break things on purpose. Every paragraph below leans on a different part of the publishing pipeline, from the **dropcap** you are reading now to the interactive plot near the end. When it is all *stacked in one place* — a single `feature-test` page instead of hunting across the archive — a regression has nowhere to hide.
