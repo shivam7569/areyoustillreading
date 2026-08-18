@@ -36,7 +36,9 @@ function contentsApi(env, path) {
 }
 async function getFile(env, path) {
   const { branch } = repoInfo(env);
-  const r = await fetch(`${contentsApi(env, path)}?ref=${encodeURIComponent(branch)}`, { headers: ghHeaders(env) });
+  // cacheTtl:0 — never let Cloudflare's edge serve a stale GitHub read; the Studio
+  // relies on read-after-write freshness for both the sha (writes) and the UI (reads).
+  const r = await fetch(`${contentsApi(env, path)}?ref=${encodeURIComponent(branch)}`, { headers: ghHeaders(env), cf: { cacheTtl: 0, cacheEverything: false } });
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`GitHub lookup failed (${r.status})`);
   const j = await r.json();

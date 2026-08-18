@@ -35,7 +35,9 @@ function fileApi(env, slug) {
 // Look up a post file: returns { sha, content } or null (404). Throws on hard error.
 async function getFile(env, slug) {
   const { branch } = repoInfo(env);
-  const r = await fetch(`${fileApi(env, slug)}?ref=${encodeURIComponent(branch)}`, { headers: ghHeaders(env) });
+  // cacheTtl:0 — never let Cloudflare's edge serve a stale GitHub read (the sha we
+  // commit against, and the content we edit, must be the live tip of the branch).
+  const r = await fetch(`${fileApi(env, slug)}?ref=${encodeURIComponent(branch)}`, { headers: ghHeaders(env), cf: { cacheTtl: 0, cacheEverything: false } });
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`GitHub lookup failed (${r.status})`);
   const j = await r.json();

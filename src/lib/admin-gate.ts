@@ -129,6 +129,10 @@ export async function adminFetch(input: string, init: RequestInit = {}): Promise
   const auth = await authHeaders();
   return fetch(input, {
     ...init,
+    // Admin data must always be fresh: never let the browser HTTP cache serve a stale
+    // copy right after a write (the "I deleted it but it came back" bug). After ...init
+    // so the guarantee is unconditional — no caller can accidentally re-enable caching.
+    cache: 'no-store',
     headers: { ...(init.headers || {}), ...auth },
   });
 }

@@ -256,6 +256,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   let curFieldSlug = '';   // selected field slug
   let draft: any = null;   // the working copy the editor edits
   let dirty = false;
+  let deleting = false;    // a delete is committing — blocks a second, concurrent runDelete
 
   async function load(sel?: { series?: string; field?: string }) {
     const [sr, pr, fr] = await Promise.all([
@@ -266,6 +267,16 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     sdefs = sr && sr.content && Array.isArray(sr.content.series) ? sr.content.series : [];
     posts = (pr && pr.posts) || [];
     fdefs = fr && fr.content && Array.isArray(fr.content.fields) ? fr.content.fields : [];
+    applySelection(sel);
+  }
+
+  // Choose what to show (a requested series/field, else the first available, else the
+  // empty state) and render it FROM CURRENT IN-MEMORY STATE. After a create/delete/move
+  // we call this instead of load(): the write endpoint already returned the authoritative
+  // (server-sanitized) arrays, so re-reading GitHub would only risk a stale, not-yet-
+  // consistent copy resurrecting what we just changed. load() (a real GitHub read) is
+  // reserved for the initial page load.
+  function applySelection(sel?: { series?: string; field?: string }) {
     const list = seriesSlugs();
     if (sel && sel.field && fdefs.some((f) => f.slug === sel.field)) loadField(sel.field);
     else if (sel && sel.series && list.includes(sel.series)) loadSeries(sel.series);
@@ -448,6 +459,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   }
 
   function askDelete() {
+    if (deleting) return; // a delete is already in flight — don't re-open/re-arm the confirm
     const msg = el('delmsg');
     if (mode === 'field') {
       const n = (fdefs.find((x) => x.slug === curFieldSlug)?.series || []).length;
@@ -456,26 +468,36 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       const n = seriesModel(curSlug).published;
       msg.innerHTML = `Delete <b>${esc(draft.name)}</b>? ${n ? `Its ${n} published post${n > 1 ? 's' : ''} stay — just ungrouped.` : 'It holds no posts yet.'}`;
     }
+    (el('delyes') as HTMLButtonElement).disabled = false; // a prior delete left it disabled
     el('delconf').classList.add('on');
   }
   async function runDelete() {
+    if (deleting) return;           // never let two deletes run at once
+    deleting = true;
+    // Snapshot the target: applySelection() (on success) moves curSlug/curFieldSlug, and
+    // nothing this function awaits should read the live, possibly-advanced selection.
+    const asField = mode === 'field', series0 = curSlug, field0 = curFieldSlug;
     const yes = el('delyes') as HTMLButtonElement; yes.disabled = true;
     try {
-      if (mode === 'field') {
-        await persistFields(fdefs.filter((f) => f.slug !== curFieldSlug));
-        await load({});
+      if (asField) {
+        await persistFields(fdefs.filter((f) => f.slug !== field0));
+        applySelection({});
       } else {
-        const members = posts.filter((p) => p.series === curSlug);
+        const members = posts.filter((p) => p.series === series0);
         for (const m of members) {
           const r = await adminFetch('/api/admin/post', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ slug: m.slug, series: null }) });
           if (!r.ok) throw new Error('Could not unassign “' + m.title + '”');
         }
-        const wasInField = fieldOf(curSlug);
-        await persistSeries(sdefs.filter((d) => d.slug !== curSlug));
-        if (wasInField) await persistFields(withMove(fdefs, curSlug, ''));
-        await load({});
+        // Mirror the unassignment in local state so the deleted series can't linger via
+        // its (now standalone) posts when we re-render from memory.
+        posts.forEach((p) => { if (p.series === series0) { p.series = null; p.seriesTitle = null; p.seriesOrder = null; } });
+        const wasInField = fieldOf(series0);
+        await persistSeries(sdefs.filter((d) => d.slug !== series0));
+        if (wasInField) await persistFields(withMove(fdefs, series0, ''));
+        applySelection({});
       }
     } catch (e: any) { el('delmsg').textContent = 'Error — ' + (e.message || e); yes.disabled = false; }
+    finally { deleting = false; }
   }
 
   // ---- events ----------------------------------------------------------------
@@ -515,12 +537,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   el('newSeries').addEventListener('click', async () => {
     const base = 'untitled-series'; let slug = base, i = 2; const taken = new Set(seriesSlugs());
     while (taken.has(slug)) slug = base + '-' + i++;
-    try { await persistSeries([...sdefs, { slug, title: 'Untitled series', total: null, status: '', planned: [] }]); await load({ series: slug }); (el('sname') as HTMLInputElement).select(); } catch (e: any) { el('state').textContent = 'Could not create — ' + (e.message || e); }
+    try { await persistSeries([...sdefs, { slug, title: 'Untitled series', total: null, status: '', planned: [] }]); applySelection({ series: slug }); (el('sname') as HTMLInputElement).select(); } catch (e: any) { el('state').textContent = 'Could not create — ' + (e.message || e); }
   });
   el('newField').addEventListener('click', async () => {
     const base = 'untitled-field'; let slug = base, i = 2; const taken = new Set(fdefs.map((f) => f.slug));
     while (taken.has(slug)) slug = base + '-' + i++;
-    try { await persistFields([...fdefs, { slug, title: 'Untitled field', summary: '', mark: '01', series: [] }]); await load({ field: slug }); (el('sname') as HTMLInputElement).select(); } catch (e: any) { el('state').textContent = 'Could not create — ' + (e.message || e); }
+    try { await persistFields([...fdefs, { slug, title: 'Untitled field', summary: '', mark: '01', series: [] }]); applySelection({ field: slug }); (el('sname') as HTMLInputElement).select(); } catch (e: any) { el('state').textContent = 'Could not create — ' + (e.message || e); }
   });
   el('sname').addEventListener('input', () => { draft.name = (el('sname') as HTMLInputElement).value; touch(); });
   el('tplus').addEventListener('click', () => { draft.total = (draft.total || 1) + 1; renderSeries(); touch(); });
