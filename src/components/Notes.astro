@@ -90,16 +90,18 @@ const { postId } = Astro.props;
     font: inherit;
     resize: vertical;
   }
+  /* Match the site's editorial primary button (.btn-primary): sharp radius,
+     on-accent text (theme-correct), the same lift + shadow. */
   #note-save {
-    margin-top: 0.5rem;
-    padding: 0.5rem 1rem;
-    border: 0;
-    border-radius: 6px;
-    background: var(--accent);
-    color: #fff;
-    font-weight: 600;
-    cursor: pointer;
+    margin-top: 0.6rem;
+    font-family: var(--sans); font-size: 15px; font-weight: 500;
+    padding: 13px 24px;
+    border: 0; border-radius: 2px;
+    background: var(--accent); color: var(--on-accent);
+    box-shadow: 0 10px 26px -14px var(--accent); cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.2s ease;
   }
+  #note-save:hover { transform: translateY(-2px); box-shadow: 0 16px 34px -14px var(--accent); }
   #others-notes { margin-top: 1.25rem; }
   .other-note { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
   .other-note-body { margin: 0.1rem 0 0; white-space: pre-wrap; }

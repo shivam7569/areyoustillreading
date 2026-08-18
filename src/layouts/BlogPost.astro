@@ -100,7 +100,10 @@ if (here !== -1) {
   // Standalone posts suggest other STANDALONE essays (a bare series part out of context
   // reads badly as a "related" card). A series post, though, uses these only at its own
   // boundaries — so it may suggest posts from OTHER series too, just not its own parts.
-  const candidates = allPosts.filter((p) => p.id !== post.id && p.id !== nextInFieldSlug && (series ? p.data.series !== post.data.series : !p.data.series));
+  // Base the pool on whether the post BELONGS to a series (post.data.series), not on
+  // whether it has multi-part nav — a lone part of a 1-post series (e.g. the last
+  // series in a field) still deserves cross-series tag suggestions.
+  const candidates = allPosts.filter((p) => p.id !== post.id && p.id !== nextInFieldSlug && (post.data.series ? p.data.series !== post.data.series : !p.data.series));
   related = candidates
     .map((p) => ({ p, shared: (p.data.tags ?? []).filter((t) => currentTags.has(t)).length }))
     .filter((x) => x.shared > 0)

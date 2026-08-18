@@ -65,6 +65,7 @@ const partMeta = field.series.flatMap((s) => s.parts.map((p) => ({ slug: p.id, t
         <div class="starthere">
           <a class="btn btn-primary" id="sh-btn" data-parts={readingOrder} data-continue-label={f.continueLabel || 'Continue reading'} data-continue-why={f.continueWhy || 'Pick up where you left off —'} href={`/blog/${start.id}`}><span class="sh-label" data-cms="fields.startHere">{f.startHere || 'Start here'}</span> <span class="arrow">→</span></a>
           <span class="why" id="sh-why">Begins with <b>{start.title}</b> — {start.mins} minute{start.mins === 1 ? '' : 's'}, no prerequisites.</span>
+          <button type="button" class="restart" id="sh-restart" hidden>Start over</button>
           <script type="application/json" id="rp-part-meta" set:html={JSON.stringify(partMeta)}></script>
         </div>
       </div>
@@ -87,9 +88,10 @@ const partMeta = field.series.flatMap((s) => s.parts.map((p) => ({ slug: p.id, t
   // from the reader's CHECKPOINT (the most-recently-read part, at its subsection),
   // name that checkpoint beside the button, mark finished series in the arc, and
   // check off read parts.
-  import { fetchProgress } from '../../lib/reader-progress';
+  import { fetchProgress, resetProgress } from '../../lib/reader-progress';
   const btn = document.getElementById('sh-btn') as HTMLAnchorElement | null;
   const why = document.getElementById('sh-why');
+  const restart = document.getElementById('sh-restart') as HTMLButtonElement | null;
   const arc = Array.from(document.querySelectorAll('.arc li[data-parts]')) as HTMLElement[];
   const partAnchors = Array.from(document.querySelectorAll('.series .parts li a[href^="/blog/"]')) as HTMLAnchorElement[];
   const slugOf = (href: string | null) => (href || '').replace(/^\/blog\//, '').replace(/\/$/, '');
@@ -101,6 +103,11 @@ const partMeta = field.series.flatMap((s) => s.parts.map((p) => ({ slug: p.id, t
   const all = new Set<string>(order);
   arc.forEach((li) => (li.dataset.parts || '').split(',').filter(Boolean).forEach((s) => all.add(s)));
   partAnchors.forEach((a) => all.add(slugOf(a.getAttribute('href'))));
+  // Originals, to restore on "Start over".
+  const startHref = btn ? btn.getAttribute('href') || '' : '';
+  const startLabel = (btn && btn.querySelector('.sh-label')?.textContent) || '';
+  const startWhy = why ? why.innerHTML : '';
+  const clearMarks = () => { arc.forEach((li) => li.classList.remove('read')); partAnchors.forEach((a) => a.closest('li')?.classList.remove('read')); };
   if (all.size) fetchProgress(Array.from(all)).then((m) => {
     if (!m.size) return;
     if (btn && order.some((s) => m.has(s))) {
@@ -118,8 +125,17 @@ const partMeta = field.series.flatMap((s) => s.parts.map((p) => ({ slug: p.id, t
       btn.setAttribute('href', href);
       const lbl = btn.querySelector('.sh-label'); if (lbl) lbl.textContent = btn.dataset.continueLabel || 'Continue reading';
       if (why && point) why.innerHTML = escHtml(btn.dataset.continueWhy || 'Pick up where you left off —') + ' <b>' + escHtml(point) + '</b>.';
+      if (restart) restart.hidden = false;
     }
     arc.forEach((li) => { const parts = (li.dataset.parts || '').split(',').filter(Boolean); if (parts.length && parts.every((s) => m.get(s) && m.get(s)!.read)) li.classList.add('read'); });
     partAnchors.forEach((a) => { const p = m.get(slugOf(a.getAttribute('href'))); if (p && p.read) a.closest('li')?.classList.add('read'); });
+  });
+  restart?.addEventListener('click', async () => {
+    restart.disabled = true;
+    await resetProgress(order);
+    if (btn) { btn.setAttribute('href', startHref); const lbl = btn.querySelector('.sh-label'); if (lbl) lbl.textContent = startLabel; }
+    if (why) why.innerHTML = startWhy;
+    clearMarks();
+    restart.hidden = true; restart.disabled = false;
   });
 </script>

@@ -139,9 +139,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .rgrp.quiet { cursor: default; }
   .rgrp.quiet:hover { color: var(--ink-faint); background: none; }
   /* field headers read clearly as a level above the series: a tinted bar, an icon, heavier name */
-  .rgrp.field { background: color-mix(in srgb, var(--accent) 7%, var(--paper-2)); border-bottom: 1px solid var(--rule); font-size: 10px; font-weight: 700; }
-  .rgrp.field .fico { width: 13px; height: 13px; flex: none; color: var(--accent); opacity: .9; }
-  .rgrp.field .nm { color: var(--ink); letter-spacing: .09em; }
+  .rgrp.field { align-items: flex-start; gap: 9px; background: color-mix(in srgb, var(--accent) 7%, var(--paper-2)); border-bottom: 1px solid var(--rule); font-size: 10px; font-weight: 700; padding: 12px 13px; }
+  .rgrp.field .fico { width: 14px; height: 14px; flex: none; color: var(--accent); opacity: .9; margin-top: 1px; }
+  .rgrp.field .fwrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .rgrp.field .nm { color: var(--ink); letter-spacing: .08em; line-height: 1.35; }
+  .rgrp.field .gm { margin-left: 0; color: var(--ink-faint); }
   .rgrp.field:hover { background: color-mix(in srgb, var(--accent) 12%, var(--paper-2)); }
   .rgrp.field.on { background: color-mix(in srgb, var(--accent) 16%, var(--paper-2)); box-shadow: inset 2px 0 0 var(--accent); }
   .rgrp.field.on .nm, .rgrp.field.on .fico { color: var(--accent); opacity: 1; }
@@ -305,7 +307,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       members.forEach((s: string) => inField.add(s));
       const pub = members.filter((s: string) => seriesModel(s).published > 0).length;
       const on = mode === 'field' && f.slug === curFieldSlug ? ' on' : '';
-      html += `<button class="rgrp field${on}" type="button" data-f="${esc(f.slug)}">${FICO}<span class="nm">${esc(f.title || f.slug)}</span><span class="gm">${members.length} series · ${pub >= 2 ? 'live' : 'not public yet'}</span></button>`;
+      html += `<button class="rgrp field${on}" type="button" data-f="${esc(f.slug)}">${FICO}<span class="fwrap"><span class="nm">${esc(f.title || f.slug)}</span><span class="gm">${members.length} series · ${pub >= 2 ? 'live' : 'not public yet'}</span></span></button>`;
       html += members.map((s: string) => railRow(s, f.slug)).join('');
     }
     const loose = seriesSlugs().filter((s) => !inField.has(s));

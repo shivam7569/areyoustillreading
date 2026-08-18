@@ -39,6 +39,19 @@ export async function fetchProgress(slugs: string[]): Promise<Map<string, Progre
   return out;
 }
 
+/** Clear this reader's progress for a set of posts ("Start over" for a field). No-op when signed out. */
+export async function resetProgress(slugs: string[]): Promise<void> {
+  const wanted = [...new Set(slugs.filter(Boolean))];
+  if (!wanted.length) return;
+  const uid = await currentUserId();
+  if (!uid) return;
+  try {
+    await supabase.from('reader_progress').delete().in('post_slug', wanted);
+  } catch {
+    /* best-effort */
+  }
+}
+
 /** Record the reader's furthest position in a post (upsert on the PK). No-op when signed out. */
 export async function recordProgress(slug: string, pct: number, read: boolean, anchor = '', heading = ''): Promise<void> {
   if (!slug) return;

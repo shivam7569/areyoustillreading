@@ -35,4 +35,9 @@ drop policy if exists reader_progress_update_own on public.reader_progress;
 create policy reader_progress_update_own on public.reader_progress
   for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-grant select, insert, update on public.reader_progress to authenticated;
+-- Delete own rows (powers "Start over" — reset a field's tracker).
+drop policy if exists reader_progress_delete_own on public.reader_progress;
+create policy reader_progress_delete_own on public.reader_progress
+  for delete using (auth.uid() = user_id);
+
+grant select, insert, update, delete on public.reader_progress to authenticated;
