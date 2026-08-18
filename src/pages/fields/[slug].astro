@@ -1,0 +1,150 @@
+---
+/*
+ * =============================================================================
+ * src/pages/fields/[slug].astro  ·  ROUTE: "/fields/<slug>"
+ * =============================================================================
+ * A single field's page: the arc across its series (reading order + a place to
+ * start), the field's generative mark, then each member series rendered as the
+ * same <SeriesPlate> the /series page uses. Only PUBLIC fields (≥2 public series)
+ * get a page — getStaticPaths draws straight from getPublicFields().
+ */
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SeriesPlate from '../../components/SeriesPlate.astro';
+import site from '../../data/site.json';
+import { getPublicFields, type PublicField } from '../../lib/fields';
+import { markSvg } from '../../lib/field-marks.mjs';
+import { washFor } from '../../lib/series-plate.mjs';
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const fields = await getPublicFields();
+  return fields.map((field) => ({ params: { slug: field.slug }, props: { field } }));
+};
+
+const { field } = Astro.props as { field: PublicField };
+const f = (site as any).fields || {};
+
+// h1 with the last word italicised + a full stop, matching the editorial pages.
+const words = field.title.trim().split(/\s+/);
+const lastWord = (words.pop() || field.title).replace(/[.…]+$/, '') + '.';
+const headWords = words.join(' ');
+
+const STATUS_WORD: Record<string, string> = { 'in-progress': 'running', complete: 'complete', paused: 'paused' };
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const stepLabel = (s: PublicField['series'][number]) =>
+  s.status === 'complete' ? `Complete · ${s.total} parts` : `${cap(STATUS_WORD[s.status] || 'running')} · ${s.parts.length} of ${s.total}`;
+
+const wash = washFor(field.slug);
+const markS = field.series.map((s) => ({ n: s.total, pub: s.parts.length }));
+const start = field.series[0].parts[0];
+// Flat reading order across the field (for the client "Continue" adapter) + each
+// series' own part slugs (for the arc's per-reader read-mark), plus part titles so
+// the client can name the checkpoint it resumes from.
+const readingOrder = field.series.flatMap((s) => s.parts.map((p) => p.id)).join(',');
+const partMeta = field.series.flatMap((s) => s.parts.map((p) => ({ slug: p.id, title: p.title })));
+---
+
+<BaseLayout title={`${field.title} — areyoustillreading`} description={field.summary || `A field gathering ${field.seriesCount} series.`} wide>
+  <div class="wrap">
+    <header class="page-head">
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="fields.pageEyebrow">{f.pageEyebrow || 'Field'}</span></div>
+      <h1>{headWords ? headWords + ' ' : ''}<em>{lastWord}</em></h1>
+      {field.summary && <p class="lede">{field.summary}</p>}
+    </header>
+
+    <div class="fhero">
+      <div>
+        <ol class="arc">
+          {field.series.map((s, i) => (
+            <li>
+              <span class="n">{String(i + 1).padStart(2, '0')}</span>
+              <div>
+                <span class="sname">{s.title}</span>
+                <ul class="aparts">
+                  {s.parts.map((p) => (
+                    <li data-slug={p.id}><a href={`/blog/${p.id}/`}>{p.title}</a></li>
+                  ))}
+                </ul>
+              </div>
+            </li>
+          ))}
+        </ol>
+        <div class="starthere">
+          <a class="btn btn-primary" id="sh-btn" data-parts={readingOrder} data-continue-label={f.continueLabel || 'Continue reading'} data-continue-why={f.continueWhy || 'Pick up where you left off —'} href={`/blog/${start.id}`}><span class="sh-label" data-cms="fields.startHere">{f.startHere || 'Start here'}</span> <span class="arrow">→</span></a>
+          <button type="button" class="restart" id="sh-restart" hidden>Start over</button>
+          <span class="why" id="sh-why">Begins with <b>{start.title}</b> — {start.mins} minute{start.mins === 1 ? '' : 's'}, no prerequisites.</span>
+          <script type="application/json" id="rp-part-meta" set:html={JSON.stringify(partMeta)}></script>
+        </div>
+      </div>
+      <div class="fart" style={`--wx:${wash.x};--wy:${wash.y};--wo:${wash.o}`} set:html={markSvg(field.mark, markS)} />
+    </div>
+  </div>
+
+  <div class="wrap">
+    {field.series.map((s, i) => (
+      <>
+        <div class="ford"><span>{i === 0 ? 'First' : 'Then'}</span><span class="step">{stepLabel(s)}</span></div>
+        <SeriesPlate s={s} />
+      </>
+    ))}
+  </div>
+</BaseLayout>
+
+<script>
+  // For a signed-in reader: turn "Start here" into "Continue reading" that resumes
+  // from the reader's CHECKPOINT (the most-recently-read part, at its subsection),
+  // name that checkpoint beside the button, mark finished series in the arc, and
+  // check off read parts.
+  import { fetchProgress, resetProgress } from '../../lib/reader-progress';
+  const btn = document.getElementById('sh-btn') as HTMLAnchorElement | null;
+  const why = document.getElementById('sh-why');
+  const restart = document.getElementById('sh-restart') as HTMLButtonElement | null;
+  const arcParts = Array.from(document.querySelectorAll('.arc .aparts li[data-slug]')) as HTMLElement[];
+  const partAnchors = Array.from(document.querySelectorAll('.series .parts li a[href^="/blog/"]')) as HTMLAnchorElement[];
+  const slugOf = (href: string | null) => (href || '').replace(/^\/blog\//, '').replace(/\/$/, '');
+  const escHtml = (s: string) => s.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'));
+  let meta: { slug: string; title: string }[] = [];
+  try { meta = JSON.parse(document.getElementById('rp-part-meta')?.textContent || '[]'); } catch {}
+  const titleOf = (slug: string) => (meta.find((p) => p.slug === slug) || { title: '' }).title;
+  const order = btn ? (btn.dataset.parts || '').split(',').filter(Boolean) : [];
+  const all = new Set<string>(order);
+  arcParts.forEach((li) => { if (li.dataset.slug) all.add(li.dataset.slug); });
+  partAnchors.forEach((a) => all.add(slugOf(a.getAttribute('href'))));
+  // Originals, to restore on "Start over".
+  const startHref = btn ? btn.getAttribute('href') || '' : '';
+  const startLabel = (btn && btn.querySelector('.sh-label')?.textContent) || '';
+  const startWhy = why ? why.innerHTML : '';
+  const clearMarks = () => { arcParts.forEach((li) => li.classList.remove('checkpoint')); partAnchors.forEach((a) => a.closest('li')?.classList.remove('checkpoint')); };
+  if (all.size) fetchProgress(Array.from(all)).then((m) => {
+    if (!m.size) return;
+    // checkpoint = the part the reader touched most recently
+    let cp = '', best = '';
+    for (const s of order) { const p = m.get(s); if (p && p.updatedAt > best) { best = p.updatedAt; cp = s; } }
+    if (!cp) return;
+    const p = m.get(cp)!;
+    let target = cp, href = '/blog/' + cp + '/', point = p.heading || titleOf(cp);
+    if (p.read) { // finished it — the checkpoint is the next part in reading order
+      const i = order.indexOf(cp);
+      if (i >= 0 && i < order.length - 1) { target = order[i + 1]; href = '/blog/' + target + '/'; point = titleOf(target); }
+    } else if (p.anchor) {
+      href = '/blog/' + cp + '/#' + p.anchor; // resume at the exact subsection
+    }
+    if (btn) {
+      btn.setAttribute('href', href);
+      const lbl = btn.querySelector('.sh-label'); if (lbl) lbl.textContent = btn.dataset.continueLabel || 'Continue reading';
+      if (why && point) why.innerHTML = escHtml(btn.dataset.continueWhy || 'Pick up where you left off —') + ' <b>' + escHtml(point) + '</b>.';
+      if (restart) restart.hidden = false;
+    }
+    // bold the checkpoint: the target blog in the tracker + its part in the plate below
+    arcParts.forEach((li) => { if (li.dataset.slug === target) li.classList.add('checkpoint'); });
+    partAnchors.forEach((a) => { if (slugOf(a.getAttribute('href')) === target) a.closest('li')?.classList.add('checkpoint'); });
+  });
+  restart?.addEventListener('click', async () => {
+    restart.disabled = true;
+    await resetProgress(order);
+    if (btn) { btn.setAttribute('href', startHref); const lbl = btn.querySelector('.sh-label'); if (lbl) lbl.textContent = startLabel; }
+    if (why) why.innerHTML = startWhy;
+    clearMarks();
+    restart.hidden = true; restart.disabled = false;
+  });
+</script>

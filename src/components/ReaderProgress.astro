@@ -1,0 +1,52 @@
+---
+/**
+ * ReaderProgress.astro — records a signed-in reader's furthest position in this post,
+ * down to the SUBSECTION (the furthest heading reached). Rendered once by BlogPost.
+ * Talks straight to Supabase via src/lib/reader-progress (a no-op for signed-out
+ * readers). This is the granular tracker that powers "Continue" + read-marks.
+ */
+interface Props { slug: string }
+const { slug } = Astro.props;
+---
+<div id="rp-track" data-slug={slug} hidden></div>
+<script>
+  import { currentUserId, fetchProgress, recordProgress } from '../lib/reader-progress';
+  const holder = document.getElementById('rp-track');
+  const slug = holder && holder.dataset.slug;
+  if (slug) {
+    const READ_AT = 85; // reaching 85% of the article counts as "read"
+    let maxPct = 0, wasRead = false, dirty = false, maxHead = -1, anchor = '', heading = '';
+    const headings = () => Array.from(document.querySelectorAll('.post-body h2[id], .post-body h3[id]')) as HTMLElement[];
+    const pctNow = () => {
+      const h = document.documentElement;
+      const max = h.scrollHeight - h.clientHeight;
+      return max > 0 ? Math.min(100, Math.round(((h.scrollTop || window.scrollY) / max) * 100)) : 100;
+    };
+    // The furthest heading whose top has passed the reading line (monotonic — never regresses).
+    const trackHeading = () => {
+      const hs = headings();
+      for (let i = 0; i < hs.length; i++) {
+        if (hs[i].getBoundingClientRect().top <= 140) {
+          if (i > maxHead) { maxHead = i; anchor = hs[i].id; heading = (hs[i].textContent || '').trim().replace(/\s+/g, ' ').slice(0, 200); dirty = true; }
+        } else break;
+      }
+    };
+    const onScroll = () => { const p = pctNow(); if (p > maxPct) { maxPct = p; dirty = true; if (maxPct >= READ_AT) wasRead = true; } trackHeading(); };
+    const flush = () => { if (dirty) { dirty = false; recordProgress(slug, maxPct, wasRead || maxPct >= READ_AT, anchor, heading); } };
+    currentUserId().then((uid) => {
+      if (!uid) return; // only signed-in readers are tracked
+      fetchProgress([slug]).then((m) => {
+        const p = m.get(slug);
+        if (p) {
+          maxPct = Math.max(maxPct, p.pct); wasRead = wasRead || p.read;
+          if (p.anchor) { const hs = headings(); const idx = hs.findIndex((h) => h.id === p.anchor); if (idx >= 0) { maxHead = idx; anchor = p.anchor; heading = p.heading; } }
+        }
+        onScroll();
+      });
+      addEventListener('scroll', onScroll, { passive: true });
+      addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+      addEventListener('pagehide', flush);
+      setInterval(flush, 20000);
+    });
+  }
+</script>

@@ -1,9 +1,23 @@
 {
   "series": [
     {
-      "slug": "temp",
-      "title": "Temp",
+      "slug": "test-series-2",
+      "title": "Test Series 2",
       "total": 5,
+      "status": "",
+      "planned": []
+    },
+    {
+      "slug": "test-series",
+      "title": "Test Series",
+      "total": 1,
+      "status": "",
+      "planned": []
+    },
+    {
+      "slug": "untitled-series",
+      "title": "sdfsfsdfsd",
+      "total": 1,
       "status": "",
       "planned": []
     }

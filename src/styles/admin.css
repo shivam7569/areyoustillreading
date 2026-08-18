@@ -680,6 +680,8 @@ table.t th.num { text-align: right; }
 .recin { width: 100%; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; line-height: 1.5; padding: 2px 0; resize: vertical; }
 .recin:focus { outline: 0; box-shadow: inset 0 -1px 0 var(--accent); }
 .recin::placeholder { color: var(--ink-faint); }
+/* Placeholder text — quiet + italic, so an empty field reads as a whisper, not a value. */
+.input::placeholder, textarea::placeholder, .inp::placeholder, input::placeholder { color: color-mix(in srgb, var(--ink-faint) 55%, transparent); font-style: italic; opacity: 1; }
 .shfoot { display: flex; align-items: center; gap: 14px; padding: 15px 26px; border-top: 1px solid var(--rule); background: color-mix(in srgb, var(--ink) 4%, transparent); flex-wrap: wrap; border-radius: 0 0 5px 5px; }
 .shnote { font-size: 12px; color: var(--ink-faint); line-height: 1.45; }
 .shnote b { color: var(--ink); font-weight: 600; }

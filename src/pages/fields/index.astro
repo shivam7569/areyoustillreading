@@ -1,0 +1,85 @@
+---
+/*
+ * =============================================================================
+ * src/pages/fields/index.astro  ·  ROUTE: "/fields"
+ * =============================================================================
+ * The Fields index — the "Field" entry in the Blog dropdown. Lists every PUBLIC
+ * field (a field is public only once it holds ≥2 public series; getPublicFields
+ * enforces that). Each field shows its chosen generative mark (field-marks.mjs),
+ * a summary, running totals, and its member series. Empty until two series belong
+ * together — shown as a sentence, not a status.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SubscribeForm from '../../components/SubscribeForm.astro';
+import site from '../../data/site.json';
+import { getPublicFields } from '../../lib/fields';
+import { markSvg } from '../../lib/field-marks.mjs';
+import { washFor } from '../../lib/series-plate.mjs';
+
+const f = (site as any).fields || {};
+const fields = await getPublicFields();
+
+const fmtMonth = (d?: Date) => (d ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' }) : '');
+const STATUS_WORD: Record<string, string> = { 'in-progress': 'running', complete: 'complete', paused: 'paused' };
+const seriesMeta = (s: { total: number; parts: any[]; status: string }) =>
+  s.status === 'complete' ? `${s.total} parts · complete` : `${s.parts.length} of ${s.total} · ${STATUS_WORD[s.status] || 'running'}`;
+const markData = (field: { series: { total: number; parts: any[] }[] }) => field.series.map((s) => ({ n: s.total, pub: s.parts.length }));
+---
+
+<BaseLayout title={f.indexSeo?.title || 'Field — areyoustillreading'} description={f.indexSeo?.description || 'Subject areas that gather several series — read one and stop, or follow the whole thing through.'} wide>
+  <div class="wrap">
+    <header class="page-head">
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="fields.indexEyebrow">{f.indexEyebrow || 'Fields'}</span></div>
+      <h1><span data-cms="fields.indexTitle">{f.indexTitle || 'Some arguments'}</span> <em data-cms="fields.indexTitleEm">{f.indexTitleEm || 'outgrow a series.'}</em></h1>
+      <p class="lede" data-cms="fields.indexLede">{f.indexLede || 'A field is a subject I keep returning to — several series that answer different halves of the same question. Read one series and stop, or follow the whole thing through.'}</p>
+    </header>
+
+    {fields.length > 0 ? (
+      <>
+        {fields.map((field) => {
+          const w = washFor(field.slug);
+          return (
+            <article class="field">
+              <a class="fart" href={`/fields/${field.slug}/`} style={`--wx:${w.x};--wy:${w.y};--wo:${w.o}`} aria-label={field.title} set:html={markSvg(field.mark, markData(field))} />
+              <div>
+                <h2><a href={`/fields/${field.slug}/`}>{field.title}</a></h2>
+                {field.summary && <p class="sum">{field.summary}</p>}
+                <div class="fmeta">
+                  <span><em>{field.seriesCount} series</em> · {field.partsTotal} parts</span>
+                  <span>{field.publishedTotal} published</span>
+                  {field.first && <span>Since {fmtMonth(field.first)}</span>}
+                </div>
+                <ol class="fseries">
+                  {field.series.map((s) => (
+                    <li><a href={`/fields/${field.slug}/`}>
+                      <span class={s.status === 'complete' ? 'd' : 'd open'}></span>
+                      <span class="t">{s.title}</span>
+                      <span class="lead"></span>
+                      <span class="m">{seriesMeta(s)}</span>
+                    </a></li>
+                  ))}
+                </ol>
+              </div>
+            </article>
+          );
+        })}
+        <div class="series-foot">
+          <div class="sub-inner">
+            <SubscribeForm heading={f.newsletterHeading || 'Follow the fields'} blurb={f.newsletterBlurb || 'New parts and new series go out by email as they publish — no noise, unsubscribe from any email in one click.'} headingKey="fields.newsletter.heading" blurbKey="fields.newsletter.blurb" />
+          </div>
+        </div>
+      </>
+    ) : (
+      <div class="fnone">
+        <h2 data-cms="fields.emptyTitle">{f.emptyTitle || 'No fields yet'}</h2>
+        <p data-cms="fields.emptyBody">{f.emptyBody || 'A field appears here once two series belong together. Until then there are only series, which is not a bad way to read either.'}</p>
+        <a class="btn btn-ghost" href="/series"><span data-cms="fields.emptyLink">{f.emptyLink || 'Browse the series'}</span> <span class="arrow">→</span></a>
+      </div>
+    )}
+  </div>
+</BaseLayout>
+
+<style>
+  .series-foot { padding: clamp(44px, 6vw, 72px) 0 clamp(56px, 8vw, 96px); }
+  .sub-inner { max-width: 720px; }
+</style>

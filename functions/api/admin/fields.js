@@ -1,24 +1,24 @@
 /**
- * /api/admin/series — manage SERIES DEFINITIONS from the Studio. Admin-gated.
+ * /api/admin/fields — manage FIELD DEFINITIONS from the Studio. Admin-gated.
  * ----------------------------------------------------------------------------
- *   GET               → src/data/series.json ({ series: [...] }) + sha
- *   POST { content }  → commit src/data/series.json
+ *   GET               → src/data/fields.json ({ fields: [...] }) + sha
+ *   POST { content }  → commit src/data/fields.json
  *
- * WHY A DEFINITIONS FILE: a series is otherwise only the set of posts that share
- * a `series` slug — so it can't exist (or carry planned parts / total / status)
- * until a post is published into it. This file lets the Studio's Series page
- * CREATE a series up front (name + planned knobs), which the public /series plate
- * then reads by slug. Posts still join a series purely by their `series` frontmatter
- * (set from the publish sheet, unchanged) — this store only holds the collection-
- * level knobs, keyed by the same slugify() the publish sheet uses.
+ * A field groups related SERIES (one level above them). It's defined here — a
+ * title, a summary, a chosen mark, and an ordered list of member series (by slug,
+ * each with an optional note) — and referenced by the public /fields pages. A field
+ * only becomes visible to readers once ≥2 of its member series are public; that rule
+ * is enforced at build (src/lib/fields.ts), not here, so an author can assemble a
+ * field ahead of its second series.
  *
- * Same commit-to-GitHub model as /api/admin/site (→ Cloudflare rebuild ~1 min).
+ * Same commit-to-GitHub model as /api/admin/series (→ Cloudflare rebuild ~1 min).
  * SECURITY: requireAdmin() gates every method; GITHUB_TOKEN never reaches the client.
  */
 import { requireAdmin, json } from '../../../lib/require-admin.js';
 import { toBase64Utf8, fromBase64Utf8 } from '../../../lib/base64.js';
 
-const SERIES_JSON = 'src/data/series.json';
+const FIELDS_JSON = 'src/data/fields.json';
+const MARKS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
 
 function ghHeaders(env) {
   return {
@@ -53,28 +53,38 @@ async function putFile(env, path, { message, contentBase64, sha }) {
   return r.json();
 }
 
+const slugify = (x) => String(x || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
 // Keep only the fields we own, normalized — never trust the client's shape.
 function sanitize(content) {
-  const arr = content && Array.isArray(content.series) ? content.series : [];
+  const arr = content && Array.isArray(content.fields) ? content.fields : [];
   const seen = new Set();
-  const series = [];
-  for (const s of arr) {
-    const slug = String((s && s.slug) || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const fields = [];
+  for (const f of arr) {
+    const slug = slugify(f && f.slug);
     if (!slug || seen.has(slug)) continue;
     seen.add(slug);
-    const total = Number(s && s.total);
-    const status = ['in-progress', 'complete', 'paused'].includes(s && s.status) ? s.status : '';
-    const planned = Array.isArray(s && s.planned) ? s.planned.map((t) => String(t || '').trim()).filter(Boolean).slice(0, 24) : [];
-    series.push({
+    const mark = MARKS.includes(f && f.mark) ? f.mark : '01';
+    const rawSeries = Array.isArray(f && f.series) ? f.series : [];
+    const seenS = new Set();
+    const series = [];
+    for (const s of rawSeries) {
+      const sSlug = typeof s === 'string' ? slugify(s) : slugify(s && s.slug);
+      if (!sSlug || seenS.has(sSlug)) continue;
+      seenS.add(sSlug);
+      const note = s && typeof s === 'object' && s.note ? String(s.note).trim().slice(0, 200) : '';
+      series.push(note ? { slug: sSlug, note } : { slug: sSlug });
+      if (series.length >= 48) break;
+    }
+    fields.push({
       slug,
-      title: String((s && s.title) || slug).trim().slice(0, 120),
-      summary: String((s && s.summary) || '').trim().slice(0, 600),
-      total: Number.isFinite(total) && total > 0 ? Math.round(total) : null,
-      status,
-      planned,
+      title: String((f && f.title) || slug).trim().slice(0, 120),
+      summary: String((f && f.summary) || '').trim().slice(0, 600),
+      mark,
+      series,
     });
   }
-  return { series };
+  return { fields };
 }
 
 export async function onRequestGet({ request, env }) {
@@ -82,16 +92,16 @@ export async function onRequestGet({ request, env }) {
   if (!gate.ok) return json({ error: gate.error }, gate.status);
   let file;
   try {
-    file = await getFile(env, SERIES_JSON);
+    file = await getFile(env, FIELDS_JSON);
   } catch (e) {
     return json({ error: String((e && e.message) || e) }, 502);
   }
-  if (!file) return json({ content: { series: [] }, sha: null }); // not created yet → empty
+  if (!file) return json({ content: { fields: [] }, sha: null }); // not created yet → empty
   let content;
   try {
     content = JSON.parse(fromBase64Utf8(file.base64));
   } catch {
-    return json({ error: 'series.json is not valid JSON' }, 502);
+    return json({ error: 'fields.json is not valid JSON' }, 502);
   }
   return json({ content: sanitize(content), sha: file.sha });
 }
@@ -107,10 +117,10 @@ export async function onRequestPost({ request, env }) {
   }
   const content = sanitize(body && body.content);
   let existing;
-  try { existing = await getFile(env, SERIES_JSON); } catch (e) { return json({ error: String((e && e.message) || e) }, 502); }
+  try { existing = await getFile(env, FIELDS_JSON); } catch (e) { return json({ error: String((e && e.message) || e) }, 502); }
   const serialized = JSON.stringify(content, null, 2) + '\n';
   try {
-    await putFile(env, SERIES_JSON, { message: 'chore(series): update series from Studio', contentBase64: toBase64Utf8(serialized), sha: existing ? existing.sha : undefined });
+    await putFile(env, FIELDS_JSON, { message: 'chore(fields): update fields from Studio', contentBase64: toBase64Utf8(serialized), sha: existing ? existing.sha : undefined });
   } catch (e) { return json({ error: String((e && e.message) || e) }, 502); }
-  return json({ ok: true, series: content.series });
+  return json({ ok: true, fields: content.fields });
 }

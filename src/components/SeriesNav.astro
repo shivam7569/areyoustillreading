@@ -1,122 +1,73 @@
 ---
 /**
- * SeriesNav.astro — in-post navigation for a multi-part series.
- * Rendered by BlogPost.astro from the build-time context computed in
- * src/lib/series.ts. Two placements:
- *   placement="top"    → a card listing every part in order (current highlighted),
- *                        so a reader lands and immediately sees the whole series
- *                        and where they are. This is what makes the author-written
- *                        intro post double as a living index (its parts list stays
- *                        current automatically).
- *   placement="bottom" → previous / next part links for continuous reading.
- * Marked data-pagefind-ignore so the other parts' titles don't pollute this post's
- * search index.
+ * SeriesNav.astro — in-post navigation for a multi-part series, field-aware.
+ * Rendered by BlogPost.astro from src/lib/series.ts (series context) + src/lib/
+ * fields.ts (field context). All styling is global (src/styles/global.css).
+ *
+ *   placement="top"    → the .seriesbar: a breadcrumb (field › series, the field
+ *                        link present only when the series is in a public field)
+ *                        over a spine of one tick per part — solid = published,
+ *                        hollow = still to come, tall accent tick = you are here.
+ *   placement="bottom" → the .pager (previous / next part) and, at the LAST part
+ *                        of a series inside a public field, a "Next in the field"
+ *                        card pointing to the first part of the next series.
+ *
+ * Marked data-pagefind-ignore so other parts' titles don't pollute this post's index.
  */
 import type { SeriesNavData } from '../lib/series';
+import type { FieldNav } from '../lib/fields';
 
 interface Props {
   data: SeriesNavData;
+  field?: FieldNav | null;
+  related?: { slug: string; title: string }[]; // tag-related reads, for boundary suggestions
   placement?: 'top' | 'bottom';
 }
-const { data, placement = 'top' } = Astro.props;
+const { data, field = null, related = [], placement = 'top' } = Astro.props;
 const href = (slug: string) => `/blog/${slug}/`;
+const introHref = href(data.introSlug);
+const todoCount = Math.max(0, data.total - data.parts.length);
 ---
 {placement === 'top' && (
-  <aside class="series-box" aria-label={`Series: ${data.title}`} data-pagefind-ignore>
-    <div class="series-head">
-      <span class="series-eyebrow">
-        {data.isIntro ? `A ${data.total}-part series` : `Part ${data.index} of ${data.total}`}
-      </span>
-      <h2 class="series-title">{data.title}</h2>
-    </div>
-    <ol class="series-parts">
+  <nav class="seriesbar" aria-label={`Series: ${data.title}`} data-pagefind-ignore>
+    <span class="crumb">
+      {field && (
+        <Fragment>
+          <a class="up" href={`/fields/${field.field.slug}/`}>{field.field.title}</a>
+          <svg class="sep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </Fragment>
+      )}
+      <a class="sname" href={introHref}>{data.title}</a>
+    </span>
+    <ol class="spine">
       {data.parts.map((p) => (
-        <li class={p.current ? 'current' : ''}>
-          {p.current ? (
-            <span class="row"><span class="pnum">{p.order}</span><span class="ptitle">{p.title}</span><span class="here">You're here</span></span>
-          ) : (
-            <a class="row" href={href(p.slug)}><span class="pnum">{p.order}</span><span class="ptitle">{p.title}</span></a>
-          )}
-        </li>
+        <li><a href={href(p.slug)} class={p.current ? 'here' : undefined} aria-current={p.current ? 'page' : undefined} title={`Part ${p.order} · ${p.title}`} aria-label={`Part ${p.order}: ${p.title}`}></a></li>
       ))}
+      {Array.from({ length: todoCount }).map((_, i) => {
+        const n = data.parts.length + i + 1;
+        const pl = data.planned[i];
+        const label = pl ? `Part ${n} · ${pl} (planned)` : `Part ${n} · planned`;
+        return <li><a class="todo" href={introHref} title={label} aria-label={label}></a></li>;
+      })}
     </ol>
-  </aside>
-)}
-{placement === 'bottom' && (data.prev || data.next) && (
-  <nav class="series-nav" aria-label={`More in ${data.title}`} data-pagefind-ignore>
-    {data.prev ? (
-      <a class="series-link prev" href={href(data.prev.slug)}>
-        <span class="dir">← Previous in series</span>
-        <span class="lbl">{data.prev.title}</span>
-      </a>
-    ) : <span />}
-    {data.next ? (
-      <a class="series-link next" href={href(data.next.slug)}>
-        <span class="dir">Next in series →</span>
-        <span class="lbl">{data.next.title}</span>
-      </a>
-    ) : <span />}
+    <span class="count"><b>{data.index}</b>/{data.total}</span>
   </nav>
 )}
-
-<style>
-  /* ---- Top: the series card ---- */
-  .series-box {
-    margin: 1.75rem 0 2rem;
-    padding: 1.1rem 1.25rem 1.25rem;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--accent) 5%, var(--bg));
-  }
-  .series-head { margin-bottom: 0.75rem; }
-  .series-eyebrow {
-    display: block;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--accent);
-  }
-  .series-title { margin: 0.15rem 0 0; font-size: 1.1rem; letter-spacing: -0.01em; }
-  .series-parts { list-style: none; margin: 0; padding: 0; counter-reset: none; }
-  .series-parts li { margin: 0; border-top: 1px solid var(--border); }
-  .series-parts li:first-child { border-top: 0; }
-  .series-parts .row {
-    display: flex; align-items: baseline; gap: 0.65rem;
-    padding: 0.5rem 0; text-decoration: none; color: var(--fg);
-  }
-  a.row:hover .ptitle { color: var(--accent); }
-  .series-parts .pnum {
-    flex: 0 0 auto; min-width: 1.4em; text-align: center;
-    font-variant-numeric: tabular-nums; font-size: 0.8rem; font-weight: 700;
-    color: var(--muted);
-  }
-  .series-parts .ptitle { flex: 1 1 auto; }
-  .series-parts li.current .row { color: var(--fg); font-weight: 600; }
-  .series-parts li.current .pnum { color: var(--accent); }
-  .series-parts .here {
-    flex: 0 0 auto; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em;
-    text-transform: uppercase; color: var(--accent);
-    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
-    border-radius: 999px; padding: 0.05rem 0.5rem;
-  }
-
-  /* ---- Bottom: prev / next ---- */
-  .series-nav {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
-    margin: 2rem 0 0.5rem;
-  }
-  .series-link {
-    display: flex; flex-direction: column; gap: 0.2rem;
-    padding: 0.75rem 0.9rem; border: 1px solid var(--border); border-radius: 10px;
-    text-decoration: none; color: var(--fg);
-  }
-  .series-link:hover { border-color: var(--accent); }
-  .series-link.next { text-align: right; }
-  .series-link .dir { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
-  .series-link .lbl { font-weight: 600; letter-spacing: -0.01em; }
-  @media (max-width: 520px) {
-    .series-nav { grid-template-columns: 1fr; }
-    .series-link.next { text-align: left; }
-  }
-</style>
+{placement === 'bottom' && (
+  <Fragment>
+    <nav class="pager" aria-label={`More in ${data.title}`} data-pagefind-ignore>
+      {data.prev
+        ? <a class="prev" href={href(data.prev.slug)}><div class="dir">← Part {data.index - 1}</div><div class="t">{data.prev.title}</div></a>
+        : related[0]
+          ? <a class="prev suggest" href={href(related[0].slug)}><div class="dir">More to read</div><div class="t">{related[0].title}</div></a>
+          : <span class="prev off"><div class="dir">The beginning</div><div class="t">Part one of the series</div></span>}
+      {data.next
+        ? <a class="next" href={href(data.next.slug)}><div class="dir">Part {data.index + 1} →</div><div class="t">{data.next.title}</div></a>
+        : (field && field.next)
+          ? <a class="next field-next" href={field.next.href}><div class="dir">Next in the field →</div><div class="t">{field.next.seriesTitle}</div></a>
+          : related[0]
+            ? <a class="next suggest" href={href(related[0].slug)}><div class="dir">Read next</div><div class="t">{related[0].title}</div></a>
+            : <a class="next" href={introHref}><div class="dir">Series complete</div><div class="t">Back to all {data.parts.length} parts</div></a>}
+    </nav>
+  </Fragment>
+)}
