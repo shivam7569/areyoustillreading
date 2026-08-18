@@ -6,6 +6,13 @@
       "total": 5,
       "status": "",
       "planned": []
+    },
+    {
+      "slug": "test-series",
+      "title": "Test Series",
+      "total": 1,
+      "status": "",
+      "planned": []
     }
   ]
 }
