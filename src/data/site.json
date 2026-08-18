@@ -216,9 +216,23 @@
     "essayPlural": "essays"
   },
   "fields": {
+    "indexSeo": {
+      "title": "Field — areyoustillreading",
+      "description": "Subject areas that gather several series — read one and stop, or follow the whole thing through."
+    },
+    "indexEyebrow": "Fields",
+    "indexTitle": "Some arguments",
+    "indexTitleEm": "outgrow a series.",
+    "indexLede": "A field is a subject I keep returning to — several series that answer different halves of the same question. Read one series and stop, or follow the whole thing through.",
+    "emptyTitle": "No fields yet",
+    "emptyBody": "A field appears here once two series belong together. Until then there are only series, which is not a bad way to read either.",
+    "emptyLink": "Browse the series",
+    "pageEyebrow": "Field",
     "startHere": "Start here",
     "continueLabel": "Continue reading",
-    "continueWhy": "Pick up where you left off —"
+    "continueWhy": "Pick up where you left off —",
+    "newsletterHeading": "Follow the fields",
+    "newsletterBlurb": "New parts and new series go out by email as they publish — no noise, unsubscribe from any email in one click."
   },
   "series": {
     "seo": {

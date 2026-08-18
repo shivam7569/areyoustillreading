@@ -182,7 +182,11 @@ import site from '../../data/site.json';
           { path: 'nav.home', label: 'Home', type: 'text' },
           { path: 'nav.blog', label: 'Blog', type: 'text' },
           { path: 'nav.allPosts', label: 'Blog dropdown — All posts', type: 'text' },
+          { path: 'nav.allPostsDesc', label: 'Blog dropdown — All posts (sub-line)', type: 'text' },
           { path: 'nav.series', label: 'Blog dropdown — Series', type: 'text' },
+          { path: 'nav.seriesDesc', label: 'Blog dropdown — Series (sub-line)', type: 'text' },
+          { path: 'nav.field', label: 'Blog dropdown — Field', type: 'text' },
+          { path: 'nav.fieldDesc', label: 'Blog dropdown — Field (sub-line)', type: 'text' },
           { path: 'nav.projects', label: 'Projects', type: 'text' },
           { path: 'nav.resume', label: 'Resume', type: 'text' },
           { path: 'nav.about', label: 'About', type: 'text' },
@@ -366,6 +370,36 @@ import site from '../../data/site.json';
           { path: 'emptyLink', label: 'Empty-state link', type: 'text' },
           { path: 'newsletter.heading', label: 'Newsletter heading', type: 'text' },
           { path: 'newsletter.blurb', label: 'Newsletter blurb', type: 'area' },
+        ] },
+      ],
+    },
+    fields: {
+      label: 'Field page', view: '/fields',
+      groups: [
+        { label: 'SEO (index)', fields: [
+          { path: 'indexSeo.title', label: 'SEO title', type: 'text' },
+          { path: 'indexSeo.description', label: 'SEO description', type: 'area' },
+        ] },
+        { label: 'Fields index header', fields: [
+          { path: 'indexEyebrow', label: 'Eyebrow', type: 'text' },
+          { path: 'indexTitle', label: 'Headline', type: 'text' },
+          { path: 'indexTitleEm', label: 'Headline — accent italic', type: 'text' },
+          { path: 'indexLede', label: 'Intro paragraph', type: 'area' },
+        ] },
+        { label: 'Empty state', fields: [
+          { path: 'emptyTitle', label: 'Empty-state heading', type: 'text' },
+          { path: 'emptyBody', label: 'Empty-state body', type: 'area' },
+          { path: 'emptyLink', label: 'Empty-state link', type: 'text' },
+        ] },
+        { label: 'A field’s page', fields: [
+          { path: 'pageEyebrow', label: 'Eyebrow', type: 'text' },
+          { path: 'startHere', label: '“Start here” button', type: 'text' },
+          { path: 'continueLabel', label: '“Continue reading” button (signed-in)', type: 'text' },
+          { path: 'continueWhy', label: 'Continue caption — prefix before the checkpoint', type: 'text' },
+        ] },
+        { label: 'Newsletter', fields: [
+          { path: 'newsletterHeading', label: 'Newsletter heading', type: 'text' },
+          { path: 'newsletterBlurb', label: 'Newsletter blurb', type: 'area' },
         ] },
       ],
     },

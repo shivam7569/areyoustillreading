@@ -56,9 +56,16 @@ const partMeta = field.series.flatMap((s) => s.parts.map((p) => ({ slug: p.id, t
       <div>
         <ol class="arc">
           {field.series.map((s, i) => (
-            <li class={s.status === 'complete' ? 'done' : ''} data-parts={s.parts.map((p) => p.id).join(',')}>
+            <li>
               <span class="n">{String(i + 1).padStart(2, '0')}</span>
-              <div><b>{s.title}</b></div>
+              <div>
+                <span class="sname">{s.title}</span>
+                <ul class="aparts">
+                  {s.parts.map((p) => (
+                    <li data-slug={p.id}><a href={`/blog/${p.id}/`}>{p.title}</a></li>
+                  ))}
+                </ul>
+              </div>
             </li>
           ))}
         </ol>
@@ -92,7 +99,7 @@ const partMeta = field.series.flatMap((s) => s.parts.map((p) => ({ slug: p.id, t
   const btn = document.getElementById('sh-btn') as HTMLAnchorElement | null;
   const why = document.getElementById('sh-why');
   const restart = document.getElementById('sh-restart') as HTMLButtonElement | null;
-  const arc = Array.from(document.querySelectorAll('.arc li[data-parts]')) as HTMLElement[];
+  const arcParts = Array.from(document.querySelectorAll('.arc .aparts li[data-slug]')) as HTMLElement[];
   const partAnchors = Array.from(document.querySelectorAll('.series .parts li a[href^="/blog/"]')) as HTMLAnchorElement[];
   const slugOf = (href: string | null) => (href || '').replace(/^\/blog\//, '').replace(/\/$/, '');
   const escHtml = (s: string) => s.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'));
@@ -101,13 +108,13 @@ const partMeta = field.series.flatMap((s) => s.parts.map((p) => ({ slug: p.id, t
   const titleOf = (slug: string) => (meta.find((p) => p.slug === slug) || { title: '' }).title;
   const order = btn ? (btn.dataset.parts || '').split(',').filter(Boolean) : [];
   const all = new Set<string>(order);
-  arc.forEach((li) => (li.dataset.parts || '').split(',').filter(Boolean).forEach((s) => all.add(s)));
+  arcParts.forEach((li) => { if (li.dataset.slug) all.add(li.dataset.slug); });
   partAnchors.forEach((a) => all.add(slugOf(a.getAttribute('href'))));
   // Originals, to restore on "Start over".
   const startHref = btn ? btn.getAttribute('href') || '' : '';
   const startLabel = (btn && btn.querySelector('.sh-label')?.textContent) || '';
   const startWhy = why ? why.innerHTML : '';
-  const clearMarks = () => { arc.forEach((li) => li.classList.remove('checkpoint')); partAnchors.forEach((a) => a.closest('li')?.classList.remove('checkpoint')); };
+  const clearMarks = () => { arcParts.forEach((li) => li.classList.remove('checkpoint')); partAnchors.forEach((a) => a.closest('li')?.classList.remove('checkpoint')); };
   if (all.size) fetchProgress(Array.from(all)).then((m) => {
     if (!m.size) return;
     // checkpoint = the part the reader touched most recently
@@ -128,8 +135,8 @@ const partMeta = field.series.flatMap((s) => s.parts.map((p) => ({ slug: p.id, t
       if (why && point) why.innerHTML = escHtml(btn.dataset.continueWhy || 'Pick up where you left off —') + ' <b>' + escHtml(point) + '</b>.';
       if (restart) restart.hidden = false;
     }
-    // one bold dot at the checkpoint: the target part + the series that holds it
-    arc.forEach((li) => { if ((li.dataset.parts || '').split(',').includes(target)) li.classList.add('checkpoint'); });
+    // bold the checkpoint: the target blog in the tracker + its part in the plate below
+    arcParts.forEach((li) => { if (li.dataset.slug === target) li.classList.add('checkpoint'); });
     partAnchors.forEach((a) => { if (slugOf(a.getAttribute('href')) === target) a.closest('li')?.classList.add('checkpoint'); });
   });
   restart?.addEventListener('click', async () => {

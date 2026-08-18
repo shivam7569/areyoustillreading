@@ -664,11 +664,13 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--ink-
 @media (max-width: 960px) { .fhero { grid-template-columns: 1fr; } .fhero .fart { max-width: 440px; } }
 .arc { list-style: none; margin: 0; padding: 0; position: relative; }
 .arc::before { content: ""; position: absolute; left: 15px; top: 18px; bottom: 18px; width: 1px; background: var(--rule); }
-.arc li { position: relative; display: grid; grid-template-columns: 32px minmax(0,1fr); gap: 16px; padding: 11px 0; }
+.arc > li { position: relative; display: grid; grid-template-columns: 32px minmax(0,1fr); gap: 16px; padding: 10px 0; }
 .arc .n { position: relative; z-index: 1; width: 31px; height: 31px; border-radius: 999px; display: grid; place-items: center; font-family: var(--sans); font-size: 11px; font-variant-numeric: tabular-nums; background: var(--paper); border: 1px solid var(--rule); color: var(--ink-faint); }
-.arc li.done .n { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.arc b { display: block; font-family: var(--serif-display); font-weight: 600; font-size: 18px; letter-spacing: -.01em; line-height: 1.3; color: var(--ink); }
-.arc small { display: block; font-family: var(--sans); font-size: 13px; color: var(--ink-faint); margin-top: 3px; line-height: 1.5; }
+/* series name: present but NOT bold — the only bold on the tracker is the checkpoint blog */
+.arc .sname { display: block; font-family: var(--serif-display); font-weight: 500; font-size: 18px; letter-spacing: -.01em; line-height: 1.3; color: var(--ink); }
+.arc .aparts { list-style: none; margin: 7px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.arc .aparts a { font-family: var(--sans); font-size: 13.5px; color: var(--ink-faint); line-height: 1.45; transition: color .2s; }
+.arc .aparts a:hover { color: var(--accent); }
 .starthere { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: clamp(22px,3vw,32px); padding-top: clamp(20px,2.6vw,26px); border-top: 1px solid var(--rule); }
 .starthere .why { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); max-width: 34ch; line-height: 1.5; }
 .starthere .restart { font-family: var(--sans); font-size: 13.5px; font-weight: 500; color: var(--ink-soft); background: transparent; border: 1px solid var(--rule); border-radius: 2px; padding: 12px 20px; cursor: pointer; transition: border-color .2s, color .2s, transform .18s; }
@@ -718,5 +720,5 @@ a.contfield:hover .chev { transform: translateX(5px); }
 
 /* Reader checkpoint — one bold dot marking where the signed-in reader is now
    (applied client-side by src/lib/reader-progress). No per-item ticks. */
-.arc li.checkpoint .n { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+.arc .aparts li.checkpoint a { font-weight: 700; color: var(--accent); }
 .parts li.checkpoint .t { color: var(--accent); }
