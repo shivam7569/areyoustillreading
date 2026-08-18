@@ -1,0 +1,77 @@
+---
+/*
+ * =============================================================================
+ * src/pages/fields/[slug].astro  ·  ROUTE: "/fields/<slug>"
+ * =============================================================================
+ * A single field's page: the arc across its series (reading order + a place to
+ * start), the field's generative mark, then each member series rendered as the
+ * same <SeriesPlate> the /series page uses. Only PUBLIC fields (≥2 public series)
+ * get a page — getStaticPaths draws straight from getPublicFields().
+ */
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SeriesPlate from '../../components/SeriesPlate.astro';
+import site from '../../data/site.json';
+import { getPublicFields, type PublicField } from '../../lib/fields';
+import { markSvg } from '../../lib/field-marks.mjs';
+import { washFor } from '../../lib/series-plate.mjs';
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const fields = await getPublicFields();
+  return fields.map((field) => ({ params: { slug: field.slug }, props: { field } }));
+};
+
+const { field } = Astro.props as { field: PublicField };
+const f = (site as any).fields || {};
+
+// h1 with the last word italicised + a full stop, matching the editorial pages.
+const words = field.title.trim().split(/\s+/);
+const lastWord = (words.pop() || field.title).replace(/[.…]+$/, '') + '.';
+const headWords = words.join(' ');
+
+const STATUS_WORD: Record<string, string> = { 'in-progress': 'running', complete: 'complete', paused: 'paused' };
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const stepLabel = (s: PublicField['series'][number]) =>
+  s.status === 'complete' ? `Complete · ${s.total} parts` : `${cap(STATUS_WORD[s.status] || 'running')} · ${s.parts.length} of ${s.total}`;
+
+const wash = washFor(field.slug);
+const markS = field.series.map((s) => ({ n: s.total, pub: s.parts.length }));
+const start = field.series[0].parts[0];
+---
+
+<BaseLayout title={`${field.title} — areyoustillreading`} description={field.summary || `A field gathering ${field.seriesCount} series.`} wide>
+  <div class="wrap">
+    <header class="page-head">
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="fields.pageEyebrow">{f.pageEyebrow || 'Field'}</span></div>
+      <h1>{headWords ? headWords + ' ' : ''}<em>{lastWord}</em></h1>
+      {field.summary && <p class="lede">{field.summary}</p>}
+    </header>
+
+    <div class="fhero">
+      <div>
+        <ol class="arc">
+          {field.series.map((s, i) => (
+            <li class={s.status === 'complete' ? 'done' : ''}>
+              <span class="n">{String(i + 1).padStart(2, '0')}</span>
+              <div><b>{s.title}</b>{(s.note || s.description) && <small>{s.note || s.description}</small>}</div>
+            </li>
+          ))}
+        </ol>
+        <div class="starthere">
+          <a class="btn btn-primary" href={`/blog/${start.id}`}><span data-cms="fields.startHere">{f.startHere || 'Start here'}</span> <span class="arrow">→</span></a>
+          <span class="why">Begins with <b>{start.title}</b> — {start.mins} minute{start.mins === 1 ? '' : 's'}, no prerequisites.</span>
+        </div>
+      </div>
+      <div class="fart" style={`--wx:${wash.x};--wy:${wash.y};--wo:${wash.o}`} set:html={markSvg(field.mark, markS)} />
+    </div>
+  </div>
+
+  <div class="wrap">
+    {field.series.map((s, i) => (
+      <>
+        <div class="ford"><span>{i === 0 ? 'First' : 'Then'}</span><span class="step">{stepLabel(s)}</span></div>
+        <SeriesPlate s={s} />
+      </>
+    ))}
+  </div>
+</BaseLayout>

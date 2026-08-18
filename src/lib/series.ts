@@ -17,6 +17,15 @@
  */
 import { getCollection } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
+import seriesDefsData from '../data/series.json';
+
+// Studio-defined knobs (total / status / planned), keyed by slug — authoritative
+// over frontmatter for the DECLARED total the in-post spine draws its ticks from.
+const seriesDefsMap = new Map<string, any>(((seriesDefsData as any).series || []).map((d: any) => [d.slug, d]));
+const firstDefined = (members: CollectionEntry<'blog'>[], key: string): any => {
+  for (const p of members) { const v = (p.data as any)[key]; if (v != null && v !== '' && !(Array.isArray(v) && v.length === 0)) return v; }
+  return undefined;
+};
 
 export type SeriesPart = {
   slug: string; // the part's URL slug (post id)
@@ -30,7 +39,8 @@ export type SeriesNavData = {
   title: string; // human display name for the series
   parts: SeriesPart[]; // every published part, ordered
   index: number; // 1-based position of the current post
-  total: number; // number of parts
+  total: number; // DECLARED total parts (published + planned) — the spine's length
+  planned: string[]; // planned/to-come part titles (the spine's hollow ticks)
   introSlug: string; // slug of the first part (the author-written index/intro)
   isIntro: boolean; // is the current post the intro/first part?
   prev: { slug: string; title: string } | null;
@@ -141,12 +151,23 @@ export async function getSeriesNav(
   const idx = parts.findIndex((p) => p.current);
   const title = seriesTitleOf(seriesSlug, members);
 
+  // Declared total (published + planned), so the spine shows hollow "to-come" ticks
+  // beyond the published parts. The series.json definition wins over frontmatter.
+  const def = seriesDefsMap.get(seriesSlug);
+  const hasDef = !!def;
+  const planned: string[] = ((hasDef ? (def.planned || []) : firstDefined(members, 'seriesPlanned')) || [])
+    .map((t: any) => String(t || '').trim())
+    .filter(Boolean);
+  const declaredTotal = hasDef ? (typeof def.total === 'number' ? def.total : undefined) : firstDefined(members, 'seriesTotal');
+  const total = Math.max(parts.length, Number(declaredTotal) || parts.length, parts.length + planned.length);
+
   return {
     slug: seriesSlug,
     title,
     parts,
     index: idx + 1,
-    total: parts.length,
+    total,
+    planned,
     introSlug: parts[0].slug,
     isIntro: idx === 0,
     prev: idx > 0 ? { slug: parts[idx - 1].slug, title: parts[idx - 1].title } : null,

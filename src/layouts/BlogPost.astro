@@ -32,6 +32,7 @@ import ShareBar from '../components/ShareBar.astro';
 import Feedback from '../components/Feedback.astro';
 import PlotlyReader from '../components/PlotlyReader.astro';
 import { getSeriesNav } from '../lib/series';
+import { getFieldNav } from '../lib/fields';
 import { getCollection } from 'astro:content';
 import site from '../data/site.json';
 import 'katex/dist/katex.min.css';
@@ -61,6 +62,9 @@ const avatarInitial = (byline.trim()[0] || 'a').toLowerCase();
 
 // Series context (null unless this post is part of a multi-post series).
 const series = await getSeriesNav(post);
+// Field context (null unless the series belongs to a public field) — drives the
+// in-post breadcrumb + the "next in the field" card at the end of a series.
+const fieldNav = series ? await getFieldNav(post) : null;
 
 // Absolute canonical URL for the share links (matches BaseHead's og:url).
 const shareUrl = new URL(Astro.url.pathname, Astro.site).toString();
@@ -131,7 +135,7 @@ if (!series && here !== -1) {
   </div>
 
   {/* Series card (top): the ordered parts list with the current one highlighted. */}
-  {series && <div class="wrap"><div class="measure"><SeriesNav data={series} placement="top" /></div></div>}
+  {series && <div class="wrap"><div class="measure"><SeriesNav data={series} field={fieldNav} placement="top" /></div></div>}
 
   {/*
     The compiled Markdown body is injected here. For a normal post that is <Content/>;
@@ -152,7 +156,7 @@ if (!series && here !== -1) {
     <div class="measure">
       <div class="after">
         {series
-          ? <SeriesNav data={series} placement="bottom" />
+          ? <SeriesNav data={series} field={fieldNav} placement="bottom" />
           : related.length > 0 && (
               <nav class="related" aria-label="Related reading">
                 <div class="related-head"><span class="line"></span><span class="eyebrow" data-cms="post.relatedHeading">{c.relatedHeading || 'Related reading'}</span></div>

@@ -129,8 +129,9 @@ const {
 const nav = [
   { href: '/', label: gnav.home || 'Home', key: 'global.nav.home' },
   { href: '/blog', label: gnav.blog || 'Blog', key: 'global.nav.blog', children: [
-    { href: '/blog', label: gnav.allPosts || 'All posts', key: 'global.nav.allPosts' },
-    { href: '/series', label: gnav.series || 'Series', key: 'global.nav.series' },
+    { href: '/blog', label: gnav.allPosts || 'All posts', key: 'global.nav.allPosts', desc: gnav.allPostsDesc || 'Everything, newest first', descKey: 'global.nav.allPostsDesc' },
+    { href: '/series', label: gnav.series || 'Series', key: 'global.nav.series', desc: gnav.seriesDesc || 'Essays that run in order', descKey: 'global.nav.seriesDesc' },
+    { href: '/fields', label: gnav.field || 'Field', key: 'global.nav.field', desc: gnav.fieldDesc || 'Series that belong together', descKey: 'global.nav.fieldDesc' },
   ] },
   { href: '/projects', label: gnav.projects || 'Projects', key: 'global.nav.projects' },
   { href: '/resume', label: gnav.resume || 'Resume', key: 'global.nav.resume' },
@@ -212,7 +213,10 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
                 </a>
                 <div class="nav-menu" role="menu">
                   {item.children.map((c) => (
-                    <a href={c.href} role="menuitem" aria-current={isActive(c.href) ? 'page' : undefined} data-cms={c.key}>{c.label}</a>
+                    <a href={c.href} role="menuitem" aria-current={isActive(c.href) ? 'page' : undefined}>
+                      <span data-cms={c.key}>{c.label}</span>
+                      {(c as any).desc && <small data-cms={(c as any).descKey}>{(c as any).desc}</small>}
+                    </a>
                   ))}
                 </div>
               </div>
@@ -327,6 +331,7 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
           <nav>
             <a href="/blog" data-cms="global.nav.blog">{gnav.blog || 'Blog'}</a>
             <a href="/series" data-cms="global.nav.series">{gnav.series || 'Series'}</a>
+            <a href="/fields" data-cms="global.nav.field">{gnav.field || 'Field'}</a>
             <a href="/projects" data-cms="global.nav.projects">{gnav.projects || 'Projects'}</a>
             <a href="/resume" data-cms="global.nav.resume">{gnav.resume || 'Resume'}</a>
             <a href="/rss.xml" data-cms="global.footer.rss">{gfoot.rss || 'RSS'}</a>
