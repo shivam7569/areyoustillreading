@@ -1,15 +1,9 @@
 {
   "series": [
     {
-      "slug": "test-series-2",
-      "title": "Test Series 2",
-      "total": 5,
-      "status": "",
-      "planned": []
-    },
-    {
       "slug": "test-series",
       "title": "Test Series",
+      "summary": "",
       "total": 1,
       "status": "",
       "planned": []
@@ -17,6 +11,7 @@
     {
       "slug": "untitled-series",
       "title": "sdfsfsdfsd",
+      "summary": "",
       "total": 1,
       "status": "",
       "planned": []
