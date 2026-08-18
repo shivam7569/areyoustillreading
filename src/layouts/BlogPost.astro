@@ -28,6 +28,7 @@ import Highlights from '../components/Highlights.astro';
 import Notes from '../components/Notes.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
 import SeriesNav from '../components/SeriesNav.astro';
+import ReaderProgress from '../components/ReaderProgress.astro';
 import ShareBar from '../components/ShareBar.astro';
 import Feedback from '../components/Feedback.astro';
 import PlotlyReader from '../components/PlotlyReader.astro';
@@ -116,6 +117,8 @@ if (here !== -1) {
 <BaseLayout title={title} description={description} image={`/og/${post.id}.png`} wide>
   {/* Reading-progress bar (driven by the script below). */}
   <div class="progress" id="pg"></div>
+  {/* Records the signed-in reader's furthest point (powers "Continue" + read-marks). */}
+  <ReaderProgress slug={post.id} />
 
   {/* Article head — inside the reading column. */}
   <div class="wrap">

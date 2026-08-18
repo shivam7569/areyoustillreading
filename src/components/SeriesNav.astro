@@ -81,3 +81,13 @@ const todoCount = Math.max(0, data.total - data.parts.length);
     )}
   </Fragment>
 )}
+
+<script>
+  // Mark the spine ticks a signed-in reader has already finished (read-marks).
+  import { fetchProgress } from '../lib/reader-progress';
+  const ticks = Array.from(document.querySelectorAll('.seriesbar .spine a:not(.todo)[href^="/blog/"]')) as HTMLAnchorElement[];
+  if (ticks.length) {
+    const slugOf = (a: HTMLAnchorElement) => (a.getAttribute('href') || '').replace(/^\/blog\//, '').replace(/\/$/, '');
+    fetchProgress(ticks.map(slugOf)).then((m) => { if (m.size) for (const a of ticks) { const p = m.get(slugOf(a)); if (p && p.read) a.classList.add('read'); } });
+  }
+</script>

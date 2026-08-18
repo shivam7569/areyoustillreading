@@ -713,3 +713,10 @@ a.contfield:hover .chev { transform: translateX(5px); }
 .pager a.next { text-align: right; }
 .pager .off { opacity: .5; }
 .pager span.off { border: 1px solid var(--rule); border-radius: 6px; padding: 20px 22px; display: block; }
+
+/* Reader read-marks — applied client-side (src/lib/reader-progress) for the signed-in
+   reader: a check on finished parts/series, and solid spine ticks for read parts. */
+.arc li.read div b::after, .parts li.read .t::after, .fseries a.read .t::after { content: " ✓"; color: var(--accent); font-weight: 600; letter-spacing: 0; }
+.parts li.read .t, .fseries a.read .t { color: var(--ink-faint); }
+.arc li.read .n { border-color: color-mix(in srgb, var(--accent) 55%, var(--rule)); color: var(--accent); }
+.spine a.read { background: var(--accent); background-clip: content-box; }

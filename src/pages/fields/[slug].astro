@@ -37,6 +37,9 @@ const stepLabel = (s: PublicField['series'][number]) =>
 const wash = washFor(field.slug);
 const markS = field.series.map((s) => ({ n: s.total, pub: s.parts.length }));
 const start = field.series[0].parts[0];
+// Flat reading order across the field (for the client "Continue" adapter) + each
+// series' own part slugs (for the arc's per-reader read-mark).
+const readingOrder = field.series.flatMap((s) => s.parts.map((p) => p.id)).join(',');
 ---
 
 <BaseLayout title={`${field.title} — areyoustillreading`} description={field.summary || `A field gathering ${field.seriesCount} series.`} wide>
@@ -51,14 +54,14 @@ const start = field.series[0].parts[0];
       <div>
         <ol class="arc">
           {field.series.map((s, i) => (
-            <li class={s.status === 'complete' ? 'done' : ''}>
+            <li class={s.status === 'complete' ? 'done' : ''} data-parts={s.parts.map((p) => p.id).join(',')}>
               <span class="n">{String(i + 1).padStart(2, '0')}</span>
               <div><b>{s.title}</b>{(s.note || s.description) && <small>{s.note || s.description}</small>}</div>
             </li>
           ))}
         </ol>
         <div class="starthere">
-          <a class="btn btn-primary" href={`/blog/${start.id}`}><span data-cms="fields.startHere">{f.startHere || 'Start here'}</span> <span class="arrow">→</span></a>
+          <a class="btn btn-primary" id="sh-btn" data-parts={readingOrder} href={`/blog/${start.id}`}><span class="sh-label" data-cms="fields.startHere">{f.startHere || 'Start here'}</span> <span class="arrow">→</span></a>
           <span class="why">Begins with <b>{start.title}</b> — {start.mins} minute{start.mins === 1 ? '' : 's'}, no prerequisites.</span>
         </div>
       </div>
@@ -75,3 +78,27 @@ const start = field.series[0].parts[0];
     ))}
   </div>
 </BaseLayout>
+
+<script>
+  // For a signed-in reader: turn "Start here" into "Continue reading" (first
+  // unfinished part), mark finished series in the arc, and check off read parts.
+  import { fetchProgress } from '../../lib/reader-progress';
+  const btn = document.getElementById('sh-btn');
+  const arc = Array.from(document.querySelectorAll('.arc li[data-parts]')) as HTMLElement[];
+  const partAnchors = Array.from(document.querySelectorAll('.series .parts li a[href^="/blog/"]')) as HTMLAnchorElement[];
+  const slugOf = (href: string | null) => (href || '').replace(/^\/blog\//, '').replace(/\/$/, '');
+  const order = btn ? (btn.dataset.parts || '').split(',').filter(Boolean) : [];
+  const all = new Set<string>(order);
+  arc.forEach((li) => (li.dataset.parts || '').split(',').filter(Boolean).forEach((s) => all.add(s)));
+  partAnchors.forEach((a) => all.add(slugOf(a.getAttribute('href'))));
+  if (all.size) fetchProgress(Array.from(all)).then((m) => {
+    if (!m.size) return;
+    if (btn && order.some((s) => m.has(s))) {
+      const next = order.find((s) => !(m.get(s) && m.get(s)!.read)) || order[order.length - 1];
+      btn.setAttribute('href', '/blog/' + next + '/');
+      const lbl = btn.querySelector('.sh-label'); if (lbl) lbl.textContent = 'Continue reading';
+    }
+    arc.forEach((li) => { const parts = (li.dataset.parts || '').split(',').filter(Boolean); if (parts.length && parts.every((s) => m.get(s) && m.get(s)!.read)) li.classList.add('read'); });
+    partAnchors.forEach((a) => { const p = m.get(slugOf(a.getAttribute('href'))); if (p && p.read) a.closest('li')?.classList.add('read'); });
+  });
+</script>

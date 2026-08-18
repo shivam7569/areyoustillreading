@@ -1,0 +1,36 @@
+---
+/**
+ * ReaderProgress.astro — records a signed-in reader's furthest position in this post.
+ * Rendered once by BlogPost. Talks straight to Supabase via src/lib/reader-progress
+ * (a no-op for signed-out readers), the same client-only pattern as Notes/Highlights.
+ * This is the "granular tracker" that powers "Continue" + read-marks elsewhere.
+ */
+interface Props { slug: string }
+const { slug } = Astro.props;
+---
+<div id="rp-track" data-slug={slug} hidden></div>
+<script>
+  import { currentUserId, fetchProgress, recordProgress } from '../lib/reader-progress';
+  const holder = document.getElementById('rp-track');
+  const slug = holder && holder.dataset.slug;
+  if (slug) {
+    const READ_AT = 85; // reaching 85% of the article counts as "read"
+    let maxPct = 0, wasRead = false, dirty = false;
+    const pctNow = () => {
+      const h = document.documentElement;
+      const max = h.scrollHeight - h.clientHeight;
+      return max > 0 ? Math.min(100, Math.round(((h.scrollTop || window.scrollY) / max) * 100)) : 100;
+    };
+    const onScroll = () => { const p = pctNow(); if (p > maxPct) { maxPct = p; dirty = true; if (maxPct >= READ_AT) wasRead = true; } };
+    const flush = () => { if (dirty) { dirty = false; recordProgress(slug, maxPct, wasRead || maxPct >= READ_AT); } };
+    currentUserId().then((uid) => {
+      if (!uid) return; // only signed-in readers are tracked
+      // Seed from the stored furthest point so a later session never regresses it.
+      fetchProgress([slug]).then((m) => { const p = m.get(slug); if (p) { maxPct = Math.max(maxPct, p.pct); wasRead = wasRead || p.read; } onScroll(); });
+      addEventListener('scroll', onScroll, { passive: true });
+      addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+      addEventListener('pagehide', flush);
+      setInterval(flush, 20000);
+    });
+  }
+</script>
