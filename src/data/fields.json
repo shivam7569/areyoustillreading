@@ -11,10 +11,6 @@
           "note": "Where the answer comes from, and why it is usually the wrong passage"
         },
         {
-          "slug": "serving-demo",
-          "note": "What it costs to get that answer back before the reader leaves"
-        },
-        {
           "slug": "test-series"
         }
       ]
@@ -24,7 +20,12 @@
       "title": "fdgfsdf",
       "summary": "",
       "mark": "01",
-      "series": []
+      "series": [
+        {
+          "slug": "serving-demo",
+          "note": "What it costs to get that answer back before the reader leaves"
+        }
+      ]
     }
   ]
 }
