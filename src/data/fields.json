@@ -6,8 +6,17 @@
       "summary": "Everything between a question arriving and an answer leaving — what gets retrieved, how fast it serves, and the evaluation that tells you whether either one worked.",
       "mark": "01",
       "series": [
-        { "slug": "retrieval-demo", "note": "Where the answer comes from, and why it is usually the wrong passage" },
-        { "slug": "serving-demo", "note": "What it costs to get that answer back before the reader leaves" }
+        {
+          "slug": "retrieval-demo",
+          "note": "Where the answer comes from, and why it is usually the wrong passage"
+        },
+        {
+          "slug": "serving-demo",
+          "note": "What it costs to get that answer back before the reader leaves"
+        },
+        {
+          "slug": "test-series"
+        }
       ]
     }
   ]
