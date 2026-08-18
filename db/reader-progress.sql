@@ -1,18 +1,24 @@
 -- ===========================================================================
--- reader_progress — per-reader, per-post reading position.
--- Powers "Continue" (field + series) and the read-marks in the arc / parts list /
--- series spine. The browser talks straight to Supabase (anon key + RLS), like
--- notes/highlights — there is no Pages Function in the path. Run once in the
--- Supabase SQL editor.
+-- reader_progress — per-reader, per-post reading position (granular: subsection).
+-- Powers "Continue" (resumes at the exact subsection) and the read-marks. The
+-- browser talks straight to Supabase (anon key + RLS), like notes/highlights.
+-- Idempotent — safe to re-run; the ALTERs add the subsection columns to an
+-- existing table. Run in the Supabase SQL editor.
 -- ===========================================================================
 create table if not exists public.reader_progress (
   user_id    uuid        not null references auth.users(id) on delete cascade,
   post_slug  text        not null,
   pct        smallint    not null default 0 check (pct >= 0 and pct <= 100),
   read       boolean     not null default false,
+  anchor     text        not null default '',   -- id of the furthest heading reached (deep-link target)
+  heading    text        not null default '',   -- that heading's text (for the "Continue from …" label)
   updated_at timestamptz not null default now(),
   primary key (user_id, post_slug)
 );
+
+-- Bring an existing (v1) table up to date.
+alter table public.reader_progress add column if not exists anchor  text not null default '';
+alter table public.reader_progress add column if not exists heading text not null default '';
 
 alter table public.reader_progress enable row level security;
 

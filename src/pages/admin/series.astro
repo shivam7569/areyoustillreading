@@ -26,8 +26,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       <div class="slist">
         <div class="lh">Series<span class="n" id="scount">—</span></div>
         <div id="rail"><div class="muted" style="padding:16px 13px;font-size:12.5px">Loading…</div></div>
-        <button class="newrow" type="button" id="newField"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New field</button>
-        <button class="newrow" type="button" id="newSeries"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New series</button>
+        <div class="newfoot">
+          <button class="newrow" type="button" id="newField"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New field</button>
+          <button class="newrow" type="button" id="newSeries"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New series</button>
+        </div>
       </div>
 
       <div class="sed" id="sed" hidden>
@@ -133,13 +135,25 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .srow .mini i.todo { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 26%, transparent); }
   .srow .st { font-family: var(--sans); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; align-self: start; padding-top: 3px; }
   .rgrp { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--rule-soft); padding: 11px 13px; cursor: pointer; font: inherit; text-align: left; color: var(--ink-faint); font-family: var(--sans); font-size: 9.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; transition: color .15s, background .15s; }
-  .rgrp:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
-  .rgrp.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
   .rgrp .gm { margin-left: auto; font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 11px; }
   .rgrp.quiet { cursor: default; }
   .rgrp.quiet:hover { color: var(--ink-faint); background: none; }
-  .slist .newrow { width: 100%; background: none; border: 0; border-top: 1px solid var(--rule); padding: 12px 13px; text-align: left; font-family: var(--sans); font-size: 12.5px; color: var(--accent); cursor: pointer; display: flex; align-items: center; gap: 8px; }
-  .slist .newrow:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  /* field headers read clearly as a level above the series: a tinted bar, an icon, heavier name */
+  .rgrp.field { background: color-mix(in srgb, var(--accent) 7%, var(--paper-2)); border-bottom: 1px solid var(--rule); font-size: 10px; font-weight: 700; }
+  .rgrp.field .fico { width: 13px; height: 13px; flex: none; color: var(--accent); opacity: .9; }
+  .rgrp.field .nm { color: var(--ink); letter-spacing: .09em; }
+  .rgrp.field:hover { background: color-mix(in srgb, var(--accent) 12%, var(--paper-2)); }
+  .rgrp.field.on { background: color-mix(in srgb, var(--accent) 16%, var(--paper-2)); box-shadow: inset 2px 0 0 var(--accent); }
+  .rgrp.field.on .nm, .rgrp.field.on .fico { color: var(--accent); opacity: 1; }
+  /* drag to reorder / move */
+  .srow { cursor: grab; }
+  .srow.dragging { opacity: .45; }
+  .srow.drop-into { box-shadow: inset 0 3px 0 var(--accent); }
+  .rgrp.drop-into { background: color-mix(in srgb, var(--accent) 18%, var(--paper-2)); }
+  /* the "New" actions read as buttons that belong to the site, not plain links */
+  .newfoot { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--rule); }
+  .slist .newrow { flex: 1; justify-content: center; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 4px; padding: 9px 10px; font-family: var(--sans); font-size: 12.5px; font-weight: 500; color: var(--ink-soft); cursor: pointer; display: flex; align-items: center; gap: 7px; transition: border-color .15s, color .15s, background .15s; }
+  .slist .newrow:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--paper-2)); }
   .slist .newrow svg { width: 13px; height: 13px; }
 
   /* the editor */
@@ -275,12 +289,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
   // ---- left rail -------------------------------------------------------------
   const railStatus = (m: any) => (m.status === 'paused' ? 'Paused' : m.status === 'complete' ? 'Complete' : !m.written.length ? 'Empty' : m.published >= m.total ? 'Complete' : m.published + ' of ' + m.total);
-  function railRow(slug: string) {
+  const FICO = '<svg class="fico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></svg>';
+  function railRow(slug: string, fieldSlug: string) {
     const m = seriesModel(slug);
     let ticks = '';
     for (let k = 0; k < Math.min(m.total, 12); k++) ticks += '<i class="' + (k < m.published ? '' : 'todo') + '"></i>';
     const on = mode === 'series' && slug === curSlug ? ' on' : '';
-    return `<button class="srow${on}" type="button" data-s="${esc(slug)}"><span class="t">${esc(m.name)}</span><span class="st">${railStatus(m)}</span><span class="mini">${ticks}</span></button>`;
+    return `<button class="srow${on}" type="button" draggable="true" data-s="${esc(slug)}" data-field="${esc(fieldSlug)}"><span class="t">${esc(m.name)}</span><span class="st">${railStatus(m)}</span><span class="mini">${ticks}</span></button>`;
   }
   function renderRail() {
     const inField = new Set<string>();
@@ -290,13 +305,13 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       members.forEach((s: string) => inField.add(s));
       const pub = members.filter((s: string) => seriesModel(s).published > 0).length;
       const on = mode === 'field' && f.slug === curFieldSlug ? ' on' : '';
-      html += `<button class="rgrp${on}" type="button" data-f="${esc(f.slug)}">${esc(f.title || f.slug)}<span class="gm">${members.length} series · ${pub >= 2 ? 'live' : 'not public yet'}</span></button>`;
-      html += members.map((s: string) => railRow(s)).join('');
+      html += `<button class="rgrp field${on}" type="button" data-f="${esc(f.slug)}">${FICO}<span class="nm">${esc(f.title || f.slug)}</span><span class="gm">${members.length} series · ${pub >= 2 ? 'live' : 'not public yet'}</span></button>`;
+      html += members.map((s: string) => railRow(s, f.slug)).join('');
     }
     const loose = seriesSlugs().filter((s) => !inField.has(s));
     if (loose.length) {
-      html += `<span class="rgrp quiet">${fdefs.length ? 'Stands alone' : 'Series'}<span class="gm">${loose.length}</span></span>`;
-      html += loose.map((s) => railRow(s)).join('');
+      html += `<span class="rgrp quiet" data-quiet="1">${fdefs.length ? 'Stands alone' : 'Series'}<span class="gm">${loose.length}</span></span>`;
+      html += loose.map((s) => railRow(s, '')).join('');
     }
     el('rail').innerHTML = html || '<div class="muted" style="padding:16px 13px;font-size:12.5px">Nothing yet — create a series or field below.</div>';
     el('scount').textContent = String(seriesSlugs().length);
@@ -463,6 +478,33 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     const f = t.closest('.rgrp[data-f]') as HTMLElement | null; if (f) return loadField(f.dataset.f!);
     const s = t.closest('.srow') as HTMLElement | null; if (s) return loadSeries(s.dataset.s!);
   });
+
+  // Drag a series to reorder it within its field, move it to another field, or drop it
+  // on "Stands alone" to ungroup it. Reordering IS the field's reading order (the arc).
+  let dragSlug = '';
+  const clearDrag = () => el('rail').querySelectorAll('.dragging,.drop-into').forEach((n) => n.classList.remove('dragging', 'drop-into'));
+  el('rail').addEventListener('dragstart', (e) => { const row = (e.target as HTMLElement).closest('.srow') as HTMLElement | null; if (!row) return; dragSlug = row.dataset.s || ''; (e as DragEvent).dataTransfer!.effectAllowed = 'move'; row.classList.add('dragging'); });
+  el('rail').addEventListener('dragend', () => { dragSlug = ''; clearDrag(); });
+  el('rail').addEventListener('dragover', (e) => { if (!dragSlug) return; e.preventDefault(); (e as DragEvent).dataTransfer!.dropEffect = 'move'; const t = (e.target as HTMLElement).closest('.srow, .rgrp') as HTMLElement | null; el('rail').querySelectorAll('.drop-into').forEach((n) => n.classList.remove('drop-into')); if (t && t.dataset.s !== dragSlug) t.classList.add('drop-into'); });
+  el('rail').addEventListener('drop', async (e) => {
+    if (!dragSlug) return; e.preventDefault();
+    const t = e.target as HTMLElement;
+    const row = t.closest('.srow') as HTMLElement | null;
+    const grp = t.closest('.rgrp') as HTMLElement | null;
+    const slug = dragSlug; dragSlug = ''; clearDrag();
+    if (row && row.dataset.s && row.dataset.s !== slug) await moveTo(slug, row.dataset.field || '', row.dataset.s);
+    else if (grp && grp.dataset.f) await moveTo(slug, grp.dataset.f, '');
+    else if (grp && grp.hasAttribute('data-quiet')) await moveTo(slug, '', '');
+  });
+  async function moveTo(slug: string, toField: string, before: string) {
+    let note: string | undefined;
+    for (const f of fdefs) { const mm = (f.series || []).find((s: any) => s.slug === slug); if (mm && mm.note) { note = mm.note; break; } }
+    fdefs.forEach((f) => { f.series = (f.series || []).filter((s: any) => s.slug !== slug); });
+    if (toField) { const f = fdefs.find((x) => x.slug === toField); if (f) { f.series = f.series || []; const entry = note ? { slug, note } : { slug }; const i = before ? f.series.findIndex((s: any) => s.slug === before) : -1; if (i >= 0) f.series.splice(i, 0, entry); else f.series.push(entry); } }
+    try { await persistFields(fdefs); } catch { await load({}); return; }
+    renderRail();
+    if (mode === 'series') { draft.fieldSlug = fieldOf(curSlug); fillFieldSel(); }
+  }
   el('newSeries').addEventListener('click', async () => {
     const base = 'untitled-series'; let slug = base, i = 2; const taken = new Set(seriesSlugs());
     while (taken.has(slug)) slug = base + '-' + i++;

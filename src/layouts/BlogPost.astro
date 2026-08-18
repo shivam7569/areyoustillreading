@@ -94,10 +94,13 @@ const MAX_RELATED = 2;
 let related: CollectionEntry<'blog'>[] = [];
 if (here !== -1) {
   const currentTags = new Set(tags);
+  // The "next in the field" post is already offered by the field card, so keep it out
+  // of the tag suggestions (no duplicate forward link at a field boundary).
+  const nextInFieldSlug = fieldNav && fieldNav.next ? fieldNav.next.href.replace(/^\/blog\//, '').replace(/\/$/, '') : null;
   // Standalone posts suggest other STANDALONE essays (a bare series part out of context
   // reads badly as a "related" card). A series post, though, uses these only at its own
   // boundaries — so it may suggest posts from OTHER series too, just not its own parts.
-  const candidates = allPosts.filter((p) => p.id !== post.id && (series ? p.data.series !== post.data.series : !p.data.series));
+  const candidates = allPosts.filter((p) => p.id !== post.id && p.id !== nextInFieldSlug && (series ? p.data.series !== post.data.series : !p.data.series));
   related = candidates
     .map((p) => ({ p, shared: (p.data.tags ?? []).filter((t) => currentTags.has(t)).length }))
     .filter((x) => x.shared > 0)

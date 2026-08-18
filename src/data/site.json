@@ -215,6 +215,11 @@
     "essaySingular": "essay",
     "essayPlural": "essays"
   },
+  "fields": {
+    "startHere": "Start here",
+    "continueLabel": "Continue reading",
+    "continueWhy": "Pick up where you left off —"
+  },
   "series": {
     "seo": {
       "title": "Series — areyoustillreading",
