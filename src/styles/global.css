@@ -680,13 +680,10 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--ink-
 .ford .step { color: var(--ink-faint); letter-spacing: .12em; }
 
 /* continue into the next series — only when the field is public */
-.contfield { margin-top: 22px; padding: 19px 22px; border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--rule)); border-radius: 5px; background: color-mix(in srgb, var(--accent) 5%, var(--card)); display: flex; align-items: center; gap: 20px; transition: border-color .2s, background .2s; }
-a.contfield:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--card)); }
-.contfield .k { font-family: var(--sans); font-size: 10.5px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); display: block; margin-bottom: 7px; }
-.contfield .t { font-family: var(--serif-display); font-size: 21px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25; display: block; color: var(--ink); }
-.contfield .s { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); margin-top: 5px; display: block; }
-.contfield .chev { flex: none; margin-left: auto; width: 26px; height: 26px; color: var(--accent); transition: transform .22s; }
-a.contfield:hover .chev { transform: translateX(5px); }
+/* the field-continuation "next" cell — subtly accented so it reads as "keep going" */
+.pager a.field-next { border-color: color-mix(in srgb, var(--accent) 34%, var(--rule)); background: color-mix(in srgb, var(--accent) 5%, var(--card)); }
+.pager a.field-next:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--card)); }
+.pager a.field-next .dir { color: var(--accent); }
 
 /* in-post series nav — breadcrumb (field › series) over a spine of one tick per part */
 .seriesbar { display: flex; align-items: center; gap: clamp(14px,2.4vw,26px); flex-wrap: wrap; margin-top: 26px; padding: 0 17px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper-2); font-family: var(--sans); font-size: 13px; min-height: 70px; }
