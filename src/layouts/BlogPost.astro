@@ -86,11 +86,17 @@ const eyebrow = tags[0] ? `${tags[0]} · ${c.kicker || 'Field notes'}` : (c.kick
 // `here !== -1` also keeps the instant-publish /post-shell donor (sentinel id, not
 // in the collection) from baking a block into KV — it renders nothing, exactly as
 // the old chronological pager did.
+// Computed for BOTH standalone and series posts: standalone posts show these as
+// end-of-post cards; series posts hand them to <SeriesNav> so a boundary (first
+// part / end of the series) offers a tag-related read instead of a dead end.
 const MAX_RELATED = 2;
 let related: CollectionEntry<'blog'>[] = [];
-if (!series && here !== -1) {
+if (here !== -1) {
   const currentTags = new Set(tags);
-  const candidates = allPosts.filter((p) => p.id !== post.id && !p.data.series);
+  // Standalone posts suggest other STANDALONE essays (a bare series part out of context
+  // reads badly as a "related" card). A series post, though, uses these only at its own
+  // boundaries — so it may suggest posts from OTHER series too, just not its own parts.
+  const candidates = allPosts.filter((p) => p.id !== post.id && (series ? p.data.series !== post.data.series : !p.data.series));
   related = candidates
     .map((p) => ({ p, shared: (p.data.tags ?? []).filter((t) => currentTags.has(t)).length }))
     .filter((x) => x.shared > 0)
@@ -156,7 +162,7 @@ if (!series && here !== -1) {
     <div class="measure">
       <div class="after">
         {series
-          ? <SeriesNav data={series} field={fieldNav} placement="bottom" />
+          ? <SeriesNav data={series} field={fieldNav} placement="bottom" related={related.map((r) => ({ slug: r.id, title: r.data.title }))} />
           : related.length > 0 && (
               <nav class="related" aria-label="Related reading">
                 <div class="related-head"><span class="line"></span><span class="eyebrow" data-cms="post.relatedHeading">{c.relatedHeading || 'Related reading'}</span></div>
