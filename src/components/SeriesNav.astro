@@ -65,9 +65,11 @@ const todoCount = Math.max(0, data.total - data.parts.length);
         ? <a class="next" href={href(data.next.slug)}><div class="dir">Part {data.index + 1} →</div><div class="t">{data.next.title}</div></a>
         : data.total > data.parts.length
           ? <span class="next off"><div class="dir">Up to date</div><div class="t">You’re on the latest part — more to come</div></span>
-          : related[0]
-            ? <a class="next suggest" href={href(related[0].slug)}><div class="dir">Read next</div><div class="t">{related[0].title}</div></a>
-            : <a class="next" href={introHref}><div class="dir">Series complete</div><div class="t">Back to all {data.parts.length} parts</div></a>}
+          : (field && field.next)
+            ? <a class="next" href={introHref}><div class="dir">Series complete</div><div class="t">Back to all {data.parts.length} parts</div></a>
+            : related[0]
+              ? <a class="next suggest" href={href(related[0].slug)}><div class="dir">Read next</div><div class="t">{related[0].title}</div></a>
+              : <a class="next" href={introHref}><div class="dir">Series complete</div><div class="t">Back to all {data.parts.length} parts</div></a>}
     </nav>
     {field && field.next && !data.next && (
       <a class="contfield" href={field.next.href} data-pagefind-ignore>

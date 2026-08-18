@@ -416,11 +416,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         const next = i >= 0 ? sdefs.map((d, k) => (k === i ? entry : d)) : [...sdefs, entry];
         await persistSeries(next);
         if (fieldOf(draft.slug) !== draft.fieldSlug) await persistFields(withMove(fdefs, draft.slug, draft.fieldSlug));
-        dirty = false; renderSeries(); st.textContent = 'Saved — live on the next rebuild.';
+        loadSeries(draft.slug); el('state').textContent = 'Saved — live on the next rebuild.'; // re-derive from the server's sanitized data
       } else {
         const next = fdefs.map((f) => (f.slug === draft.slug ? { ...f, title: (draft.name || '').trim() || f.slug, summary: draft.summary, mark: draft.mark } : f));
         await persistFields(next);
-        dirty = false; renderField(); st.textContent = 'Saved — live on the next rebuild.';
+        loadField(draft.slug); el('state').textContent = 'Saved — live on the next rebuild.';
       }
     } catch (e: any) { st.textContent = 'Not saved — ' + (e.message || e); }
   }
@@ -474,8 +474,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     try { await persistFields([...fdefs, { slug, title: 'Untitled field', summary: '', mark: '01', series: [] }]); await load({ field: slug }); (el('sname') as HTMLInputElement).select(); } catch (e: any) { el('state').textContent = 'Could not create — ' + (e.message || e); }
   });
   el('sname').addEventListener('input', () => { draft.name = (el('sname') as HTMLInputElement).value; touch(); });
-  el('tplus').addEventListener('click', () => { draft.total = Math.min(24, (draft.total || 1) + 1); renderSeries(); touch(); });
-  el('tminus').addEventListener('click', () => { draft.total = Math.max(Math.max(1, seriesModel(curSlug).written.length), (draft.total || 1) - 1); renderSeries(); touch(); });
+  el('tplus').addEventListener('click', () => { draft.total = (draft.total || 1) + 1; renderSeries(); touch(); });
+  // Floor is the parts actually listed (written + planned) so the total can't drop below them.
+  el('tminus').addEventListener('click', () => { draft.total = Math.max(Math.max(1, seriesModel(curSlug).written.length + draft.planned.length), (draft.total || 1) - 1); renderSeries(); touch(); });
   el('statseg').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return; draft.status = b.dataset.v; renderSeries(); touch(); });
   el('padd').addEventListener('click', () => { const inp = el('ptitle') as HTMLInputElement; const v = inp.value.trim(); if (!v) return inp.focus(); draft.planned.push(v); inp.value = ''; if (seriesModel(curSlug).written.length + draft.planned.length > draft.total) draft.total = seriesModel(curSlug).written.length + draft.planned.length; renderSeries(); touch(); });
   el('ptitle').addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); el('padd').click(); } });
