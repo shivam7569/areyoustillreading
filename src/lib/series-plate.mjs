@@ -119,7 +119,9 @@ export function resolveSeries(slug, membersInput, def) {
   const status = (hasDef ? (def.status || '') : firstOf(members, 'seriesStatus')) || (allDeclaredPublished ? 'complete' : 'in-progress');
   return {
     slug, title, parts, planned, total, status,
-    description: members[0] && members[0].data.description,
+    // The line under the series name: a Studio-set summary (series.json) wins over the
+    // first post's frontmatter description.
+    description: (hasDef && def.summary && String(def.summary).trim()) || (members[0] && members[0].data.description),
     first: parts[0] && parts[0].date,
     latest: parts.length ? parts[parts.length - 1].date : undefined,
     comb: combLines(total),

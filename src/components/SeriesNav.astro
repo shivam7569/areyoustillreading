@@ -64,14 +64,10 @@ const todoCount = Math.max(0, data.total - data.parts.length);
       {data.next
         ? <a class="next" href={href(data.next.slug)}><div class="dir">Part {data.index + 1} →</div><div class="t">{data.next.title}</div></a>
         : (field && field.next)
-          ? (related[0]
-              ? <a class="next suggest" href={href(related[0].slug)}><div class="dir">More like this</div><div class="t">{related[0].title}</div></a>
-              : <a class="next" href={introHref}><div class="dir">End of this series</div><div class="t">Back to all {data.parts.length} parts</div></a>)
-          : data.total > data.parts.length
-            ? <span class="next off"><div class="dir">Up to date</div><div class="t">You’re on the latest part — more to come</div></span>
-            : related[0]
-              ? <a class="next suggest" href={href(related[0].slug)}><div class="dir">Read next</div><div class="t">{related[0].title}</div></a>
-              : <a class="next" href={introHref}><div class="dir">Series complete</div><div class="t">Back to all {data.parts.length} parts</div></a>}
+          ? <a class="next" href={introHref}><div class="dir">End of this series</div><div class="t">Back to all {data.parts.length} parts</div></a>
+          : related[0]
+            ? <a class="next suggest" href={href(related[0].slug)}><div class="dir">Read next</div><div class="t">{related[0].title}</div></a>
+            : <a class="next" href={introHref}><div class="dir">Series complete</div><div class="t">Back to all {data.parts.length} parts</div></a>}
     </nav>
     {field && field.next && !data.next && (
       <a class="contfield" href={field.next.href} data-pagefind-ignore>
@@ -85,13 +81,3 @@ const todoCount = Math.max(0, data.total - data.parts.length);
     )}
   </Fragment>
 )}
-
-<script>
-  // Mark the spine ticks a signed-in reader has already finished (read-marks).
-  import { fetchProgress } from '../lib/reader-progress';
-  const ticks = Array.from(document.querySelectorAll('.seriesbar .spine a:not(.todo)[href^="/blog/"]')) as HTMLAnchorElement[];
-  if (ticks.length) {
-    const slugOf = (a: HTMLAnchorElement) => (a.getAttribute('href') || '').replace(/^\/blog\//, '').replace(/\/$/, '');
-    fetchProgress(ticks.map(slugOf)).then((m) => { if (m.size) for (const a of ticks) { const p = m.get(slugOf(a)); if (p && p.read) a.classList.add('read'); } });
-  }
-</script>

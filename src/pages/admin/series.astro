@@ -74,6 +74,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
               <div class="plate-read" id="pread"></div>
             </div>
             <div class="sedsec">
+              <span class="fl">Summary</span>
+              <textarea class="inp" id="ssum" style="width:100%;box-sizing:border-box;min-height:78px;resize:vertical" placeholder="The line under the series name (defaults to the first post's description)." aria-label="Series summary"></textarea>
+            </div>
+            <div class="sedsec">
               <span class="fl">Field</span>
               <select class="sel" id="fieldsel" style="width:100%" aria-label="Field"></select>
               <div class="fh">A field needs two live series before readers see it.</div>
@@ -286,7 +290,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     if (status !== 'paused' && status !== 'complete') status = ''; // '' = auto
     const total = def && typeof def.total === 'number' && def.total > 0 ? def.total : Math.max(members.length + planned.length, 1);
     const written = members.map((m: any) => ({ slug: m.slug, t: m.title, live: !m.draft, m: m.draft ? 'In draft' : fmtMonth(m.pubDate) || 'Live' }));
-    return { slug, name, total, status, planned: planned.slice(), written, published, fieldSlug: fieldOf(slug) };
+    return { slug, name, summary: (def && def.summary) || '', total, status, planned: planned.slice(), written, published, fieldSlug: fieldOf(slug) };
   }
 
   // ---- left rail -------------------------------------------------------------
@@ -323,11 +327,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   function loadSeries(slug: string) {
     mode = 'series'; curSlug = slug;
     const m = seriesModel(slug);
-    draft = { slug, name: m.name, total: m.total, status: m.status, planned: m.planned.slice(), fieldSlug: m.fieldSlug };
+    draft = { slug, name: m.name, summary: m.summary, total: m.total, status: m.status, planned: m.planned.slice(), fieldSlug: m.fieldSlug };
     (el('sed') as HTMLElement).hidden = false;
     (el('mSeries') as HTMLElement).hidden = false;
     (el('mField') as HTMLElement).hidden = true;
     (el('sname') as HTMLInputElement).value = draft.name;
+    (el('ssum') as HTMLTextAreaElement).value = draft.summary;
     el('del').textContent = 'Delete series';
     el('delconf').classList.remove('on');
     dirty = false; renderSeries();
@@ -428,7 +433,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     const st = el('state'); st.textContent = 'Saving…';
     try {
       if (mode === 'series') {
-        const entry = { slug: draft.slug, title: (draft.name || '').trim() || draft.slug, total: draft.total || null, status: draft.status, planned: draft.planned };
+        const entry = { slug: draft.slug, title: (draft.name || '').trim() || draft.slug, summary: draft.summary || '', total: draft.total || null, status: draft.status, planned: draft.planned };
         const i = sdefs.findIndex((d) => d.slug === draft.slug);
         const next = i >= 0 ? sdefs.map((d, k) => (k === i ? entry : d)) : [...sdefs, entry];
         await persistSeries(next);
@@ -526,6 +531,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   el('ptitle').addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); el('padd').click(); } });
   el('plist').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('[data-rm]') as HTMLElement | null; if (!b) return; draft.planned.splice(+b.dataset.rm!, 1); renderSeries(); touch(); });
   el('fieldsel').addEventListener('change', () => { draft.fieldSlug = (el('fieldsel') as HTMLSelectElement).value; touch(); });
+  el('ssum').addEventListener('input', () => { draft.summary = (el('ssum') as HTMLTextAreaElement).value; touch(); });
   el('fsum').addEventListener('input', () => { draft.summary = (el('fsum') as HTMLTextAreaElement).value; touch(); });
   el('marks').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button[data-m]') as HTMLElement | null; if (!b) return; draft.mark = b.dataset.m; renderField(); touch(); });
   el('save').addEventListener('click', save);

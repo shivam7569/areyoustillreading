@@ -671,8 +671,8 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--ink-
 .arc small { display: block; font-family: var(--sans); font-size: 13px; color: var(--ink-faint); margin-top: 3px; line-height: 1.5; }
 .starthere { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: clamp(22px,3vw,32px); padding-top: clamp(20px,2.6vw,26px); border-top: 1px solid var(--rule); }
 .starthere .why { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); max-width: 34ch; line-height: 1.5; }
-.starthere .restart { font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--ink-faint) 40%, transparent); padding: 2px 0; cursor: pointer; transition: color .2s, border-color .2s; }
-.starthere .restart:hover { color: var(--accent); border-color: var(--accent); }
+.starthere .restart { font-family: var(--sans); font-size: 13.5px; font-weight: 500; color: var(--ink-soft); background: transparent; border: 1px solid var(--rule); border-radius: 2px; padding: 12px 20px; cursor: pointer; transition: border-color .2s, color .2s, transform .18s; }
+.starthere .restart:hover { border-color: var(--ink-faint); color: var(--ink); transform: translateY(-2px); }
 .ford { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-family: var(--sans); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
 .ford::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
 .ford .step { color: var(--ink-faint); letter-spacing: .12em; }
@@ -716,9 +716,7 @@ a.contfield:hover .chev { transform: translateX(5px); }
 .pager .off { opacity: .5; }
 .pager span.off { border: 1px solid var(--rule); border-radius: 6px; padding: 20px 22px; display: block; }
 
-/* Reader read-marks — applied client-side (src/lib/reader-progress) for the signed-in
-   reader: a check on finished parts/series, and solid spine ticks for read parts. */
-.arc li.read div b::after, .parts li.read .t::after, .fseries a.read .t::after { content: " ✓"; color: var(--accent); font-weight: 600; letter-spacing: 0; }
-.parts li.read .t, .fseries a.read .t { color: var(--ink-faint); }
-.arc li.read .n { border-color: color-mix(in srgb, var(--accent) 55%, var(--rule)); color: var(--accent); }
-.spine a.read { background: var(--accent); background-clip: content-box; }
+/* Reader checkpoint — one bold dot marking where the signed-in reader is now
+   (applied client-side by src/lib/reader-progress). No per-item ticks. */
+.arc li.checkpoint .n { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+.parts li.checkpoint .t { color: var(--accent); }

@@ -68,6 +68,7 @@ function sanitize(content) {
     series.push({
       slug,
       title: String((s && s.title) || slug).trim().slice(0, 120),
+      summary: String((s && s.summary) || '').trim().slice(0, 600),
       total: Number.isFinite(total) && total > 0 ? Math.round(total) : null,
       status,
       planned,
