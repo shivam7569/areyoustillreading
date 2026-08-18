@@ -4,7 +4,7 @@
       "slug": "ml-in-production",
       "title": "Machine learning in production",
       "summary": "Everything between a question arriving and an answer leaving — what gets retrieved, how fast it serves, and the evaluation that tells you whether either one worked.",
-      "mark": "01",
+      "mark": "09",
       "series": [
         {
           "slug": "retrieval-demo",
