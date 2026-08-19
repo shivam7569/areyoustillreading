@@ -51,14 +51,18 @@ $$;
 
 -- Is this user allowed to author? RLS predicate (SECURITY DEFINER so a signed-in
 -- caller can evaluate it without SELECT on content.profiles), same shape as
--- public.is_admin(). Pinned search_path is the required escalation defense.
+-- public.is_admin(). plpgsql (not sql) so its body — which references the
+-- content.profiles table created further down — is validated at first CALL, not
+-- at CREATE (a `language sql` body is planned at creation and would 42P01 here).
+-- Pinned search_path is the required escalation defense.
 create or replace function content.is_active_author(p_uid uuid) returns boolean
-  language sql stable security definer set search_path = content, public, extensions as $$
-  select exists (
+  language plpgsql stable security definer set search_path = content, public, extensions as $$
+begin
+  return exists (
     select 1 from content.profiles
     where id = p_uid and role in ('author','editor') and status = 'active' and deleted_at is null
   );
-$$;
+end $$;
 
 -- Owner check for the SERVICE-ROLE RPCs below, which are handed a caller id.
 -- NOTE: public.is_admin() is NULLARY and derives auth.uid() — useless under the
