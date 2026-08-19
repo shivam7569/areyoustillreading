@@ -219,36 +219,13 @@ create trigger series_touch before update on content.series for each row execute
 drop trigger if exists fields_touch on content.fields;
 create trigger fields_touch before update on content.fields for each row execute function content.touch_updated_at();
 
--- ── same-author enforcement on the join tables (defense in depth beyond RLS) ─
-create or replace function content.enforce_same_author_series_posts() returns trigger
-  language plpgsql security definer set search_path = content, public, extensions as $$
-declare v_series_owner uuid; v_post_author uuid;
-begin
-  select owner_id  into v_series_owner from content.series where id = new.series_id;
-  select author_id into v_post_author  from content.posts  where id = new.post_id;
-  if v_series_owner is null or v_post_author is null or v_series_owner <> v_post_author then
-    raise exception 'series_posts: series (%) and post (%) must share one owner', new.series_id, new.post_id;
-  end if;
-  return new;
-end $$;
-drop trigger if exists series_posts_same_author on content.series_posts;
-create trigger series_posts_same_author before insert or update on content.series_posts
-  for each row execute function content.enforce_same_author_series_posts();
-
-create or replace function content.enforce_same_author_field_series() returns trigger
-  language plpgsql security definer set search_path = content, public, extensions as $$
-declare v_field_owner uuid; v_series_owner uuid;
-begin
-  select owner_id into v_field_owner  from content.fields where id = new.field_id;
-  select owner_id into v_series_owner from content.series where id = new.series_id;
-  if v_field_owner is null or v_series_owner is null or v_field_owner <> v_series_owner then
-    raise exception 'field_series: field (%) and series (%) must share one owner', new.field_id, new.series_id;
-  end if;
-  return new;
-end $$;
-drop trigger if exists field_series_same_author on content.field_series;
-create trigger field_series_same_author before insert or update on content.field_series
-  for each row execute function content.enforce_same_author_field_series();
+-- NOTE: single-owner join-table membership was originally enforced here by
+-- "same-author" triggers. db/content-collab.sql supersedes that with a consent
+-- model (cross-author membership, accepted via SECURITY DEFINER RPCs) and DROPS
+-- those triggers. They are intentionally NOT created here anymore, so re-running
+-- this file after collaboration is applied does not re-arm them. The base
+-- join-table RLS (insert requires owning both parents) still guards a collab-less
+-- install; collaboration then routes all membership writes through its RPCs.
 
 -- ── RLS policies ─────────────────────────────────────────────────────────────
 -- profiles: a user sees/edits ONLY their own row; owner sees/edits any. There is
