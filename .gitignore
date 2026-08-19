@@ -37,3 +37,4 @@ reference_files/
 
 # Local env (Turnstile site key etc.)
 .env
+.dev.vars

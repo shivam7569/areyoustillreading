@@ -198,7 +198,14 @@ async function renderPermalinkPost(context, url, handle, slug) {
 
     // Fetch the shell donor from THIS deployment (so the assembled page uses the current
     // hashed asset URLs); it passes back through this middleware's copy overlay → fresh chrome.
-    const shellRes = await fetch(new URL('/permalink-shell', url), { redirect: 'manual' });
+    // Trailing slash hits the built index directly (the build serves /permalink-shell/); the
+    // DEFAULT redirect:follow is deliberate — the editor's /post-shell fetch relies on it too.
+    // Read the shell as a STATIC ASSET (env.ASSETS) — a plain same-origin fetch would re-enter
+    // this middleware and can throw in the Functions runtime. Falls back to fetch if no binding.
+    const shellUrl = new URL('/permalink-shell/', url);
+    const shellRes = (env && env.ASSETS && env.ASSETS.fetch)
+      ? await env.ASSETS.fetch(new Request(shellUrl))
+      : await fetch(shellUrl, { cache: 'no-store' });
     if (!shellRes.ok) return next();
     const shell = await shellRes.text();
 
