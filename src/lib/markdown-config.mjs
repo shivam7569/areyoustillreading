@@ -28,6 +28,9 @@
  */
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import { defaultSchema } from 'hast-util-sanitize';
 import { createJavaScriptRegexEngine } from 'shiki';
 // Pure hast transform (no Node/WASM) → safe to import in every environment. Turns a
 // published ```plotly figure fence into a reader plot + collapsible code view.
@@ -38,6 +41,35 @@ import rehypeCodeChrome from './rehype-code-chrome.mjs';
 
 // One shared engine instance (pure JS, no WASM). Created once at module load.
 const engine = createJavaScriptRegexEngine();
+
+// ── UGC sanitize ────────────────────────────────────────────────────────────
+// Runs FIRST in the rehype chain (see markdownConfig): the tree at that point holds the
+// AUTHOR's markdown-rendered HTML plus Shiki's already-highlighted code — nothing else.
+// So it strips the author's dangerous raw HTML (script/onX/iframe/javascript:) via the
+// safe default schema, while we only need to re-permit Shiki's inline-styled spans + the
+// fence/math classes our later plugins (KaTeX/D2/Plotly/code-chrome) read. Those plugins
+// run AFTER this, so their SVG/JSON/spans are trusted and never sanitized.
+const A = defaultSchema.attributes || {};
+export const sanitizeSchema = {
+  ...defaultSchema,
+  // The editorial raw-HTML elements authors legitimately use (blockquote/cite already in the
+  // default set); everything not listed is unwrapped to its text, and script/style/on*/etc.
+  // are dropped outright.
+  tagNames: [...(defaultSchema.tagNames || []), 'cite', 'aside', 'figure', 'figcaption', 'mark', 'abbr', 'details', 'summary'],
+  attributes: {
+    ...A,
+    // Class names are harmless (they can't execute) and load-bearing for our render:
+    // Shiki scopes its palette under `.astro-code`, and the math placeholder reaches KaTeX
+    // via its class. Allow both hast (`className`) and the raw (`class`) forms, because
+    // Astro's built-in Shiki emits a raw `class` string rather than a hast className array.
+    '*': [...(A['*'] || []), 'className', 'class', 'ariaHidden'],
+    // Inline `style` only where our pipeline needs it (Shiki's css-variables theme) — never
+    // on prose elements, so an author can't inline-style arbitrary content.
+    pre: [...(A.pre || []), 'style', 'tabIndex', 'tabindex', 'dataLanguage'],
+    code: [...(A.code || []), 'style'],
+    span: [...(A.span || []), 'style'],
+  },
+};
 
 // Editorial code blocks are ALWAYS dark (like the design), framed on the warm
 // --code-bg surface (global.css styles the <pre>). A single dark theme means the
@@ -62,9 +94,14 @@ export function markdownConfig(rehypeD2) {
     // raw instead of being syntax-highlighted into span soup.
     syntaxHighlight: { type: 'shiki', excludeLangs: ['d2', 'plotly'] },
     remarkPlugins: [remarkMath],
+    // rehypeRaw parses the author's raw HTML (which Astro leaves as raw string nodes) into real
+    // hast elements so rehypeSanitize can allow-list the safe ones (blockquote/aside/figure…) and
+    // drop the dangerous ones (script/onX/iframe/javascript:). Both run BEFORE the trusted
+    // transforms (KaTeX/D2/Plotly/code-chrome), whose SVG/JSON/styled markup must not be
+    // sanitized. Shiki (Astro's built-in) has already run; its output survives via sanitizeSchema.
     rehypePlugins: rehypeD2
-      ? [rehypeKatex, rehypeD2, rehypePlotly, rehypeCodeChrome]
-      : [rehypeKatex, rehypePlotly, rehypeCodeChrome],
+      ? [rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex, rehypeD2, rehypePlotly, rehypeCodeChrome]
+      : [rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex, rehypePlotly, rehypeCodeChrome],
     shikiConfig,
   };
 }
