@@ -34,6 +34,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       <div class="shelf" id="shelf"></div>
     </section>
 
+    <!-- Ways in: three routes chosen by how pieces READ (public.ways_in), each on a
+         reading shape, not a score. Hidden until three exemplars exist. -->
+    <section class="waysec" id="waysin" hidden>
+      <div class="slab"><span class="eyebrow">Ways in</span><span class="line"></span><span class="more-link">Chosen by how they read, not when they arrived</span></div>
+      <div class="wgrid" id="wgrid"></div>
+    </section>
+
     <div class="filters">
       <label class="search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.6-3.6"></path></svg>
@@ -134,11 +141,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #stream .pcrumb .ticks i.todo { background: color-mix(in srgb, var(--ink) 16%, transparent); }
   #stream .pcrumb .ticks i.here { background: var(--accent); height: 6px; }
   #stream .aside { grid-column: 4; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 2px; text-align: right; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
-  #stream .aside .curve { display: block; width: 86px; height: 28px; overflow: hidden; margin-top: 6px; }
-  #stream .curve path.fill { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
-  #stream .curve path.line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; }
-  #stream .curve line.base { stroke: var(--rule); stroke-width: 1; }
-  #stream .curve circle.cliff { fill: var(--paper); stroke: var(--accent); stroke-width: 1.3; }
+  .curve { display: block; overflow: hidden; }
+  #stream .aside .curve { width: 86px; height: 28px; margin-top: 6px; }
+  .curve path.fill { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .curve path.line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; }
+  .curve line.base { stroke: var(--rule); stroke-width: 1; }
+  .curve circle.cliff { fill: var(--paper); stroke: var(--accent); stroke-width: 1.3; }
   #stream .post.is-hidden, #stream .grp.is-hidden, #stream .post-list.is-hidden { display: none; }
 
   /* ——— the fields shelf (the map) ——— tiles are JS-created, so styled globally under #fieldshelf */
@@ -159,6 +167,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #fieldshelf .ftile:hover h3 { color: var(--accent); }
   #fieldshelf .ftile .fm { display: block; margin-top: 6px; font-family: var(--sans); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
   @media (max-width: 760px) { #fieldshelf .shelf { grid-template-columns: 1fr; } }
+
+  /* ——— ways in ——— three routes by reading shape (cards + a mini curve each) */
+  #waysin { padding: 0 0 clamp(34px, 4.4vw, 50px); }
+  #waysin .slab { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  #waysin .slab .eyebrow { font-family: var(--sans); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-faint); }
+  #waysin .slab .line { height: 1px; flex: 1; background: var(--rule); }
+  #waysin .slab .more-link { font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+  #waysin .wgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  #waysin .way { display: block; border: 1px solid var(--rule); border-radius: 5px; background: var(--card); padding: 16px 18px 15px; transition: border-color .2s, transform .2s; }
+  #waysin .way:hover { border-color: color-mix(in srgb, var(--accent) 58%, var(--rule)); transform: translateY(-2px); }
+  #waysin .way .wk { display: flex; align-items: center; gap: 11px; margin-bottom: 13px; }
+  #waysin .way .wk b { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+  #waysin .way .wk .curve { margin: 0 0 0 auto; width: 58px; height: 19px; }
+  #waysin .way h3 { font-family: var(--serif-display); font-weight: 600; font-size: 18.5px; line-height: 1.26; letter-spacing: -.01em; margin: 0 0 7px; color: var(--ink); text-wrap: pretty; }
+  #waysin .way:hover h3 { color: var(--accent); }
+  #waysin .way .wm { font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); }
+  #waysin .way p { margin: 11px 0 0; padding-top: 11px; border-top: 1px solid var(--rule-soft); font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); }
+  @media (max-width: 820px) { #waysin .wgrid { grid-template-columns: 1fr; } }
 
   @media (max-width: 620px) {
     #stream .post { grid-template-columns: auto minmax(0, 1fr); }
@@ -412,6 +438,27 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     (document.getElementById('fieldshelf') as HTMLElement).hidden = false;
   }
 
+  // Ways in: three routes into the archive, chosen by reading shape (public.ways_in).
+  const WAYS: Record<string, { label: string; copy: string }> = {
+    holds: { label: 'Holds to the end', copy: 'Almost nobody puts this one down. Start here if you want proof the place is worth your time.' },
+    hard:  { label: 'Hard, worth it',  copy: 'Loses many readers in the opening and rewards the ones who stay. Bring coffee.' },
+    quick: { label: 'A quick read',    copy: 'Short, complete, and finished by nearly everyone who opens it. Read it on a break.' },
+  };
+  async function loadWays() {
+    const { data, error } = await supabase.rpc('ways_in');
+    if (error || !data || data.length < 3) return;   // only show when all three routes exist
+    const byRoute: Record<string, any> = Object.fromEntries(data.map((d: any) => [d.route, d]));
+    const grid = document.getElementById('wgrid')!;
+    grid.innerHTML = ['holds', 'hard', 'quick'].filter((r) => byRoute[r]).map((r) => {
+      const d = byRoute[r], w = WAYS[r];
+      return `<div class="way"><span class="wk"><b>${esc(w.label)}</b>${curveSvg(d.samples)}</span>`
+        + `<h3>${esc(d.title)}</h3><span class="wm">${esc(d.author_name)} · ${esc(d.reading_min || 1)} min</span>`
+        + `<p>${esc(w.copy)}</p></div>`;
+    }).join('');
+    (document.getElementById('waysin') as HTMLElement).hidden = false;
+  }
+
   load();
   loadFields();
+  loadWays();
 </script>

@@ -76,8 +76,9 @@ async function main() {
         const html = `<p>${LOREM}</p>`;
         const text = LOREM.trim();
         const days = (a.i * PPA + k) % 900;
+        const readMin = 4 + ((a.i * 7 + k * 3) % 16);   // 4–19 min, varied but deterministic
         params.push(a.id, slug, `Load post ${a.i}.${k}`, `Synthetic post ${a.i}.${k} for load testing.`,
-          new Date(Date.now() - days * 86400000).toISOString(), pick(TAGS, k), html, text, 3, 1);
+          new Date(Date.now() - days * 86400000).toISOString(), pick(TAGS, k), html, text, readMin, 1);
         vals.push(`($${n + 1},$${n + 2},$${n + 3},$${n + 4},$${n + 5},'published','public',$${n + 6},'',$${n + 7},$${n + 8},$${n + 9},$${n + 10},now())`);
         n += 10;
       }
