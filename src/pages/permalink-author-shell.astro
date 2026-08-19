@@ -1,0 +1,227 @@
+---
+/**
+ * src/pages/permalink-author-shell.astro — shell donor for the /@handle author page.
+ * ============================================================================
+ * The /@* edge middleware fetches this (via env.ASSETS), injects an author's data into its
+ * sentinels, and serves it for /@handle. Ported from Claude Design's editorial/author.html
+ * (masthead · writes-in · series-they-run · published-work · colophon · empty-state). The
+ * optional opt-in "they've been reading" + "working on" bands are deferred (need reader-opt-in
+ * + draft data). Styles are is:global (inlined into the shell) so the edge-injected sections
+ * get styled, and load only on author pages.
+ *
+ * SENTINELS: AYSRZZTITLE/NAME/HANDLE/MARK/BIO in the masthead; <div data-shell-sig> (signals +
+ * signature shape), data-shell-fields, data-shell-series, data-shell-work (year groups + rows,
+ * or the empty state), and the colophon device (#pdevice, filled by the script or a profile img).
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout title="AYSRZZTITLE" description="AYSRZZBIODESC" wide>
+  <div class="wrap">
+
+    <header class="mast">
+      <div class="kick"><span class="mono lg" id="pmark">AYSRZZMARK</span><span class="handle" id="phandle">@AYSRZZHANDLE</span><span class="line"></span></div>
+      <h1 id="pname">AYSRZZNAME</h1>
+      <div data-shell-bio></div>
+      <div class="mrow" data-shell-sig></div>
+    </header>
+
+    <section class="fband" data-shell-fband hidden>
+      <div class="slab"><span class="eyebrow">Writes in</span><span class="line"></span><button class="xbtn" type="button" data-expand="fchips" aria-expanded="false" data-shell-fxbtn hidden>Show all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m6 9 6 6 6-6"/></svg></button></div>
+      <div class="fgrid" id="fchips" data-shell-fields></div>
+    </section>
+
+    <section class="sband" data-shell-sband hidden>
+      <div class="slab"><span class="eyebrow">Series they run</span><span class="line"></span><button class="xbtn" type="button" data-expand="sgrid" aria-expanded="false" data-shell-sxbtn hidden>Show all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m6 9 6 6 6-6"/></svg></button></div>
+      <div class="sgrid" id="sgrid" data-shell-series></div>
+      <div data-shell-snote></div>
+    </section>
+
+    <section class="worksec" data-shell-work></section>
+
+    <section class="colo">
+      <div class="slab"><span class="eyebrow">Colophon</span><span class="line"></span></div>
+      <div class="ctop">
+        <span class="device" aria-hidden="true" data-shell-device><b id="pdevice"></b></span>
+        <p class="clead">Written when a piece is finished, not on a schedule. <span>Nothing goes out to hit a date, and nothing is quietly rewritten afterwards.</span></p>
+      </div>
+      <div class="cl">
+        <div class="ci"><span class="k">Publishes</span><span class="v">When a piece is finished. Series go out <em>in order</em>, however long that takes.</span></div>
+        <div class="ci"><span class="k">Won't cover</span><span class="v">Benchmarks without a method, and launches without a lesson in them.</span></div>
+        <div class="ci"><span class="k">Corrections</span><span class="v">Marked in place and dated, at the paragraph that was wrong.</span></div>
+        <div class="ci"><span class="k">Reading shape</span><span class="v">Every piece shows how many readers stayed — a shape, never a score.</span></div>
+      </div>
+      <p class="foot-note">Written to be finished.</p>
+    </section>
+
+  </div>
+</BaseLayout>
+
+<style is:global>
+  /* — author's mark — */
+  .mono { position: relative; flex: none; font-family: var(--serif-display); font-weight: 600; line-height: 1; letter-spacing: .12em; color: var(--ink-soft); padding: 0 1px 7px; transition: color .2s; }
+  .mono::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--rule-soft); transition: background .2s; }
+  .mono.lg { font-size: 19px; letter-spacing: .16em; color: var(--accent); padding-bottom: 9px; }
+  .mono.lg::after { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+  /* — masthead — */
+  .mast { padding: clamp(44px, 6.5vw, 84px) 0 clamp(26px, 3.6vw, 40px); }
+  .mast .kick { display: flex; align-items: center; gap: 15px; margin-bottom: 22px; }
+  .mast .kick .handle { font-family: var(--sans); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); }
+  .mast .kick .line { height: 1px; flex: 1; background: var(--rule); }
+  .mast h1 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(38px, 6.4vw, 68px); line-height: 1.02; letter-spacing: -.025em; margin: 0; max-width: 22ch; overflow-wrap: break-word; text-wrap: balance; }
+  .mast h1.mid { font-size: clamp(32px, 4.8vw, 52px); }
+  .mast h1.long { font-size: clamp(27px, 3.6vw, 40px); letter-spacing: -.015em; }
+  .mast .bio { font-size: clamp(17px, 2.1vw, 20px); line-height: 1.6; color: var(--ink-soft); max-width: 56ch; margin: 22px 0 0; text-wrap: pretty; }
+  .mrow { display: flex; align-items: flex-end; gap: clamp(22px, 4vw, 52px); flex-wrap: wrap; margin-top: clamp(26px, 3.4vw, 38px); padding-top: clamp(20px, 2.6vw, 28px); border-top: 1px solid var(--rule); }
+  .msig { font-family: var(--sans); font-size: 12.5px; line-height: 1.7; color: var(--ink-faint); max-width: 34ch; }
+  .msig b { color: var(--ink-soft); font-weight: 500; }
+  .shape { margin-left: auto; display: flex; align-items: flex-end; gap: 14px; }
+  .shape .lab { text-align: right; font-family: var(--sans); font-size: 10.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); line-height: 1.5; }
+  .shape .lab small { display: block; font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; max-width: 20ch; }
+  @media (max-width: 700px) { .shape { margin-left: 0; } }
+  /* — reading shapes — */
+  .curve { display: block; overflow: visible; }
+  .curve path.fill { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .curve path.line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; }
+  .curve line.base { stroke: var(--rule); stroke-width: 1; }
+  .curve circle.cliff { fill: var(--paper); stroke: var(--accent); stroke-width: 1.3; }
+  .curve.sig { width: clamp(150px, 20vw, 214px); height: 66px; }
+  .curve.sig path.line { stroke-width: 1.8; }
+  .post .curve { width: 86px; height: 28px; margin: 14px 0 0 auto; }
+  @media (max-width: 820px) { .post .curve { margin-left: 0; margin-top: 10px; } }
+  /* — fields band — */
+  .fband { padding: 0 0 clamp(30px, 4vw, 44px); }
+  .slab { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  .slab .eyebrow { font-family: var(--sans); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-faint); }
+  .slab .line { height: 1px; flex: 1; background: var(--rule); }
+  .fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 13px; }
+  .fchip { display: grid; grid-template-columns: 96px minmax(0, 1fr); border: 1px solid var(--rule); border-radius: 5px; background: var(--card); overflow: hidden; transition: border-color .2s; }
+  .fchip:hover { border-color: color-mix(in srgb, var(--accent) 52%, var(--rule)); }
+  .fchip .plate { position: relative; background: var(--paper-2); border-right: 1px solid var(--rule-soft); }
+  .fchip .plate::after { content: ""; position: absolute; inset: 0; background: radial-gradient(115% 105% at var(--wx, 20%) var(--wy, 12%), color-mix(in srgb, var(--accent) var(--wo, 12%), transparent), transparent 68%); }
+  .fchip .plate svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .fchip .fb { padding: 14px 16px 13px; min-width: 0; }
+  .fchip h3 { font-family: var(--serif-display); font-weight: 600; font-size: 17.5px; line-height: 1.22; letter-spacing: -.01em; margin: 0; color: var(--ink); }
+  .fchip:hover h3 { color: var(--accent); }
+  .fchip .sl { margin: 9px 0 0; font-family: var(--sans); font-size: 11.5px; line-height: 1.6; color: var(--ink-faint); }
+  .xbtn { display: inline-flex; align-items: center; gap: 7px; background: none; border: 0; padding: 0; cursor: pointer; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+  .xbtn:hover { color: var(--accent); }
+  .xbtn svg { width: 11px; height: 11px; transition: transform .22s; }
+  .xbtn[aria-expanded="true"] { color: var(--accent); }
+  .xbtn[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .snest { display: block; list-style: none; margin: 12px 0 0; padding: 11px 0 0; border-top: 1px solid var(--rule-soft); }
+  .fchip.extra { display: none; }
+  .fgrid.on .fchip.extra { display: grid; }
+  .snest li { display: flex; align-items: center; gap: 11px; padding: 5px 0; }
+  .snest .t { font-family: var(--serif-display); font-size: 13.5px; color: var(--ink-soft); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .snest .tk { margin-left: auto; display: flex; gap: 2px; flex: none; }
+  .snest .tk i { width: 9px; height: 4px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 65%, transparent); }
+  .snest .tk i.todo { background: color-mix(in srgb, var(--ink) 15%, transparent); }
+  /* — series band — */
+  .sband { padding: 0 0 clamp(30px, 4vw, 44px); }
+  .sgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(288px, 1fr)); gap: 13px; }
+  .scard { display: flex; flex-direction: column; gap: 11px; border: 1px solid var(--rule); border-radius: 5px; background: var(--card); padding: 18px 19px 15px; transition: border-color .2s; }
+  .scard:hover { border-color: color-mix(in srgb, var(--accent) 52%, var(--rule)); }
+  .scard .in { font-family: var(--sans); font-size: 9.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); }
+  .scard h3 { font-family: var(--serif-display); font-weight: 600; font-size: 19.5px; line-height: 1.2; letter-spacing: -.01em; margin: 0; color: var(--ink); }
+  .scard h3 a { color: inherit; }
+  .scard:hover h3 { color: var(--accent); }
+  .scard p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink-soft); }
+  .scard .sp { display: flex; gap: 3px; }
+  .scard .sp i { flex: 1; height: 5px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 70%, transparent); }
+  .scard .sp i.todo { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 24%, transparent); }
+  .scard .foot { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-top: auto; padding-top: 11px; border-top: 1px solid var(--rule-soft); font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); }
+  .scard .foot .go { margin-left: auto; color: var(--accent); }
+  .scard:hover .foot .go { text-decoration: underline; text-underline-offset: 3px; }
+  .scard.extra { display: none; }
+  .sgrid.on .scard.extra { display: flex; }
+  .snote { margin: 14px 0 0; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
+  .snote a { color: var(--ink-soft); }
+  .snote a:hover { color: var(--accent); }
+  /* — published work — */
+  .worksec { padding-top: clamp(20px, 2.6vw, 30px); }
+  .worksec .slab .more-link { font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+  .post-list { border-top: 1px solid var(--rule); }
+  .post { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: clamp(12px, 2vw, 20px); padding: 22px 0; align-items: start; }
+  @media (max-width: 820px) { .post { grid-template-columns: 1fr; } }
+  .pmain { display: flex; align-items: flex-start; gap: clamp(14px, 1.8vw, 20px); }
+  .ptext { min-width: 0; flex: 1; }
+  .picon { position: relative; width: 112px; height: 112px; flex: none; border: 1px solid var(--rule-soft); border-radius: 3px; background: var(--paper-2); overflow: hidden; transition: border-color .25s; }
+  .picon::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 110% at 22% 14%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 68%); }
+  .post:hover .picon { border-color: color-mix(in srgb, var(--accent) 32%, var(--rule)); }
+  @media (max-width: 620px) { .picon { width: 72px; height: 72px; } }
+  .post h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(18px, 2vw, 21px); line-height: 1.28; letter-spacing: -.01em; margin: 0; color: var(--ink); text-wrap: pretty; }
+  .post h3 a { color: inherit; transition: color .2s; }
+  .post:hover h3 a, .post h3 a:hover { color: var(--accent); }
+  .post p.sum { margin: 8px 0 0; font-family: var(--sans); font-size: 14px; line-height: 1.5; color: var(--ink-soft); max-width: 60ch; }
+  .post .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .post .tag { font-family: var(--sans); font-size: 12px; letter-spacing: .03em; color: var(--ink-faint); border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 4px 11px; }
+  .pcrumb { display: block; margin-top: 18px; padding-top: 14px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); }
+  .pcrumb .fd { display: block; margin-bottom: 9px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+  .pcrumb .cr { display: flex; align-items: baseline; gap: 13px; flex-wrap: wrap; }
+  .pcrumb .cr .snm { font-family: var(--serif-display); font-size: 15px; letter-spacing: -.005em; color: var(--ink-soft); }
+  .pcrumb .pt { display: inline-flex; align-items: center; gap: 8px; }
+  .pcrumb .pt .n { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; }
+  .pcrumb .ticks { display: flex; align-items: center; gap: 2px; }
+  .pcrumb .ticks i { width: 11px; height: 3px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 60%, transparent); }
+  .pcrumb .ticks i.todo { background: color-mix(in srgb, var(--ink) 16%, transparent); }
+  .pcrumb .ticks i.here { background: var(--accent); height: 6px; }
+  .post .aside { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+  @media (max-width: 820px) { .post .aside { align-items: flex-start; text-align: left; } }
+  .yr { display: flex; align-items: baseline; gap: 16px; padding: 36px 0 10px; }
+  .yr h2 { font-family: var(--serif-display); font-weight: 600; font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  .yr .rule { flex: 1; height: 1px; background: var(--rule); }
+  /* — empty state — */
+  .blank { border: 1px solid var(--rule); border-radius: 6px; background: var(--card); padding: clamp(30px, 4vw, 48px); display: flex; gap: clamp(20px, 3vw, 34px); align-items: flex-start; flex-wrap: wrap; margin-top: 8px; }
+  .blank .art { position: relative; width: 132px; height: 132px; flex: none; border: 1px solid var(--rule-soft); border-radius: 4px; background: var(--paper-2); overflow: hidden; }
+  .blank .art::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 110% at 24% 16%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%); }
+  .blank .bt { min-width: 0; flex: 1; }
+  .blank h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(21px, 2.6vw, 26px); line-height: 1.18; letter-spacing: -.015em; margin: 0 0 12px; }
+  .blank p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--ink-soft); max-width: 48ch; }
+  /* — colophon — */
+  .colo { padding: clamp(40px, 5.5vw, 64px) 0 clamp(40px, 6vw, 80px); }
+  .ctop { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: clamp(22px, 3.4vw, 44px); align-items: center; padding: clamp(6px, 1vw, 10px) 0 clamp(26px, 3.4vw, 38px); }
+  @media (max-width: 640px) { .ctop { grid-template-columns: 1fr; gap: 20px; } }
+  .device { position: relative; width: 132px; height: 132px; flex: none; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper-2); display: grid; place-items: center; overflow: hidden; }
+  .device::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 110% at 24% 16%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 70%); }
+  .device img { position: relative; width: 100%; height: 100%; object-fit: cover; }
+  .device b { position: relative; font-family: var(--serif-display); font-weight: 600; font-size: 34px; letter-spacing: .16em; color: var(--accent); line-height: 1; padding-bottom: 11px; }
+  .device b::after { content: ""; position: absolute; left: 0; right: 5px; bottom: 0; height: 1px; background: color-mix(in srgb, var(--accent) 45%, transparent); }
+  .clead { font-family: var(--serif-display); font-style: italic; font-size: clamp(21px, 3vw, 30px); line-height: 1.38; color: var(--ink); margin: 0; max-width: 42ch; text-wrap: pretty; }
+  .clead span { font-style: normal; color: var(--ink-faint); }
+  .cl { display: grid; grid-template-columns: 1fr 1fr; gap: 0 clamp(28px, 5vw, 68px); border-top: 1px solid var(--rule); margin-top: clamp(4px, 1vw, 10px); }
+  @media (max-width: 600px) { .cl { grid-template-columns: 1fr; } }
+  .ci { padding: 17px 0 18px; border-bottom: 1px solid var(--rule-soft); }
+  .ci .k { display: block; font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+  .ci .v { display: block; margin-top: 9px; font-family: var(--serif-body, var(--serif-display)); font-size: 16.5px; line-height: 1.6; color: var(--ink-soft); max-width: 40ch; text-wrap: pretty; }
+  .ci .v em { font-style: italic; color: var(--ink); }
+  .colo .foot-note { margin: 20px 0 0; font-family: var(--serif-display); font-style: italic; font-size: 15.5px; color: var(--ink-faint); }
+</style>
+
+<script>
+  import { initFieldPlates } from '../lib/field-plates.js';
+  /* The pen name drives the type scale + page title; the mark (#pmark) is a separately-editable
+     value (a compound pen name's mark can't be derived), used verbatim as the colophon device. */
+  (function () {
+    var nameEl = document.getElementById('pname'), markEl = document.getElementById('pmark'), handleEl = document.getElementById('phandle');
+    if (!nameEl) return;
+    var name = nameEl.textContent.trim();
+    nameEl.classList.remove('mid', 'long');
+    if (name.length > 26) nameEl.classList.add('long'); else if (name.length > 16) nameEl.classList.add('mid');
+    // colophon device = the same mark, unless a profile picture was injected
+    var dev = document.getElementById('pdevice');
+    if (dev && !dev.textContent.trim() && markEl) dev.textContent = markEl.textContent.trim();
+    var handle = handleEl ? handleEl.textContent.trim() : '';
+    document.title = name + (handle ? ' · ' + handle : '') + ' — areyoustillreading';
+    // in-place expand toggles (fields' nested series / the extra series cards)
+    document.querySelectorAll('.xbtn[data-expand]').forEach(function (btn) {
+      var target = document.getElementById(btn.getAttribute('data-expand'));
+      if (!target) return;
+      btn.addEventListener('click', function () {
+        var open = target.classList.toggle('on');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+    });
+  })();
+  // Draw the generative field plates from each chip's data-field-plate.
+  initFieldPlates();
+</script>

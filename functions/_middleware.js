@@ -50,6 +50,7 @@
  */
 import { flattenCopy, readFreshCopy, emphHtml, boldHtml } from '../lib/site-copy.js';
 import { assemblePermalinkHtml } from '../lib/assemble-permalink.js';
+import { assembleAuthorHtml } from '../lib/assemble-author.js';
 
 // Which requests are overlay candidates. Excludes: non-GET/HEAD; APIs (JSON); the
 // admin dashboard (its own AdminLayout, no data-cms anchors); gated paid bodies
@@ -75,10 +76,11 @@ export async function onRequest(context) {
   if (at && (request.method === 'GET' || request.method === 'HEAD')) {
     const handle = decodeURIComponent(at[1]);
     const seg = at[2] ? at[2].split('/') : [];
+    if (seg.length === 0) return renderAuthorPage(context, url, handle);
     if (seg.length === 1 && seg[0] !== 's' && seg[0] !== 'f') {
       return renderPermalinkPost(context, url, handle, decodeURIComponent(seg[0]));
     }
-    // /@handle (author), /@handle/s/<slug> (series), /@handle/f/<slug> (field) — next slice.
+    // /@handle/s/<slug> (series), /@handle/f/<slug> (field) — next slice.
     return next();
   }
 
@@ -219,6 +221,49 @@ async function renderPermalinkPost(context, url, handle, slug) {
         'cache-control': 'public, max-age=0, must-revalidate',
         'x-served-by': 'permalink',
       },
+    });
+  } catch {
+    return next();
+  }
+}
+
+// Render /@handle: the author profile page (masthead + fields + series + work + colophon).
+async function renderAuthorPage(context, url, handle) {
+  const { request, env, next } = context;
+  try {
+    const authorRows = await permalinkRpc(env, 'get_public_author', { p_handle: handle });
+    const author = Array.isArray(authorRows) ? authorRows[0] : (authorRows && authorRows.handle ? authorRows : null);
+    if (!author || !author.handle) return next(); // no such author → static 404
+
+    const [stats, fields, series, posts] = await Promise.all([
+      permalinkRpc(env, 'get_author_stats', { p_handle: handle }),
+      permalinkRpc(env, 'author_fields', { p_handle: handle }),
+      permalinkRpc(env, 'author_series', { p_handle: handle }),
+      permalinkRpc(env, 'list_author_posts_multi', { p_handle: handle, p_limit: 100 }),
+    ]);
+    const postArr = Array.isArray(posts) ? posts : [];
+    const retention = {};
+    if (postArr.length) {
+      const ret = await permalinkRpc(env, 'feed_retention', { p_slugs: postArr.map((p) => p.slug) });
+      if (Array.isArray(ret)) for (const r of ret) if (r.samples) retention[r.slug] = r.samples;
+    }
+
+    const shellUrl = new URL('/permalink-author-shell/', url);
+    const shellRes = (env && env.ASSETS && env.ASSETS.fetch)
+      ? await env.ASSETS.fetch(new Request(shellUrl))
+      : await fetch(shellUrl, { cache: 'no-store' });
+    if (!shellRes.ok) return next();
+    const shell = await shellRes.text();
+
+    const path = `/@${author.handle}`;
+    const html = assembleAuthorHtml(shell, {
+      author, stats: Array.isArray(stats) ? stats[0] : null,
+      fields: fields || [], series: series || [], posts: postArr, retention,
+      path, url: new URL(path, url).toString(),
+    });
+    return new Response(request.method === 'HEAD' ? null : html, {
+      status: 200,
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate', 'x-served-by': 'author' },
     });
   } catch {
     return next();
