@@ -93,7 +93,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   .slab { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
   .slab .eyebrow { font-family: var(--sans); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-faint); }
   .slab .line { height: 1px; flex: 1; background: var(--rule); }
-  .fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 13px; }
+  /* Card-width chips (capped), packed from the left — a single field must not stretch to the full
+     measure, which would fling its nested-series ticks far to the right. */
+  .fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 520px)); gap: 13px; justify-content: start; }
   .fchip { display: grid; grid-template-columns: 96px minmax(0, 1fr); border: 1px solid var(--rule); border-radius: 5px; background: var(--card); overflow: hidden; transition: border-color .2s; }
   .fchip:hover { border-color: color-mix(in srgb, var(--accent) 52%, var(--rule)); }
   .fchip .plate { position: relative; background: var(--paper-2); border-right: 1px solid var(--rule-soft); }
