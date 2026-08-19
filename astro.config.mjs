@@ -103,7 +103,7 @@ export default defineConfig({
   //   public sitemap never advertises paywalled posts to crawlers. SECURITY: this
   //   is discoverability hygiene, not enforcement — the actual paywall is the
   //   token/entitlement middleware + Supabase RLS. See top doc block.
-  integrations: [sitemap({ filter: (page) => !page.includes('/gated/') && !page.includes('/post-shell') && !page.includes('/admin') })],
+  integrations: [sitemap({ filter: (page) => !page.includes('/gated/') && !page.includes('/post-shell') && !page.includes('/permalink-shell') && !page.includes('/admin') })],
 
   // Markdown/MDX compilation pipeline (Shiki syntax highlighting with ```d2
   // excluded, remark-math → rehype-katex, then rehype-d2 → inline SVG). Defined in

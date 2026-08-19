@@ -148,6 +148,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #stream .byline .co { color: var(--ink-faint); }
   #stream .post.cont .byline { display: none; }
   #stream .post h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(18px, 2vw, 21px); line-height: 1.28; letter-spacing: -.01em; margin: 0; color: var(--ink); text-wrap: pretty; }
+  #stream .post h3 a { color: inherit; text-decoration: none; transition: color .2s; }
+  #stream .post:hover h3 a, #stream .post h3 a:hover { color: var(--accent); }
   #stream .post.lead h3 { font-size: clamp(23px, 3vw, 30px); }
   #stream .post p.sum { margin: 8px 0 0; font-family: var(--sans); font-size: 14px; line-height: 1.5; color: var(--ink-soft); max-width: 60ch; }
   #stream .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -403,7 +405,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       `<span class="picon" aria-hidden="true"></span>` +
       `<div class="ptext">` +
         `<p class="byline">${byline(p)}</p>` +
-        `<h3>${esc(p.title)}</h3>` +
+        `<h3><a href="/@${esc(p.primary_handle)}/${esc(p.slug)}">${esc(p.title)}</a></h3>` +
         (p.description ? `<p class="sum">${esc(p.description)}</p>` : '') +
         (tags ? `<div class="tags">${tags}</div>` : '') +
         crumb(p) +

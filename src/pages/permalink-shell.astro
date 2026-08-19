@@ -1,0 +1,117 @@
+---
+/**
+ * src/pages/permalink-shell.astro — the "shell donor" for DB-served multi-author posts.
+ * ============================================================================
+ * A real, built page that renders the full reader CHROME (BaseLayout head/nav/footer +
+ * the BlogPost article-head/byline styling) around EMPTY sentinel placeholders. It is
+ * NOT reader-facing: the /@* edge middleware fetches THIS page at request time, injects
+ * a DB post's title/meta/byline/crumb/body into it (reusing the current deployment's
+ * hashed asset URLs), and serves the assembled HTML for /@handle/slug.
+ *
+ * WHY A LIVE DONOR: fetching this page from the CURRENT build means the assembled HTML
+ * always references valid hashed CSS/JS — the same reason post-shell.astro exists for the
+ * KV overlay. Lives at /permalink-shell (outside /blog and /@) so no overlay touches it.
+ *
+ * DEFERRED (a later slice): the DB-keyed reader islands (Highlights/Notes/Comments/
+ * Feedback/ReaderProgress) + paywall need the post's uuid⇆slug keying settled first, so
+ * this slice ships a real, themed, crawlable post — byline, body, share, subscribe — only.
+ *
+ * SENTINELS (edge does targeted string replacement — no DOM selectors, can't drift):
+ *   AYSRZZTITLE → title (in <title>/<h1>/og/twitter)   AYSRZZDESC → description
+ *   AYSRZZID    → slug (og:image path)                  AYSRZZURL  → canonical absolute URL
+ *   <div data-shell-crumb>  → field/series crumb HTML (or empty)
+ *   <div data-shell-byline> → the multi-author byline inner HTML
+ *   <div data-shell-body>   → the rendered, sanitized post body HTML
+ *   /permalink-shell/       → /@handle/slug (canonical + og:url, set by BaseHead from the path)
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ShareBar from '../components/ShareBar.astro';
+import SubscribeForm from '../components/SubscribeForm.astro';
+import PlotlyReader from '../components/PlotlyReader.astro';
+import site from '../data/site.json';
+const c = (site as any).post || {};
+---
+<BaseLayout title="AYSRZZTITLE" description="AYSRZZDESC" image="/og/AYSRZZID.png" wide>
+  <div class="wrap">
+    <div class="measure">
+      <header class="art-head">
+        <a class="backlink" href="/blog"><span class="a">&larr;</span> <span>{c.backlink || 'Back to the blog'}</span></a>
+        <div data-shell-crumb></div>
+        <h1 class="title">AYSRZZTITLE</h1>
+        <p class="standfirst">AYSRZZDESC</p>
+        <div class="byline" data-shell-byline></div>
+      </header>
+    </div>
+  </div>
+
+  {/* The single <article class="post-body"> wrapper + .measure is what the reader prose in
+      global.css styles (drop cap, code chrome, KaTeX, D2, Plotly). The edge injects body_html
+      into the body sentinel below. */}
+  <div class="wrap">
+    <article class="post-body">
+      <div class="measure">
+        <div data-shell-body></div>
+      </div>
+    </article>
+  </div>
+
+  <div class="wrap">
+    <div class="measure">
+      <div class="after">
+        <ShareBar url="AYSRZZURL" title="AYSRZZTITLE" />
+        <div data-hide-admin>
+          <SubscribeForm
+            heading={c.newsletter?.heading || 'Read the next one first'}
+            blurb={c.newsletter?.blurb || 'One considered essay every few weeks on LLM engineering and the systems underneath. No noise — unsubscribe in one click.'}
+            headingKey="post.newsletter.heading"
+            blurbKey="post.newsletter.blurb"
+          />
+        </div>
+        <div class="all-link"><a href="/blog"><span>{c.browseAllPrefix || 'Browse all'}</span> essays &rarr;</a></div>
+      </div>
+    </div>
+  </div>
+
+  <PlotlyReader />
+</BaseLayout>
+
+<style>
+  /* Article-head + byline styling, matching BlogPost.astro so a DB post reads identically to
+     a statically-built one. (The body prose lives in global.css via .post-body.) */
+  .art-head { padding: clamp(40px, 6vw, 76px) 0 clamp(20px, 3vw, 36px); }
+  .backlink { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); display: inline-flex; align-items: center; gap: 8px; margin-bottom: 32px; transition: color 0.2s; }
+  .backlink:hover { color: var(--accent); }
+  .backlink .a { transition: transform 0.2s; }
+  .backlink:hover .a { transform: translateX(-4px); }
+  h1.title { font-family: var(--serif-display); font-weight: 600; font-size: clamp(34px, 5.6vw, 60px); line-height: 1.05; letter-spacing: -0.02em; margin: 0; max-width: 22ch; text-wrap: balance; }
+  .standfirst { font-family: var(--serif-display); font-style: italic; font-size: clamp(19px, 2.4vw, 25px); line-height: 1.5; color: var(--ink-soft); max-width: 54ch; margin: 24px 0 0; text-wrap: pretty; }
+
+  /* Field/series crumb above the title. */
+  .pcrumb { display: block; margin: 0 0 18px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); }
+  .pcrumb .fd { display: block; margin-bottom: 8px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+  .pcrumb .fd:hover { color: var(--accent); }
+  .pcrumb .cr { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .pcrumb .cr a { font-family: var(--serif-display); font-size: 15px; color: var(--ink-soft); }
+  .pcrumb .cr a:hover { color: var(--accent); }
+  .pcrumb .pt { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
+
+  .byline { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--rule); }
+  .byline .avatar { width: 42px; height: 42px; border-radius: 999px; background: radial-gradient(120% 120% at 30% 20%, var(--accent-soft), var(--accent)); display: grid; place-items: center; color: var(--on-accent); font-family: var(--serif-display); font-size: 20px; font-weight: 600; line-height: 1; flex: none; user-select: none; overflow: hidden; }
+  .byline .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .byline .who { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); line-height: 1.4; }
+  .byline .who b { color: var(--ink); font-weight: 600; }
+  .byline .who b a { color: inherit; }
+  .byline .who b a:hover { color: var(--accent); }
+  .byline .who .co { color: var(--ink-faint); font-weight: 400; }
+  .byline .who small { display: block; font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+  .byline .nums { font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .byline .btags { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+  .byline .tag { font-family: var(--sans); font-size: 12px; letter-spacing: 0.03em; color: var(--ink-faint); border: 1px solid var(--rule); border-radius: 999px; padding: 4px 11px; transition: border-color 0.2s, color 0.2s; }
+  .byline .tag:hover { border-color: var(--accent); color: var(--accent); }
+  @media (max-width: 680px) { .byline .btags { margin-left: 0; width: 100%; } }
+
+  .after { padding: clamp(30px, 4vw, 44px) 0 0; }
+  .all-link { text-align: center; margin: 34px 0 0; }
+  .all-link a { font-family: var(--sans); font-size: 14px; color: var(--accent); border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+  .all-link a:hover { border-color: var(--accent); }
+</style>

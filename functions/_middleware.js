@@ -49,6 +49,7 @@
  * ============================================================================
  */
 import { flattenCopy, readFreshCopy, emphHtml, boldHtml } from '../lib/site-copy.js';
+import { assemblePermalinkHtml } from '../lib/assemble-permalink.js';
 
 // Which requests are overlay candidates. Excludes: non-GET/HEAD; APIs (JSON); the
 // admin dashboard (its own AdminLayout, no data-cms anchors); gated paid bodies
@@ -66,6 +67,20 @@ function shouldOverlay(url, method) {
 export async function onRequest(context) {
   const { request, env, next } = context;
   const url = new URL(request.url);
+
+  // ── DB-served permalinks (/@handle/…) ────────────────────────────────────────
+  // Resolve live from the content RPCs and render into the /permalink-shell donor. Any
+  // miss/error falls to next() (the static 404), so this can never break other routes.
+  const at = url.pathname.match(/^\/@([^/]+)(?:\/(.+?))?\/?$/);
+  if (at && (request.method === 'GET' || request.method === 'HEAD')) {
+    const handle = decodeURIComponent(at[1]);
+    const seg = at[2] ? at[2].split('/') : [];
+    if (seg.length === 1 && seg[0] !== 's' && seg[0] !== 'f') {
+      return renderPermalinkPost(context, url, handle, decodeURIComponent(seg[0]));
+    }
+    // /@handle (author), /@handle/s/<slug> (series), /@handle/f/<slug> (field) — next slice.
+    return next();
+  }
 
   if (!shouldOverlay(url, request.method)) return next();
   if (!env || !env.POSTS_HTML) return next();
@@ -148,4 +163,57 @@ export async function onRequest(context) {
   headers.set('x-served-by', 'copy-overlay');
   headers.set('cache-control', 'public, max-age=0, must-revalidate');
   return new Response(request.method === 'HEAD' ? null : out.body, { status: 200, headers });
+}
+
+// ── DB permalink rendering ────────────────────────────────────────────────────
+// Call a public read RPC via PostgREST with the ANON key (least privilege — these RPCs
+// are granted to anon and return only published/public data). Falls back to the service
+// role only if no anon key is bound, so the page works before that binding is added.
+// Any timeout/non-200 → null (the caller then serves the static 404).
+async function permalinkRpc(env, fn, args) {
+  const sb = env && env.SUPABASE_URL;
+  const key = env && (env.PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!sb || !key) return null;
+  try {
+    const r = await fetch(`${sb}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, apikey: key, 'content-type': 'application/json' },
+      body: JSON.stringify(args || {}),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+// Render /@handle/slug: fetch the post, assemble it into the freshly-built shell, serve it.
+async function renderPermalinkPost(context, url, handle, slug) {
+  const { request, env, next } = context;
+  try {
+    const rows = await permalinkRpc(env, 'get_public_post', { p_handle: handle, p_slug: slug });
+    const row = Array.isArray(rows) ? rows[0] : (rows && rows.slug ? rows : null);
+    if (!row || !row.slug) return next(); // not a published/public post by this @handle → static 404
+
+    // Fetch the shell donor from THIS deployment (so the assembled page uses the current
+    // hashed asset URLs); it passes back through this middleware's copy overlay → fresh chrome.
+    const shellRes = await fetch(new URL('/permalink-shell', url), { redirect: 'manual' });
+    if (!shellRes.ok) return next();
+    const shell = await shellRes.text();
+
+    const canonicalPath = `/@${row.primary_handle}/${row.slug}`;
+    const canonicalUrl = new URL(canonicalPath, url).toString();
+    const html = assemblePermalinkHtml(shell, row, canonicalPath, canonicalUrl);
+    return new Response(request.method === 'HEAD' ? null : html, {
+      status: 200,
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'public, max-age=0, must-revalidate',
+        'x-served-by': 'permalink',
+      },
+    });
+  } catch {
+    return next();
+  }
 }
