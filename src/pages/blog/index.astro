@@ -1,220 +1,277 @@
 ---
 /*
  * =============================================================================
- * src/pages/blog/index.astro  ·  ROUTE: "/blog"  (the archive / essay index)
+ * src/pages/explore.astro  ·  ROUTE: "/explore"  (the "Everyone" multi-author feed)
  * =============================================================================
- * The editorial archive (Phase 5), rebuilt from the Claude Design "blog" template:
- * a page head, a filter bar (in-page search + tag chips), essays grouped by year
- * as `.post` rows, an empty state, and the newsletter block. Static SSG.
+ * Phase 2 build to the Claude Design "explore.html" (Everyone): every author's
+ * published work in one stream, read LIVE from the content.* tables via the public
+ * read RPC (public.list_feed_posts) over the anon client. Author identity is a
+ * monogram, consecutive posts by one author collapse into a single spine, tags are
+ * search shortcuts, and there are no scores or totals. This will become the
+ * destination the Blog nav's feed leads to; /blog stays as-is until it's proven.
  *
- * SEARCH: the design filters the RENDERED list in-page by title/summary/tag text
- * (see the script). This intentionally replaces the previous Pagefind modal — it
- * is the design's UX; Pagefind full-text search is no longer mounted here.
- *
- * INSTANT-PUBLISH OVERLAY: functions/blog/_middleware.js injects a just-published
- * post into this page before the git rebuild lands. It targets the stable
- * <div id="ays-instant"></div> anchor below — keep the two in lockstep.
- *
- * GUARD: `!data.draft` is the only publication gate (static site). JSX comments only.
+ * DEFERRED (each its own slice, needs more plumbing): the reading-shape retention
+ * curve (needs per-post analytics), the "Ways in" band, the fields shelf, the
+ * "Where you left off" strip, and clickable post permalinks.
+ * =============================================================================
  */
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import SubscribeForm from '../../components/SubscribeForm.astro';
-import site from '../../data/site.json';
-import { getCollection } from 'astro:content';
-
-// Blog-index copy, editable from Studio → Content Management → Blog index.
-// The lede + filter empty-state carry one inline link each: a {series}/{reset}
-// token is filled with the anchor here (text escaped; content is trusted).
-const c = (site as any).blogIndex || {};
-const esc = (s = '') => String(s).replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] as string));
-const ledeHtml = esc(c.lede || 'The complete archive — everything published here on LLM engineering and the systems underneath. Filter by subject or search the titles; for multi-part reads, see the {series}.')
-  .replace('{series}', `<a class="link" href="/series">${esc(c.ledeSeriesLabel || 'series')}</a>`);
-const emptyFilterHtml = esc(c.emptyFilter || 'Nothing matches that. Try a broader subject, or {reset}.')
-  .replace('{reset}', `<a class="link" href="#" data-reset>${esc(c.emptyResetLabel || 'clear the filters')}</a>`);
-const essaySingular = c.essaySingular || 'essay';
-const essayPlural = c.essayPlural || 'essays';
-
-const posts = (await getCollection('blog', ({ data }) => !data.draft))
-  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
-
-// Group by year (newest year first), reverse-chron within each.
-const groups = new Map<number, typeof posts>();
-for (const p of posts) {
-  const y = p.data.pubDate.getUTCFullYear();
-  if (!groups.has(y)) groups.set(y, []);
-  groups.get(y)!.push(p);
-}
-const years = [...groups.keys()].sort((a, b) => b - a);
-
-// Filter chips: the most-used tags (plus "All").
-const tagCount = new Map<string, number>();
-posts.forEach((p) => (p.data.tags ?? []).forEach((t) => tagCount.set(t, (tagCount.get(t) ?? 0) + 1)));
-const topTags = [...tagCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([t]) => t);
-
-const fmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).filter(Boolean).length ?? 0) / 200));
-
-// Continuous 01, 02 … index across the whole archive (matches the design).
-let n = 0;
 ---
 
-<BaseLayout title={c.seo?.title || 'Blog — areyoustillreading'} description={c.seo?.description || 'Every essay on LLM engineering and the systems underneath, grouped by year.'} wide>
+<BaseLayout title="Everyone — areyoustillreading" description="Every author's published work, in one feed — read live from the database." wide>
   <div class="wrap">
     <header class="page-head">
-      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="blogIndex.eyebrow">{c.eyebrow || 'The blog'}</span></div>
-      <h1><span data-cms="blogIndex.title">{c.title || 'Every essay,'}</span> <em data-cms="blogIndex.titleEm">{c.titleEm || 'in the order it arrived.'}</em></h1>
-      <p class="lede" set:html={ledeHtml}></p>
+      <div class="kicker"><span class="line"></span><span class="eyebrow">Everyone</span></div>
+      <h1>Every author, <em>one feed.</em></h1>
+      <p class="lede">Nothing is ranked, promoted or trending. Work arrives in order, read live from the database — start something rather than scroll past it.</p>
     </header>
 
-    {posts.length > 0 ? (
-      <Fragment>
-        <div class="filters">
-          <label class="search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-            <input type="search" id="q" placeholder={c.searchPlaceholder || 'Search titles and summaries'} aria-label="Search essays" />
-          </label>
-          <span class="count" id="count" data-shown={c.shownLabel || 'shown'}>{posts.length} {c.shownLabel || 'shown'}</span>
-          <div class="chips" id="chips">
-            <button class="chip" data-tag="all" aria-pressed="true" type="button" data-cms="blogIndex.allChip">{c.allChip || 'All'}</button>
-            {topTags.map((t) => (<button class="chip" data-tag={t} aria-pressed="false" type="button">{t}</button>))}
-          </div>
-        </div>
+    <div class="filters">
+      <label class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.6-3.6"></path></svg>
+        <input type="search" id="q" placeholder="Search titles, authors, subjects" aria-label="Search the stream" />
+      </label>
+      <span class="count" id="count"></span>
+      <span class="sortwrap"><span>Sort</span><select id="sort" aria-label="Sort the stream"><option value="new">Newest first</option><option value="short">Shortest read</option></select></span>
+    </div>
 
-        {/* Instant-publish injection anchor — keep in lockstep with functions/blog/_middleware.js. */}
-        <div id="ays-instant"></div>
+    <div id="stream" aria-live="polite"></div>
+    <p class="empty" id="empty">Nothing matches that. Try a broader subject, or <a class="link" href="#" data-reset>clear the filters</a>.</p>
+    <div class="more"><button class="btn btn-ghost" type="button" id="morebtn" hidden>Keep going back</button></div>
 
-        {years.map((year) => (
-          <Fragment>
-            <div class="yr" data-year={year}><h2>{year}</h2><span class="n">{groups.get(year)!.length} {groups.get(year)!.length === 1 ? essaySingular : essayPlural}</span><span class="rule"></span></div>
-            <div class="post-list" data-year={year}>
-              {groups.get(year)!.map((post) => {
-                n += 1;
-                const idx = String(n).padStart(2, '0');
-                const dataTags = (post.data.tags ?? []).join(' ');
-                return (
-                  <article class="post" data-tags={dataTags}>
-                    <div class="idx">{idx}</div>
-                    <div>
-                      {post.data.series && (
-                        <a class="series-flag" href="/series">
-                          <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M12 2 15 9l7 .5-5.4 4.5L18.5 21 12 17l-6.5 4 1.9-7L2 9.5 9 9z"/></svg>
-                          {post.data.seriesTitle ?? post.data.series}{post.data.seriesOrder ? ` · Part ${post.data.seriesOrder}` : ''}
-                        </a>
-                      )}
-                      <h3><a href={`/blog/${post.id}`}>{post.data.title}</a></h3>
-                      <p>{post.data.description}</p>
-                      {post.data.tags && post.data.tags.length > 0 && (
-                        <div class="tags">{post.data.tags.slice(0, 3).map((t) => (<span class="tag">{t}</span>))}</div>
-                      )}
-                    </div>
-                    <div class="aside">
-                      <span class="date">{fmt(post.data.pubDate)}</span>
-                      <span class="rt">{readMins(post.body)} min</span>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </Fragment>
-        ))}
-
-        <p class="empty" id="empty" set:html={emptyFilterHtml}></p>
-      </Fragment>
-    ) : (
-      <p class="empty on" style="border:0" data-cms="blogIndex.emptyArchive">{c.emptyArchive || 'No essays yet — the first one is on its way.'}</p>
-    )}
-
-    <div class="archive-foot" data-hide-admin>
-      <div class="sub-inner">
-        <SubscribeForm
-          heading={c.newsletter?.heading || 'Read the next one first'}
-          blurb={c.newsletter?.blurb || 'New essays on LLM engineering and the systems underneath, straight to your inbox. No noise — unsubscribe in one click.'}
-          headingKey="blogIndex.newsletter.heading"
-          blurbKey="blogIndex.newsletter.blurb"
-        />
-      </div>
+    <div class="feed-foot">
+      <section class="subscribe">
+        <span class="eyebrow">The letter</span>
+        <h3>One from every field, once a week</h3>
+        <p>A single email of pieces that held their readers to the end. No digests of digests, no engagement bait.</p>
+      </section>
     </div>
   </div>
 </BaseLayout>
 
 <style>
-  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 22px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin-bottom: 8px; }
-  .search { position: relative; flex: 1; min-width: 240px; max-width: 340px; }
+  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 18px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .search { position: relative; flex: 1; min-width: 210px; max-width: 300px; }
   .search input { width: 100%; font-family: var(--sans); font-size: 14px; padding: 10px 14px 10px 38px; border-radius: 999px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); }
   .search input::placeholder { color: var(--ink-faint); }
   .search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
   .search svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--ink-faint); }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
-  .chip { font-family: var(--sans); font-size: 12.5px; letter-spacing: 0.02em; color: var(--ink-soft); border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 6px 14px; cursor: pointer; transition: color 0.2s, background 0.2s, border-color 0.2s; }
-  .chip:hover { border-color: var(--ink-faint); color: var(--ink); }
-  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-  .yr { display: flex; align-items: baseline; gap: 16px; padding: 44px 0 14px; }
-  .yr h2 { font-family: var(--serif-display); font-weight: 600; font-size: 28px; margin: 0; letter-spacing: -0.01em; }
-  .yr .n { font-family: var(--sans); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
-  .yr .rule { flex: 1; height: 1px; background: var(--rule); }
-  .post-list { border-top: 1px solid var(--rule); }
-  /* Series membership flag on an archive row (R8). */
-  .series-flag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 9px; transition: opacity 0.2s; }
-  .series-flag svg { opacity: 0.85; }
-  .series-flag:hover { opacity: 0.72; }
-  .post.is-hidden { display: none; }
-  .yr.is-hidden, .post-list.is-hidden { display: none; }
-  .empty { padding: 60px 8px; text-align: center; color: var(--ink-faint); font-family: var(--sans); font-size: 15px; display: none; }
+  .sortwrap { display: flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); margin-left: auto; }
+  .sortwrap select { font-family: var(--sans); font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--ink); background: transparent; border: 1px solid var(--rule); border-radius: 999px; padding: 8px 12px; cursor: pointer; }
+  .count { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); white-space: nowrap; display: none; }
+  .count.on { display: inline; }
+  .empty { padding: 56px 8px; text-align: center; font-family: var(--sans); font-size: 15px; color: var(--ink-faint); display: none; }
   .empty.on { display: block; }
-  .count { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); white-space: nowrap; }
-  .archive-foot { padding: 56px 0 clamp(56px, 8vw, 96px); }
-  .sub-inner { max-width: 720px; }
+  .more { padding: 26px 0 0; display: flex; }
+  .feed-foot { padding: clamp(40px, 5.5vw, 68px) 0 clamp(56px, 8vw, 96px); }
+</style>
+
+<!-- Rows are created by client JS (no Astro scope attribute) → style them globally,
+     contained under #stream so nothing leaks to other pages. -->
+<style is:global>
+  #stream .grp { display: flex; align-items: baseline; gap: 16px; padding: 36px 0 10px; }
+  #stream .grp h2 { font-family: var(--serif-display); font-weight: 600; font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  #stream .grp .rule { flex: 1; height: 1px; background: var(--rule); }
+  #stream .post { display: grid; grid-template-columns: auto 1fr; gap: 0 clamp(12px, 1.6vw, 18px); padding: 22px 0; }
+  #stream .post .rail { position: relative; grid-row: 1 / span 2; width: 36px; }
+  #stream .mono { width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--rule); background: var(--paper-2); display: grid; place-items: center; margin: 0 auto; position: relative; z-index: 1; font-family: var(--serif-display); font-size: 13px; font-weight: 600; color: var(--ink-soft); letter-spacing: .03em; transition: border-color .2s, color .2s; }
+  #stream .post:hover .mono { border-color: var(--accent); color: var(--accent); }
+  #stream .post.cont .mono { display: none; }
+  /* One continuous spine per author run: real line elements with OVERLAPPING offsets
+     (padding is 22px, so -24 overlaps ~2px each side — no sub-pixel breaks). The run
+     never crosses a month header because collapse() resets per group. */
+  #stream .post .line { position: absolute; left: 50%; transform: translateX(-50%); width: 1px; background: var(--rule-soft); display: none; }
+  #stream .post.runstart .line { display: block; top: 44px; bottom: -26px; }
+  #stream .post.cont .line { display: block; top: -26px; bottom: -26px; }
+  #stream .post.cont.runend .line { bottom: auto; height: 41px; }
+  #stream .post .bead { position: absolute; left: 50%; top: 15px; width: 6px; height: 6px; margin-left: -3px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 55%, transparent); display: none; transition: background .2s, transform .2s; }
+  #stream .post.cont .bead { display: block; }
+  #stream .post.cont:hover .bead { background: var(--accent); transform: scale(1.3); }
+  #stream .pmain { display: flex; align-items: flex-start; gap: clamp(13px, 1.6vw, 18px); min-width: 0; }
+  #stream .ptext { min-width: 0; flex: 1; }
+  #stream .picon { position: relative; width: 108px; height: 108px; flex: none; border: 1px solid var(--rule-soft); border-radius: 3px; background: var(--paper-2); overflow: hidden; transition: border-color .25s; }
+  #stream .picon::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 110% at 22% 14%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 68%); }
+  #stream .post:hover .picon { border-color: color-mix(in srgb, var(--accent) 32%, var(--rule)); }
+  #stream .byline { display: flex; align-items: baseline; gap: 9px; margin: 0 0 7px; font-family: var(--sans); font-size: 12.5px; flex-wrap: wrap; }
+  #stream .byline .nm { font-family: var(--serif-display); font-size: 15px; font-weight: 600; letter-spacing: -.01em; color: var(--ink); }
+  #stream .byline .hd { color: var(--ink-faint); }
+  #stream .byline .co { color: var(--ink-faint); }
+  #stream .post.cont .byline { display: none; }
+  #stream .post h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(18px, 2vw, 21px); line-height: 1.28; letter-spacing: -.01em; margin: 0; color: var(--ink); text-wrap: pretty; }
+  #stream .post.lead h3 { font-size: clamp(23px, 3vw, 30px); }
+  #stream .post p.sum { margin: 8px 0 0; font-family: var(--sans); font-size: 14px; line-height: 1.5; color: var(--ink-soft); max-width: 60ch; }
+  #stream .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  #stream button.tag { font-family: var(--sans); font-size: 12px; letter-spacing: .03em; color: var(--ink-faint); border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 4px 11px; cursor: pointer; transition: border-color .2s, color .2s; }
+  #stream button.tag:hover { border-color: var(--accent); color: var(--accent); }
+  #stream .pcrumb { display: flex; align-items: center; gap: 11px; margin-top: 13px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); flex-wrap: wrap; }
+  #stream .pcrumb .snm { color: var(--ink-soft); }
+  #stream .pcrumb .ticks { display: flex; align-items: center; gap: 2px; }
+  #stream .pcrumb .ticks i { width: 11px; height: 3px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 60%, transparent); }
+  #stream .pcrumb .ticks i.todo { background: color-mix(in srgb, var(--ink) 16%, transparent); }
+  #stream .pcrumb .ticks i.here { background: var(--accent); height: 6px; }
+  #stream .aside { grid-column: 2; display: flex; align-items: baseline; gap: 10px; margin-top: 12px; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
+  #stream .post.is-hidden, #stream .grp.is-hidden, #stream .post-list.is-hidden { display: none; }
+  @media (max-width: 620px) {
+    #stream .post { grid-template-columns: 1fr; }
+    #stream .post .rail { grid-row: auto; margin-bottom: 8px; width: auto; }
+    #stream .post.cont .mono { display: grid; opacity: .4; width: 30px; height: 30px; }
+    #stream .post.cont .byline { display: flex; }
+    #stream .post .line, #stream .post .bead { display: none !important; }
+    #stream .picon { display: none; }
+    #stream .aside { grid-column: 1; }
+  }
 </style>
 
 <script>
-  // In-page filter: search (title/summary/tag text) AND a single active tag chip.
-  // Hides non-matching posts, empties year groups with nothing visible, updates the
-  // count, and shows an empty state. Overlay-injected posts are in the DOM at load,
-  // so they participate automatically.
-  (function () {
-    const q = document.getElementById('q') as HTMLInputElement | null;
-    const chips = document.getElementById('chips');
-    const count = document.getElementById('count');
-    const empty = document.getElementById('empty');
-    if (!q || !chips || !count || !empty) return;
-    let tag = 'all';
-    const apply = () => {
-      const term = (q.value || '').trim().toLowerCase();
-      let shown = 0;
-      document.querySelectorAll('.post').forEach((el) => {
-        const p = el as HTMLElement;
-        const tags = ' ' + (p.getAttribute('data-tags') || '') + ' ';
-        const okTag = tag === 'all' || tags.toLowerCase().indexOf(' ' + tag.toLowerCase() + ' ') > -1;
-        const okTerm = !term || (p.textContent || '').toLowerCase().indexOf(term) > -1;
-        const on = okTag && okTerm;
-        p.classList.toggle('is-hidden', !on);
-        if (on) shown++;
-      });
-      document.querySelectorAll('.post-list').forEach((listEl) => {
-        const list = listEl as HTMLElement;
-        const any = Array.from(list.querySelectorAll('.post')).some((p) => !p.classList.contains('is-hidden'));
-        list.classList.toggle('is-hidden', !any);
-        const head = document.querySelector('.yr[data-year="' + list.getAttribute('data-year') + '"]');
-        if (head) head.classList.toggle('is-hidden', !any);
-      });
-      count.textContent = shown + ' ' + (count.getAttribute('data-shown') || 'shown');
-      empty.classList.toggle('on', shown === 0);
-    };
-    q.addEventListener('input', apply);
-    chips.addEventListener('click', (e) => {
-      const b = (e.target as HTMLElement).closest('.chip') as HTMLElement | null;
-      if (!b) return;
-      tag = b.getAttribute('data-tag') || 'all';
-      chips.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === b ? 'true' : 'false'));
-      apply();
-    });
-    empty.querySelector('[data-reset]')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      q.value = '';
-      tag = 'all';
-      chips.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c.getAttribute('data-tag') === 'all' ? 'true' : 'false'));
-      apply();
-    });
+  import { supabase } from '../../lib/supabase';
+
+  const stream = document.getElementById('stream')!;
+  const q = document.getElementById('q') as HTMLInputElement;
+  const sortSel = document.getElementById('sort') as HTMLSelectElement;
+  const count = document.getElementById('count')!;
+  const empty = document.getElementById('empty')!;
+  const moreBtn = document.getElementById('morebtn') as HTMLButtonElement;
+
+  const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+  const initials = (name: string) => {
+    const w = String(name || '').trim().split(/\s+/).filter(Boolean);
+    return ((w.length >= 2 ? w[0][0] + w[1][0] : (w[0] || '?').slice(0, 2)) || '?').toUpperCase();
+  };
+  const monthKey = (d: Date) => d.getUTCFullYear() * 12 + d.getUTCMonth();
+  const monthLabel = (d: Date) => {
+    const now = new Date();
+    if (d.getUTCFullYear() === now.getUTCFullYear() && d.getUTCMonth() === now.getUTCMonth()) return 'This month';
+    const m = d.toLocaleDateString('en-US', { month: 'long' });
+    return d.getUTCFullYear() === now.getUTCFullYear() ? m : `${m} ${d.getUTCFullYear()}`;
+  };
+  const fmtDate = (s: string) => { const t = Date.parse(s); return isNaN(t) ? '' : new Date(t).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); };
+
+  let rows: any[] = [];
+  let before: string | null = null;
+  const PAGE = 25;
+
+  function byline(p: any) {
+    if (p.author_count > 1 && Array.isArray(p.author_names)) {
+      const names = p.author_names.filter(Boolean);
+      const head = `<span class="nm">${esc(names[0])}</span>`;
+      const rest = names.length === 2 ? `<span class="co">& ${esc(names[1])}</span>` : `<span class="co">& ${names.length - 1} others</span>`;
+      return head + rest + `<span class="hd">@${esc(p.primary_handle)}</span>`;
+    }
+    return `<span class="nm">${esc(p.primary_name)}</span><span class="hd">@${esc(p.primary_handle)}</span>`;
+  }
+
+  function crumb(p: any) {
+    if (!p.series_title) return '';
+    let ticks = '';
+    if (p.series_total && p.series_total > 0) {
+      for (let k = 1; k <= p.series_total; k++) ticks += `<i class="${k === p.series_part ? 'here' : k < (p.series_part || 0) ? '' : 'todo'}"></i>`;
+    }
+    const part = p.series_part != null ? ` <span>Part ${esc(p.series_part)}${p.series_total ? ` of ${esc(p.series_total)}` : ''}</span>` : '';
+    return `<p class="pcrumb"><span class="snm">${esc(p.series_title)}</span>${part}${ticks ? `<span class="ticks">${ticks}</span>` : ''}</p>`;
+  }
+
+  function rowEl(p: any) {
+    const el = document.createElement('article');
+    el.className = 'post';
+    el.dataset.author = p.primary_handle || '';
+    el.dataset.text = `${p.title} ${p.primary_name} ${(p.author_names || []).join(' ')} ${(p.tags || []).join(' ')} ${p.description || ''}`.toLowerCase();
+    el.dataset.rt = String(p.reading_min || 1);
+    const tags = (p.tags || []).slice(0, 4).map((t: string) => `<button class="tag" type="button" data-tag="${esc(t)}">${esc(t)}</button>`).join('');
+    el.innerHTML =
+      `<div class="rail"><span class="mono">${esc(initials(p.primary_name))}</span><span class="line"></span><span class="bead"></span></div>` +
+      `<div class="pmain">` +
+        `<div class="ptext">` +
+          `<p class="byline">${byline(p)}</p>` +
+          `<h3>${esc(p.title)}</h3>` +
+          (p.description ? `<p class="sum">${esc(p.description)}</p>` : '') +
+          (tags ? `<div class="tags">${tags}</div>` : '') +
+          crumb(p) +
+        `</div>` +
+        `<span class="picon" aria-hidden="true"></span>` +
+      `</div>` +
+      `<div class="aside"><span>${esc(fmtDate(p.pub_date))}</span><span>${esc(p.reading_min || 1)} min</span></div>`;
+    return el;
+  }
+
+  // Build month groups from the current rows, then run the design's collapse/leads/filter.
+  function render() {
+    const mode = sortSel.value;
+    let list = rows.slice();
+    if (mode === 'short') list.sort((a, b) => (a.reading_min || 99) - (b.reading_min || 99));
+    // group by month, preserving order
+    stream.innerHTML = '';
+    const groups = new Map<number, any[]>();
+    for (const p of list) { const k = monthKey(new Date(p.pub_date)); if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(p); }
+    const keys = mode === 'short' ? [...groups.keys()] : [...groups.keys()].sort((a, b) => b - a);
+    for (const k of keys) {
+      const head = document.createElement('div'); head.className = 'grp'; head.dataset.grp = String(k);
+      head.innerHTML = `<h2>${esc(monthLabel(new Date(groups.get(k)![0].pub_date)))}</h2><span class="rule"></span>`;
+      stream.appendChild(head);
+      const wrap = document.createElement('div'); wrap.className = 'post-list'; wrap.dataset.grp = String(k);
+      for (const p of groups.get(k)!) wrap.appendChild(rowEl(p));
+      stream.appendChild(wrap);
+    }
     apply();
-  })();
+  }
+
+  // Consecutive posts by one author collapse into a single spine — computed PER month
+  // group so a run never crosses a header (recomputed after every filter/sort).
+  function collapse() {
+    stream.querySelectorAll('.post').forEach((p) => p.classList.remove('runstart', 'runend', 'cont', 'lead'));
+    stream.querySelectorAll('.post-list').forEach((list) => {
+      let prev: string | null = null, run: HTMLElement[] = [];
+      const close = () => { if (run.length > 1) { run[0].classList.add('runstart'); run[run.length - 1].classList.add('runend'); } run = []; };
+      (list.querySelectorAll('.post') as NodeListOf<HTMLElement>).forEach((p) => {
+        if (p.classList.contains('is-hidden')) return;
+        const same = p.dataset.author === prev;
+        p.classList.toggle('cont', same);
+        if (!same) close();
+        run.push(p); prev = p.dataset.author!;
+      });
+      close();
+      const f = list.querySelector('.post:not(.is-hidden)'); if (f) f.classList.add('lead');
+    });
+  }
+
+  function apply() {
+    const term = (q.value || '').trim().toLowerCase();
+    let shown = 0;
+    stream.querySelectorAll('.post').forEach((el) => {
+      const on = !term || (el as HTMLElement).dataset.text!.indexOf(term) > -1;
+      el.classList.toggle('is-hidden', !on);
+      if (on) shown++;
+    });
+    stream.querySelectorAll('.post-list').forEach((l) => {
+      const any = [...l.querySelectorAll('.post')].some((p) => !p.classList.contains('is-hidden'));
+      l.classList.toggle('is-hidden', !any);
+      const head = stream.querySelector(`.grp[data-grp="${(l as HTMLElement).dataset.grp}"]`);
+      if (head) head.classList.toggle('is-hidden', !any);
+    });
+    collapse();
+    count.classList.toggle('on', !!term);
+    count.textContent = term ? (shown === 1 ? 'One match' : `${shown} matches`) : '';
+    empty.classList.toggle('on', shown === 0);
+    moreBtn.hidden = !!term || before === null;
+  }
+
+  async function load() {
+    moreBtn.disabled = true;
+    const { data, error } = await supabase.rpc('list_feed_posts', { p_limit: PAGE, p_before: before });
+    if (error) { empty.textContent = 'Could not load the feed: ' + error.message; empty.classList.add('on'); return; }
+    const got = data || [];
+    rows = rows.concat(got);
+    before = got.length === PAGE ? got[got.length - 1].pub_date : null;
+    render();
+    moreBtn.disabled = false;
+  }
+
+  stream.addEventListener('click', (e) => {
+    const t = (e.target as HTMLElement).closest('button.tag') as HTMLElement | null;
+    if (t) { q.value = t.dataset.tag || ''; apply(); q.focus(); }
+  });
+  q.addEventListener('input', apply);
+  sortSel.addEventListener('change', render);
+  moreBtn.addEventListener('click', load);
+  empty.querySelector('[data-reset]')?.addEventListener('click', (e) => { e.preventDefault(); q.value = ''; sortSel.value = 'new'; render(); });
+  load();
 </script>
