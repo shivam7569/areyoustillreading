@@ -1,0 +1,47 @@
+---
+/**
+ * src/pages/permalink-series-shell.astro — shell donor for a DB-served SERIES page.
+ * ============================================================================
+ * A real, built page carrying the full reader CHROME (BaseLayout head/nav/footer + the
+ * silk-plate CSS) around an empty sentinel. NOT reader-facing: the /@* edge middleware
+ * fetches THIS page at request time for /@handle/s/slug, injects the assembled series
+ * HTML (page-head + one .series article of plate + progress + parts) into the sentinel,
+ * and serves it — so the page always references the current build's hashed asset URLs.
+ * Mirrors permalink-shell.astro; lives at /permalink-series-shell so no overlay touches it.
+ *
+ * SENTINELS (edge does targeted string replacement — see lib/assemble-series.js):
+ *   AYSRZZTITLE → series title (in <title>/og/twitter)   AYSRZZDESC → summary
+ *   AYSRZZURL   → canonical absolute URL
+ *   <div data-shell-main></div> → the whole assembled series body (wrap + page-head + article)
+ *   /permalink-series-shell/    → /@handle/s/slug (canonical + og:url, set by BaseHead)
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SubscribeForm from '../components/SubscribeForm.astro';
+import site from '../data/site.json';
+import '../styles/series-card.css';
+const c = (site as any).series || {};
+---
+<BaseLayout title="AYSRZZTITLE" description="AYSRZZDESC" wide>
+  <div data-shell-main></div>
+
+  <div class="wrap">
+    <div class="series-foot">
+      <div class="sub-inner">
+        <SubscribeForm
+          heading={c.newsletter?.heading || 'Get the next part when it lands'}
+          blurb={c.newsletter?.blurb || 'Series instalments go out by email as they publish. No noise — unsubscribe from any email in one click.'}
+          headingKey="series.newsletter.heading"
+          blurbKey="series.newsletter.blurb"
+        />
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+{/* is:global — the page-head + article HTML is INJECTED by the edge (no Astro scope attribute).
+    Loads only on the permalink-series pages, never on /blog etc., so it can't leak. */}
+<style is:global>
+  .series-foot { padding: clamp(44px, 6vw, 72px) 0 0; }
+  /* "Part of the <field> field" link under the lede on a single-series page. */
+  .pfield { margin-top: 22px; }
+</style>

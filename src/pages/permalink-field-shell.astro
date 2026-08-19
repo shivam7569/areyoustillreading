@@ -1,0 +1,44 @@
+---
+/**
+ * src/pages/permalink-field-shell.astro — shell donor for a DB-served FIELD page.
+ * ============================================================================
+ * Full reader CHROME around an empty sentinel. NOT reader-facing: the /@* edge middleware
+ * fetches THIS page for /@handle/f/slug and injects the assembled field HTML (page-head +
+ * fhero [arc + start-here + field mark] + each member series as a .series article) into the
+ * sentinel. Mirrors permalink-series-shell.astro; the .fhero/.arc/.fart/.ford/.starthere
+ * vocabulary is already global in global.css, and the .series card CSS comes from
+ * series-card.css — so the injected markup styles exactly like the built /fields/<slug> page.
+ *
+ * SENTINELS (see lib/assemble-field.js):
+ *   AYSRZZTITLE → field title   AYSRZZDESC → summary   AYSRZZURL → canonical URL
+ *   <div data-shell-main></div> → the whole assembled field body
+ *   /permalink-field-shell/     → /@handle/f/slug (canonical + og:url)
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SubscribeForm from '../components/SubscribeForm.astro';
+import site from '../data/site.json';
+import '../styles/series-card.css';
+const c = (site as any).fields || {};
+---
+<BaseLayout title="AYSRZZTITLE" description="AYSRZZDESC" wide>
+  <div data-shell-main></div>
+
+  <div class="wrap">
+    <div class="series-foot">
+      <div class="sub-inner">
+        <SubscribeForm
+          heading={c.newsletter?.heading || 'Hear when this field moves'}
+          blurb={c.newsletter?.blurb || 'One note whenever a new part lands in any of these series. Nothing else — unsubscribe in one click.'}
+          headingKey="fields.newsletter.heading"
+          blurbKey="fields.newsletter.blurb"
+        />
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+{/* is:global — the assembled field body is INJECTED by the edge (no Astro scope attribute).
+    Loads only on the permalink-field pages, so it can't leak. */}
+<style is:global>
+  .series-foot { padding: clamp(44px, 6vw, 72px) 0 0; }
+</style>

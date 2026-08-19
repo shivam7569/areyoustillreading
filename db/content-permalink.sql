@@ -118,16 +118,32 @@ language sql stable security definer set search_path = public, content, extensio
 $$;
 
 -- ── one series (owner-scoped) ───────────────────────────────────────────────
+-- Return shape grew a field crumb (field_owner_handle/slug/title) → drop before recreate.
+drop function if exists public.get_public_series(text, text);
 create or replace function public.get_public_series(p_owner_handle text, p_series_slug text)
-returns table (owner_handle citext, owner_name text, slug text, title text, summary text, total int, status text, published_count int)
+returns table (
+  owner_handle citext, owner_name text, slug text, title text, summary text, total int, status text, published_count int,
+  field_owner_handle citext, field_slug text, field_title text
+)
 language sql stable security definer set search_path = public, content, extensions as $$
   select o.handle, o.pen_name, se.slug, se.title, se.summary, se.total, se.status,
     (select count(*)::int from content.series_posts sp
        join content.posts po on po.id = sp.post_id
        where sp.series_id = se.id and sp.accepted
-         and po.status = 'published' and po.visibility = 'public' and po.deleted_at is null)
+         and po.status = 'published' and po.visibility = 'public' and po.deleted_at is null),
+    fld.owner_handle, fld.slug, fld.title
   from content.series se
   join content.profiles o on o.id = se.owner_id
+  -- the field this series sits in (owner handle scopes its /@handle/f/slug URL), if public-linked
+  left join lateral (
+    select fo.handle as owner_handle, f.slug, f.title
+    from content.field_series fs
+    join content.fields f on f.id = fs.field_id and f.deleted_at is null
+    join content.profiles fo on fo.id = f.owner_id
+    where fs.series_id = se.id and fs.accepted
+    order by f.created_at
+    limit 1
+  ) fld on true
   where o.handle = p_owner_handle and se.slug = p_series_slug and se.deleted_at is null
     and exists (select 1 from content.series_posts sp
                 join content.posts po on po.id = sp.post_id
@@ -135,10 +151,12 @@ language sql stable security definer set search_path = public, content, extensio
                   and po.status = 'published' and po.visibility = 'public' and po.deleted_at is null);
 $$;
 
+-- Return shape grew pub_date (for the "Feb 2026 · 12 min" line + date range) → drop before recreate.
+drop function if exists public.list_series_posts(text, text);
 create or replace function public.list_series_posts(p_owner_handle text, p_series_slug text)
-returns table (part int, slug text, title text, description text, reading_min int, primary_handle citext, author_names text[])
+returns table (part int, slug text, title text, description text, reading_min int, pub_date timestamptz, primary_handle citext, author_names text[])
 language sql stable security definer set search_path = public, content, extensions as $$
-  select sp.position, po.slug, po.title, po.description, po.reading_min,
+  select sp.position, po.slug, po.title, po.description, po.reading_min, po.pub_date,
     pp.handle,
     (select array_agg(p2.pen_name order by pa2.position)
        from content.post_authors pa2 join content.profiles p2 on p2.id = pa2.user_id

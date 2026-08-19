@@ -1,0 +1,50 @@
+/*
+ * src/styles/series-card.css — the "silk plate" series card, as a GLOBAL (unscoped)
+ * stylesheet. Verbatim from SeriesPlate.astro's scoped <style>, lifted here so it can
+ * also style the DB-served permalink pages (/@handle/s/slug, /@handle/f/slug), whose
+ * .series markup is injected at the edge and therefore carries no Astro scope hash.
+ * Imported ONLY by permalink-series-shell.astro + permalink-field-shell.astro, so it
+ * ships on the permalink pages alone and never leaks onto /blog etc. Keep in lockstep
+ * with SeriesPlate.astro so a series looks identical wherever it appears.
+ */
+.series { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: clamp(24px, 3.6vw, 48px); padding: clamp(34px, 4.4vw, 56px) 0; border-top: 1px solid var(--rule); }
+@media (max-width: 820px) { .series { grid-template-columns: 1fr; gap: 20px; } }
+/* The silk plate floats (no card): a soft edge mask + a per-series accent wash. */
+.art { position: relative; align-self: start; aspect-ratio: 3 / 2; margin: -4px 0 0 -22px; display: block;
+  -webkit-mask-image: radial-gradient(104% 92% at 30% 50%, #000 14%, rgba(0,0,0,.58) 50%, transparent 78%), linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: radial-gradient(104% 92% at 30% 50%, #000 14%, rgba(0,0,0,.58) 50%, transparent 78%), linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+  mask-composite: intersect; }
+@media (max-width: 820px) { .art { max-width: 420px; margin-left: -14px; } }
+.art::after { content: ""; position: absolute; inset: -14%; background: radial-gradient(80% 70% at var(--wx, 18%) var(--wy, 8%), color-mix(in srgb, var(--accent) var(--wo, 20%), transparent), transparent 70%); pointer-events: none; }
+.art svg { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; display: block; overflow: visible; }
+.series h2 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(27px, 3.3vw, 37px); line-height: 1.1; letter-spacing: -.015em; margin: 0 0 12px; }
+.series h2 a { color: var(--ink); background-image: linear-gradient(var(--accent), var(--accent)); background-size: 0 1.5px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size .3s; }
+.series:hover h2 a { background-size: 100% 1.5px; }
+.sum { color: var(--ink-soft); margin: 0 0 22px; max-width: 62ch; font-size: 17.5px; }
+.prog { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 26px; font-family: var(--sans); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
+.prog em { font-style: normal; color: var(--ink-soft); }
+.badge { display: inline-flex; font-family: var(--sans); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; background: var(--accent); color: var(--on-accent); padding: 5px 10px; border-radius: 2px; }
+.badge.quiet { background: transparent; border: 1px solid var(--rule); color: var(--ink-faint); }
+.segs { display: flex; gap: 3px; width: 128px; flex: none; }
+.segs i { flex: 1; height: 5px; border-radius: 1px; background: color-mix(in srgb, var(--ink) 32%, transparent); }
+.segs i.on { background: var(--accent); }
+.parts { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.parts li { border-bottom: 1px solid var(--rule); }
+.parts a, .parts .soon { display: flex; align-items: baseline; gap: 12px; padding: 11px 2px; transition: padding-left .22s; }
+.parts a:hover { padding-left: 8px; }
+.parts .soon { color: var(--ink-faint); }
+.parts .soon .t { font-style: italic; color: var(--ink-faint); }
+.parts .n { flex: none; width: 20px; font-family: var(--sans); font-size: 11px; letter-spacing: .1em; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.parts .t { flex: 0 1 auto; min-width: 0; font-family: var(--serif-display); font-size: 17.5px; line-height: 1.35; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.parts a:hover .t { color: var(--accent); }
+.parts .lead { flex: 1 1 14px; min-width: 14px; border-bottom: 1px dotted var(--rule); transform: translateY(-5px); }
+.parts .m { flex: none; font-family: var(--sans); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+@media (max-width: 1120px) { .parts .t { white-space: normal; } .parts .lead { display: none; } .parts .m { flex: none; margin-left: auto; padding-left: 16px; } }
+@media (max-width: 560px) { .parts .m { display: none; } }
+
+/* Single-series permalink page: the page-head carries the title + summary, so the
+   article drops its own h2/sum and leads with the progress line. A touch of top
+   space keeps the plate aligned with the progress row. */
+.series.solo { border-top: 0; padding-top: clamp(8px, 2vw, 20px); }
+.series.solo .prog { margin-top: 2px; }

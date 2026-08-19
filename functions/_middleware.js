@@ -51,6 +51,8 @@
 import { flattenCopy, readFreshCopy, emphHtml, boldHtml } from '../lib/site-copy.js';
 import { assemblePermalinkHtml } from '../lib/assemble-permalink.js';
 import { assembleAuthorHtml } from '../lib/assemble-author.js';
+import { assembleSeriesHtml } from '../lib/assemble-series.js';
+import { assembleFieldHtml } from '../lib/assemble-field.js';
 
 // Which requests are overlay candidates. Excludes: non-GET/HEAD; APIs (JSON); the
 // admin dashboard (its own AdminLayout, no data-cms anchors); gated paid bodies
@@ -77,10 +79,11 @@ export async function onRequest(context) {
     const handle = decodeURIComponent(at[1]);
     const seg = at[2] ? at[2].split('/') : [];
     if (seg.length === 0) return renderAuthorPage(context, url, handle);
+    if (seg.length === 2 && seg[0] === 's') return renderSeriesPage(context, url, handle, decodeURIComponent(seg[1]));
+    if (seg.length === 2 && seg[0] === 'f') return renderFieldPage(context, url, handle, decodeURIComponent(seg[1]));
     if (seg.length === 1 && seg[0] !== 's' && seg[0] !== 'f') {
       return renderPermalinkPost(context, url, handle, decodeURIComponent(seg[0]));
     }
-    // /@handle/s/<slug> (series), /@handle/f/<slug> (field) — next slice.
     return next();
   }
 
@@ -264,6 +267,74 @@ async function renderAuthorPage(context, url, handle) {
     return new Response(request.method === 'HEAD' ? null : html, {
       status: 200,
       headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate', 'x-served-by': 'author' },
+    });
+  } catch {
+    return next();
+  }
+}
+
+// Render /@handle/s/<slug>: one series — its silk plate + progress + ordered parts.
+async function renderSeriesPage(context, url, ownerHandle, seriesSlug) {
+  const { request, env, next } = context;
+  try {
+    const [srows, prows] = await Promise.all([
+      permalinkRpc(env, 'get_public_series', { p_owner_handle: ownerHandle, p_series_slug: seriesSlug }),
+      permalinkRpc(env, 'list_series_posts', { p_owner_handle: ownerHandle, p_series_slug: seriesSlug }),
+    ]);
+    const row = Array.isArray(srows) ? srows[0] : (srows && srows.slug ? srows : null);
+    if (!row || !row.slug) return next(); // not a public series by this @handle → static 404
+
+    const shellUrl = new URL('/permalink-series-shell/', url);
+    const shellRes = (env && env.ASSETS && env.ASSETS.fetch)
+      ? await env.ASSETS.fetch(new Request(shellUrl))
+      : await fetch(shellUrl, { cache: 'no-store' });
+    if (!shellRes.ok) return next();
+    const shell = await shellRes.text();
+
+    const canonicalPath = `/@${row.owner_handle}/s/${row.slug}`;
+    const canonicalUrl = new URL(canonicalPath, url).toString();
+    const html = assembleSeriesHtml(shell, row, Array.isArray(prows) ? prows : [], canonicalPath, canonicalUrl);
+    return new Response(request.method === 'HEAD' ? null : html, {
+      status: 200,
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate', 'x-served-by': 'series' },
+    });
+  } catch {
+    return next();
+  }
+}
+
+// Render /@handle/f/<slug>: one field — its arc, generative mark, then each member series.
+async function renderFieldPage(context, url, ownerHandle, fieldSlug) {
+  const { request, env, next } = context;
+  try {
+    const [frows, srows] = await Promise.all([
+      permalinkRpc(env, 'get_public_field', { p_owner_handle: ownerHandle, p_field_slug: fieldSlug }),
+      permalinkRpc(env, 'list_field_series', { p_owner_handle: ownerHandle, p_field_slug: fieldSlug }),
+    ]);
+    const field = Array.isArray(frows) ? frows[0] : (frows && frows.slug ? frows : null);
+    if (!field || !field.slug) return next(); // not a public field (needs ≥2 series) → static 404
+    const list = Array.isArray(srows) ? srows : [];
+
+    // Each member series' published parts (owner-scoped), fetched in parallel.
+    const partsArr = await Promise.all(
+      list.map((s) => permalinkRpc(env, 'list_series_posts', { p_owner_handle: s.series_owner_handle, p_series_slug: s.series_slug })),
+    );
+    const partsBySeries = {};
+    list.forEach((s, i) => { partsBySeries[s.series_slug] = Array.isArray(partsArr[i]) ? partsArr[i] : []; });
+
+    const shellUrl = new URL('/permalink-field-shell/', url);
+    const shellRes = (env && env.ASSETS && env.ASSETS.fetch)
+      ? await env.ASSETS.fetch(new Request(shellUrl))
+      : await fetch(shellUrl, { cache: 'no-store' });
+    if (!shellRes.ok) return next();
+    const shell = await shellRes.text();
+
+    const canonicalPath = `/@${field.owner_handle}/f/${field.slug}`;
+    const canonicalUrl = new URL(canonicalPath, url).toString();
+    const html = assembleFieldHtml(shell, field, list, partsBySeries, canonicalPath, canonicalUrl);
+    return new Response(request.method === 'HEAD' ? null : html, {
+      status: 200,
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate', 'x-served-by': 'field' },
     });
   } catch {
     return next();
