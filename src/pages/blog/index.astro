@@ -116,7 +116,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #stream .grp { display: flex; align-items: baseline; gap: 16px; padding: 36px 0 10px; }
   #stream .grp h2 { font-family: var(--serif-display); font-weight: 600; font-size: 22px; margin: 0; letter-spacing: -.01em; }
   #stream .grp .rule { flex: 1; height: 1px; background: var(--rule); }
-  #stream .post { position: relative; display: grid; grid-template-columns: 36px auto minmax(0, 1fr) auto; column-gap: clamp(12px, 1.6vw, 16px); padding: 22px 0; align-items: start; }
+  /* The hover fill (global `.post:hover { background: var(--paper-2) }`) is wanted here, so give
+     it breathing room + rounded corners: 14px horizontal padding with a matching negative margin
+     keeps the row content aligned with the section while the fill extends 14px past it — so the
+     round monogram sits INSIDE the fill instead of tangent to its sharp edge. */
+  #stream .post { position: relative; display: grid; grid-template-columns: 36px auto minmax(0, 1fr) auto; column-gap: clamp(12px, 1.6vw, 16px); padding: 22px 14px; margin: 0 -14px; border-radius: 10px; align-items: start; transition: background .18s ease; }
   #stream .post .rail { grid-column: 1; align-self: start; width: 36px; }
   #stream .mono { width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--rule); background: var(--paper-2); display: grid; place-items: center; margin: 0 auto; position: relative; z-index: 1; font-family: var(--serif-display); font-size: 13px; font-weight: 600; color: var(--ink-soft); letter-spacing: .03em; transition: border-color .2s, color .2s; }
   #stream .post:hover .mono { border-color: var(--accent); color: var(--accent); }
@@ -127,11 +131,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   /* The spine is anchored to .post (full-height, zero gap between rows), not the rail —
      so it never depends on grid-cell height. Offsets are from .post's box (22px padding);
      consecutive rows touch, so cont segments overlap 4px → continuous. */
-  #stream .post .spine { position: absolute; left: 18px; transform: translateX(-50%); width: 1px; background: var(--rule-soft); display: none; }
+  #stream .post .spine { position: absolute; left: 32px; transform: translateX(-50%); width: 1px; background: var(--rule-soft); display: none; }
   #stream .post.runstart .spine { display: block; top: 62px; bottom: -4px; }
   #stream .post.cont .spine { display: block; top: -4px; bottom: -4px; }
   #stream .post.cont.runend .spine { bottom: auto; height: 34px; }
-  #stream .post .bead { position: absolute; left: 18px; top: 30px; width: 6px; height: 6px; margin-left: -3px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 55%, transparent); display: none; transition: background .2s, transform .2s; }
+  #stream .post .bead { position: absolute; left: 32px; top: 30px; width: 6px; height: 6px; margin-left: -3px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 55%, transparent); display: none; transition: background .2s, transform .2s; }
   #stream .post.cont .bead { display: block; }
   #stream .post.cont:hover .bead { background: var(--accent); transform: scale(1.3); }
   #stream .picon { grid-column: 2; align-self: start; position: relative; width: 108px; height: 108px; border: 1px solid var(--rule-soft); border-radius: 3px; background: var(--paper-2); overflow: hidden; transition: border-color .25s; }

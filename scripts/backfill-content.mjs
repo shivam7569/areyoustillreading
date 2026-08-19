@@ -121,8 +121,9 @@ async function main() {
     for (const [slug, { id, fm }] of postIdBySlug) {
       if (typeof fm.series === 'string' && seriesById.has(fm.series)) {
         await pool.query(
-          `insert into content.series_posts (series_id, post_id, position) values ($1,$2,$3)
-           on conflict (series_id, post_id) do update set position = excluded.position`,
+          // Owner's own posts in the owner's own series → self-membership, auto-accepted.
+          `insert into content.series_posts (series_id, post_id, position, accepted) values ($1,$2,$3,true)
+           on conflict (series_id, post_id) do update set position = excluded.position, accepted = true`,
           [seriesById.get(fm.series), id, numOrNull(fm.seriesOrder) ?? 0],
         );
         links++;
@@ -143,8 +144,9 @@ async function main() {
         const sid = seriesById.get(member.slug);
         if (!sid) continue; // member series has no published posts / isn't defined → skip (mirrors the public rule)
         await pool.query(
-          `insert into content.field_series (field_id, series_id, position, note) values ($1,$2,$3,$4)
-           on conflict (field_id, series_id) do update set position = excluded.position, note = excluded.note`,
+          // Owner's own series in the owner's own field → self-membership, auto-accepted.
+          `insert into content.field_series (field_id, series_id, position, note, accepted) values ($1,$2,$3,$4,true)
+           on conflict (field_id, series_id) do update set position = excluded.position, note = excluded.note, accepted = true`,
           [rows[0].id, sid, pos++, member.note || ''],
         );
         fieldLinks++;
