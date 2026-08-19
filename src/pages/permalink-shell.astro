@@ -75,7 +75,10 @@ const c = (site as any).post || {};
   <PlotlyReader />
 </BaseLayout>
 
-<style>
+{/* is:global — the crumb + byline HTML is INJECTED by the edge (no Astro scope attribute), so
+    scoped styles wouldn't reach it. This CSS bundle loads only on the permalink pages (the shell
+    + the assembled /@ pages that copy its head), never on /blog etc., so it can't leak. */}
+<style is:global>
   /* Article-head + byline styling, matching BlogPost.astro so a DB post reads identically to
      a statically-built one. (The body prose lives in global.css via .post-body.) */
   .art-head { padding: clamp(40px, 6vw, 76px) 0 clamp(20px, 3vw, 36px); }
