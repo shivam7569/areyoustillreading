@@ -30,7 +30,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <!-- Fields shelf: the map. Client-rendered from public.list_public_fields, each tile a
          generative plate. Hidden until at least one field is public (>=2 series). -->
     <section class="fieldsec" id="fieldshelf" hidden>
-      <div class="slab"><span class="eyebrow">Fields</span><span class="line"></span></div>
+      <div class="slab"><span class="eyebrow">Fields</span><span class="line"></span><a class="more-link" href="/fields">All fields →</a></div>
       <div class="shelf" id="shelf"></div>
     </section>
 
@@ -99,10 +99,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   /* The spine is anchored to .post (full-height, zero gap between rows), not the rail —
      so it never depends on grid-cell height. Offsets are from .post's box (22px padding);
      consecutive rows touch, so cont segments overlap 4px → continuous. */
-  #stream .post .line { position: absolute; left: 18px; transform: translateX(-50%); width: 1px; background: var(--rule-soft); display: none; }
-  #stream .post.runstart .line { display: block; top: 62px; bottom: -4px; }
-  #stream .post.cont .line { display: block; top: -4px; bottom: -4px; }
-  #stream .post.cont.runend .line { bottom: auto; height: 34px; }
+  #stream .post .spine { position: absolute; left: 18px; transform: translateX(-50%); width: 1px; background: var(--rule-soft); display: none; }
+  #stream .post.runstart .spine { display: block; top: 62px; bottom: -4px; }
+  #stream .post.cont .spine { display: block; top: -4px; bottom: -4px; }
+  #stream .post.cont.runend .spine { bottom: auto; height: 34px; }
   #stream .post .bead { position: absolute; left: 18px; top: 30px; width: 6px; height: 6px; margin-left: -3px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 55%, transparent); display: none; transition: background .2s, transform .2s; }
   #stream .post.cont .bead { display: block; }
   #stream .post.cont:hover .bead { background: var(--accent); transform: scale(1.3); }
@@ -134,7 +134,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #stream .pcrumb .ticks i.todo { background: color-mix(in srgb, var(--ink) 16%, transparent); }
   #stream .pcrumb .ticks i.here { background: var(--accent); height: 6px; }
   #stream .aside { grid-column: 4; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 2px; text-align: right; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
-  #stream .aside .curve { display: block; width: 74px; height: 24px; overflow: visible; margin-top: 4px; }
+  #stream .aside .curve { display: block; width: 86px; height: 28px; overflow: hidden; margin-top: 6px; }
   #stream .curve path.fill { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
   #stream .curve path.line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; }
   #stream .curve line.base { stroke: var(--rule); stroke-width: 1; }
@@ -146,6 +146,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #fieldshelf .slab { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
   #fieldshelf .slab .eyebrow { font-family: var(--sans); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-faint); }
   #fieldshelf .slab .line { height: 1px; flex: 1; background: var(--rule); }
+  #fieldshelf .slab .more-link { font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; text-decoration: none; transition: color .2s; }
+  #fieldshelf .slab .more-link:hover { color: var(--accent); }
   #fieldshelf .shelf { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; padding: 2px 2px 6px; }
   #fieldshelf .ftile { position: relative; display: block; height: 172px; border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--paper-2); transition: border-color .2s, transform .2s; }
   #fieldshelf .ftile:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--rule)); transform: translateY(-2px); }
@@ -163,7 +165,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     #stream .post .rail { grid-column: 1; grid-row: 1 / span 2; align-self: start; }
     #stream .post.cont .mono { display: grid; opacity: .4; width: 30px; height: 30px; }
     #stream .post.cont .byline { display: flex; }
-    #stream .post .line, #stream .post .bead { display: none !important; }
+    #stream .post .spine, #stream .post .bead { display: none !important; }
     #stream .picon { display: none; }
     #stream .ptext { grid-column: 2; grid-row: 1; }
     #stream .aside { grid-column: 2; grid-row: 2; flex-direction: row; align-items: baseline; text-align: left; margin-top: 8px; }
@@ -242,9 +244,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     }
     let ni = -1, md = 0;
     for (let i = 1; i < P.length; i++) { const dd = P[i][1] - P[i - 1][1]; if (dd > md) { md = dd; ni = i; } }
-    const cliff = md > 3 && ni > 0 ? `<circle class="cliff" cx="${P[ni][0]}" cy="${P[ni][1]}" r="2.4"></circle>` : '';
+    // Skip a cliff dot within 3px of either edge — overflow:hidden would clip it in half.
+    const cliff = md > 3 && ni > 0 && P[ni][0] >= 3 && P[ni][0] <= 83 ? `<circle class="cliff" cx="${P[ni][0]}" cy="${P[ni][1]}" r="2.4"></circle>` : '';
     const label = esc(shapeText(samples));
-    return `<svg class="curve" viewBox="0 0 86 28" role="img" aria-label="${label}"><title>${label}</title><path class="fill" d="${d} L86 28 L0 28 Z"></path><path class="line" d="${d}"></path><line class="base" x1="0" y1="27" x2="86" y2="27"></line>${cliff}</svg>`;
+    // xMinYMid pins x=0 to the box's left edge at every size — never let the line drift out of frame.
+    return `<svg class="curve" viewBox="0 0 86 28" preserveAspectRatio="xMinYMid meet" role="img" aria-label="${label}"><title>${label}</title><path class="fill" d="${d} L86 28 L0 28 Z"></path><path class="line" d="${d}"></path><line class="base" x1="0" y1="27" x2="86" y2="27"></line>${cliff}</svg>`;
   }
 
   // Field above, series line below (name · part · progress ticks). Rendered as styled text,
@@ -273,7 +277,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const tags = (p.tags || []).slice(0, 4).map((t: string) => `<button class="tag" type="button" data-tag="${esc(t)}">${esc(t)}</button>`).join('');
     el.innerHTML =
       `<div class="rail"><span class="mono">${esc(initials(p.primary_name))}</span></div>` +
-      `<span class="line"></span><span class="bead"></span>` +
+      `<span class="spine"></span><span class="bead"></span>` +
       `<span class="picon" aria-hidden="true"></span>` +
       `<div class="ptext">` +
         `<p class="byline">${byline(p)}</p>` +
@@ -394,7 +398,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   // The fields shelf (the map). Independent of the stream; stays hidden if no field is public yet.
   async function loadFields() {
-    const { data, error } = await supabase.rpc('list_public_fields', { p_limit: 8 });
+    const { data, error } = await supabase.rpc('list_public_fields', { p_limit: 4 });
     if (error || !data || !data.length) return;
     const shelf = document.getElementById('shelf')!;
     const washes = [[20, 12, 13], [78, 80, 11], [50, 20, 12], [30, 72, 12]];
