@@ -4,6 +4,9 @@
 -- co-author byline (from content.post_authors) and one series crumb per post.
 -- Idempotent. Depends on db/content.sql + db/content-collab.sql.
 -- =============================================================================
+-- Return columns changed (added field_slug/field_title) → drop before recreate,
+-- since create-or-replace cannot alter a function's OUT signature.
+drop function if exists public.list_feed_posts(int, timestamptz);
 create or replace function public.list_feed_posts(p_limit int default 25, p_before timestamptz default null)
 returns table (
   post_id       uuid,
@@ -20,7 +23,9 @@ returns table (
   series_slug   text,
   series_title  text,
   series_part   int,
-  series_total  int
+  series_total  int,
+  field_slug    text,
+  field_title   text
 )
 language sql stable security definer set search_path = public, content, extensions as $$
   select
@@ -30,13 +35,23 @@ language sql stable security definer set search_path = public, content, extensio
     (select array_agg(p2.pen_name order by pa.position)
        from content.post_authors pa join content.profiles p2 on p2.id = pa.user_id
        where pa.post_id = po.id and pa.accepted),
-    ser.slug, ser.title, ser.part, ser.total
+    ser.slug, ser.title, ser.part, ser.total, ser.field_slug, ser.field_title
   from content.posts po
   join content.profiles pr on pr.id = po.author_id
   left join lateral (
-    select se.slug, se.title, sp.position as part, se.total
+    select se.slug, se.title, sp.position as part, se.total,
+           fld.slug as field_slug, fld.title as field_title
     from content.series_posts sp
     join content.series se on se.id = sp.series_id and se.deleted_at is null
+    -- the field this series sits in (accepted membership only); first by age if several
+    left join lateral (
+      select f.slug, f.title
+      from content.field_series fs
+      join content.fields f on f.id = fs.field_id and f.deleted_at is null
+      where fs.series_id = se.id and fs.accepted
+      order by f.created_at
+      limit 1
+    ) fld on true
     where sp.post_id = po.id and sp.accepted
     order by se.created_at
     limit 1

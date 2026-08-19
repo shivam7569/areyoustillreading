@@ -99,13 +99,15 @@ async function main() {
         [a.id, `${LT.prefix}series-${a.i}`, `LT Series ${a.i}`],
       );
       const posts = await pool.query('select id from content.posts where author_id=$1 order by slug limit 5', [a.id]);
-      let pos = 0;
-      for (const p of posts.rows) await pool.query('insert into content.series_posts (series_id, post_id, position) values ($1,$2,$3)', [sres.rows[0].id, p.id, pos++]);
+      let pos = 1;   // Part numbers are 1-based (what a reader sees as "Part N of 5")
+      for (const p of posts.rows) await pool.query('insert into content.series_posts (series_id, post_id, position, accepted) values ($1,$2,$3,true)', [sres.rows[0].id, p.id, pos++]);
       // A field needs >=2 series to be public; one synthetic series each keeps this simple (field stays "not public yet").
-      await pool.query(
-        `insert into content.fields (owner_id, slug, title, summary, mark) values ($1,$2,$3,'A synthetic field.','0${(a.i % 9) + 1}')`,
+      const fres = await pool.query(
+        `insert into content.fields (owner_id, slug, title, summary, mark) values ($1,$2,$3,'A synthetic field.','0${(a.i % 9) + 1}') returning id`,
         [a.id, `${LT.prefix}field-${a.i}`, `LT Field ${a.i}`],
       );
+      // Put the series in the field (self-membership → accepted) so the feed's field crumb populates.
+      await pool.query('insert into content.field_series (field_id, series_id, position, accepted) values ($1,$2,0,true)', [fres.rows[0].id, sres.rows[0].id]);
     }
     console.log(`  series + fields: ${authors.length} each`);
 

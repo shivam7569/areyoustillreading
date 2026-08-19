@@ -1,18 +1,19 @@
 ---
 /*
  * =============================================================================
- * src/pages/explore.astro  ·  ROUTE: "/explore"  (the "Everyone" multi-author feed)
+ * src/pages/blog/index.astro  ·  ROUTE: "/blog"  (the "Everyone" multi-author feed)
  * =============================================================================
  * Phase 2 build to the Claude Design "explore.html" (Everyone): every author's
  * published work in one stream, read LIVE from the content.* tables via the public
- * read RPC (public.list_feed_posts) over the anon client. Author identity is a
- * monogram, consecutive posts by one author collapse into a single spine, tags are
- * search shortcuts, and there are no scores or totals. This will become the
- * destination the Blog nav's feed leads to; /blog stays as-is until it's proven.
+ * read RPCs (public.list_feed_posts + public.feed_retention) over the anon client.
+ * Author identity is a monogram, consecutive posts by one author collapse into a
+ * single spine, each row carries its reading-shape curve (retention as a shape, not
+ * a score), and its field + series crumb. Tags are a real subject filter (token
+ * match, not substring); there are no aggregate totals.
  *
- * DEFERRED (each its own slice, needs more plumbing): the reading-shape retention
- * curve (needs per-post analytics), the "Ways in" band, the fields shelf, the
- * "Where you left off" strip, and clickable post permalinks.
+ * DEFERRED (each its own slice): the "Ways in" band, the fields shelf, the "Where
+ * you left off" strip, and clickable field/series/post permalinks (crumb is text
+ * until those pages ship).
  * =============================================================================
  */
 import BaseLayout from '../../layouts/BaseLayout.astro';
@@ -32,11 +33,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <input type="search" id="q" placeholder="Search titles, authors, subjects" aria-label="Search the stream" />
       </label>
       <span class="count" id="count"></span>
-      <span class="sortwrap"><span>Sort</span><select id="sort" aria-label="Sort the stream"><option value="new">Newest first</option><option value="short">Shortest read</option></select></span>
+      <span class="sortwrap"><span>Sort</span><select id="sort" aria-label="Sort the stream"><option value="new">Newest first</option><option value="held">Best held</option><option value="short">Shortest read</option></select></span>
     </div>
 
     <div id="stream" aria-live="polite"></div>
     <p class="empty" id="empty">Nothing matches that. Try a broader subject, or <a class="link" href="#" data-reset>clear the filters</a>.</p>
+
+    <div class="legend">
+      <svg viewBox="0 0 50 16" aria-hidden="true"><path d="M0 2 C 11 3 21 8 31 9 S 44 11 50 12" fill="none" stroke="var(--accent)" stroke-width="1.4"></path><circle cx="25" cy="7.5" r="2.2" fill="var(--paper)" stroke="var(--accent)" stroke-width="1.2"></circle></svg>
+      <span>Every piece carries the shape of its own reading — how many readers were still there, start to finish. The notch is where it loses most of them. No scores, no ranking.</span>
+    </div>
+
     <div class="more"><button class="btn btn-ghost" type="button" id="morebtn" hidden>Keep going back</button></div>
 
     <div class="feed-foot">
@@ -62,6 +69,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   .count.on { display: inline; }
   .empty { padding: 56px 8px; text-align: center; font-family: var(--sans); font-size: 15px; color: var(--ink-faint); display: none; }
   .empty.on { display: block; }
+  .legend { display: flex; align-items: center; gap: 11px; padding: 22px 0 0; font-family: var(--sans); font-size: 11.5px; line-height: 1.5; color: var(--ink-faint); }
+  .legend svg { width: 50px; height: 16px; overflow: visible; flex: none; }
   .more { padding: 26px 0 0; display: flex; }
   .feed-foot { padding: clamp(40px, 5.5vw, 68px) 0 clamp(56px, 8vw, 96px); }
 </style>
@@ -105,8 +114,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #stream .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   #stream button.tag { font-family: var(--sans); font-size: 12px; letter-spacing: .03em; color: var(--ink-faint); border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 4px 11px; cursor: pointer; transition: border-color .2s, color .2s; }
   #stream button.tag:hover { border-color: var(--accent); color: var(--accent); }
-  #stream .pcrumb { display: flex; align-items: center; gap: 11px; margin-top: 13px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); flex-wrap: wrap; }
-  #stream .pcrumb .snm { color: var(--ink-soft); }
+  #stream button.tag.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  /* a piece inside a series says so — its field above, the series line and where it sits below */
+  #stream .pcrumb { display: block; margin-top: 18px; padding-top: 14px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); }
+  #stream .pcrumb .fd { display: block; margin-bottom: 9px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+  #stream .pcrumb .cr { display: flex; align-items: baseline; gap: 13px; flex-wrap: wrap; }
+  #stream .pcrumb .cr .snm { font-family: var(--serif-display); font-size: 15px; letter-spacing: -.005em; color: var(--ink-soft); }
+  #stream .pcrumb .pt { display: inline-flex; align-items: center; gap: 8px; }
+  #stream .pcrumb .pt .n { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; }
   #stream .pcrumb .ticks { display: flex; align-items: center; gap: 2px; }
   #stream .pcrumb .ticks i { width: 11px; height: 3px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 60%, transparent); }
   #stream .pcrumb .ticks i.todo { background: color-mix(in srgb, var(--ink) 16%, transparent); }
@@ -172,26 +187,54 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   // The reading shape: readers-remaining at each decile → a retention curve (a shape,
   // not a score). The steepest drop gets a "cliff" dot. Empty when there's no data yet.
   const retention = new Map<string, number[]>();
-  function curveSvg(samples: number[] | undefined) {
-    if (!samples || !samples.length) return '';
-    const W = 86, top = 3, bot = 24;
-    const pts = samples.map((s, i) => [(i / (samples.length - 1)) * W, top + (100 - Math.max(0, Math.min(100, s))) / 100 * (bot - top)]);
-    const all = [[0, pts[0][1]], ...pts];
-    const d = all.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+
+  // A short, honest sentence for the hover tooltip: what this shape says, no numbers as a score.
+  function shapeText(samples: number[]) {
+    const finish = samples[samples.length - 1] ?? 0;
     let ni = -1, md = 0;
-    for (let i = 1; i < pts.length; i++) { const dd = pts[i][1] - pts[i - 1][1]; if (dd > md) { md = dd; ni = i; } }
-    const cliff = md > 5 && ni > 0 ? `<circle class="cliff" cx="${pts[ni][0].toFixed(1)}" cy="${pts[ni][1].toFixed(1)}" r="2.4"></circle>` : '';
-    return `<svg class="curve" viewBox="0 0 86 28" aria-label="Reading shape: how many readers stayed to the end"><path class="fill" d="${d} L86 28 L0 28 Z"></path><path class="line" d="${d}"></path><line class="base" x1="0" y1="27" x2="86" y2="27"></line>${cliff}</svg>`;
+    for (let i = 1; i < samples.length; i++) { const drop = samples[i - 1] - samples[i]; if (drop > md) { md = drop; ni = i; } }
+    const held = finish >= 70 ? 'Holds most readers to the end.' : finish >= 45 ? 'Keeps a committed core to the end.' : 'Loses many readers before the end.';
+    const notch = md >= 14 && ni > 0 ? ` The steepest drop is around ${ni * 10}% in.` : '';
+    return `Reading shape — ${held}${notch}`;
   }
 
+  // Smooth curve through the decile points (Catmull-Rom → cubic bézier), clamped inside the
+  // box so the line can never leave the graph however sharp the drop.
+  function curveSvg(samples: number[] | undefined) {
+    if (!samples || !samples.length) return '';
+    const W = 86, top = 3.5, bot = 22.5;
+    const y = (s: number) => top + (100 - clamp(s, 0, 100)) / 100 * (bot - top);
+    const P = samples.map((s, i) => [+((i / (samples.length - 1)) * W).toFixed(1), +y(s).toFixed(1)]);
+    const cy = (v: number) => +clamp(v, 1.5, 25).toFixed(1); // keep control points in-box too
+    let d = `M${P[0][0]} ${P[0][1]}`;
+    for (let i = 0; i < P.length - 1; i++) {
+      const p0 = P[i - 1] || P[0], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || P[P.length - 1];
+      const c1x = +(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1), c1y = cy(p1[1] + (p2[1] - p0[1]) / 6);
+      const c2x = +(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1), c2y = cy(p2[1] - (p3[1] - p1[1]) / 6);
+      d += ` C${c1x} ${c1y} ${c2x} ${c2y} ${p2[0]} ${p2[1]}`;
+    }
+    let ni = -1, md = 0;
+    for (let i = 1; i < P.length; i++) { const dd = P[i][1] - P[i - 1][1]; if (dd > md) { md = dd; ni = i; } }
+    const cliff = md > 3 && ni > 0 ? `<circle class="cliff" cx="${P[ni][0]}" cy="${P[ni][1]}" r="2.4"></circle>` : '';
+    const label = esc(shapeText(samples));
+    return `<svg class="curve" viewBox="0 0 86 28" role="img" aria-label="${label}"><title>${label}</title><path class="fill" d="${d} L86 28 L0 28 Z"></path><path class="line" d="${d}"></path><line class="base" x1="0" y1="27" x2="86" y2="27"></line>${cliff}</svg>`;
+  }
+
+  // Field above, series line below (name · part · progress ticks). Rendered as styled text,
+  // not links, until the field/series pages ship — so nothing here is a dead end.
   function crumb(p: any) {
-    if (!p.series_title) return '';
+    if (!p.series_title && !p.field_title) return '';
+    const field = p.field_title ? `<span class="fd">${esc(p.field_title)}</span>` : '';
+    if (!p.series_title) return `<p class="pcrumb">${field}</p>`;
     let ticks = '';
     if (p.series_total && p.series_total > 0) {
       for (let k = 1; k <= p.series_total; k++) ticks += `<i class="${k === p.series_part ? 'here' : k < (p.series_part || 0) ? '' : 'todo'}"></i>`;
     }
-    const part = p.series_part != null ? ` <span>Part ${esc(p.series_part)}${p.series_total ? ` of ${esc(p.series_total)}` : ''}</span>` : '';
-    return `<p class="pcrumb"><span class="snm">${esc(p.series_title)}</span>${part}${ticks ? `<span class="ticks">${ticks}</span>` : ''}</p>`;
+    const pt = p.series_part != null
+      ? `<span class="pt"><span class="n">Part ${esc(p.series_part)}${p.series_total ? ` of ${esc(p.series_total)}` : ''}</span>${ticks ? `<span class="ticks">${ticks}</span>` : ''}</span>`
+      : '';
+    return `<p class="pcrumb">${field}<span class="cr"><span class="snm">${esc(p.series_title)}</span>${pt}</span></p>`;
   }
 
   function rowEl(p: any) {
@@ -199,6 +242,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     el.className = 'post';
     el.dataset.author = p.primary_handle || '';
     el.dataset.text = `${p.title} ${p.primary_name} ${(p.author_names || []).join(' ')} ${(p.tags || []).join(' ')} ${p.description || ''}`.toLowerCase();
+    el.dataset.tags = (p.tags || []).join(' ');
     el.dataset.rt = String(p.reading_min || 1);
     const tags = (p.tags || []).slice(0, 4).map((t: string) => `<button class="tag" type="button" data-tag="${esc(t)}">${esc(t)}</button>`).join('');
     el.innerHTML =
@@ -216,22 +260,26 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return el;
   }
 
-  // Build month groups from the current rows, then run the design's collapse/leads/filter.
+  // "Best held" reads off the retention tail (readers still there at the end); −1 sinks posts
+  // with no shape yet to the bottom.
+  const heldScore = (p: any) => { const s = retention.get(p.slug); return s && s.length ? s[s.length - 1] : -1; };
+
+  // Month groups stay in chronological order (newest first); the sort only reorders WITHIN a
+  // group, so a "shortest"/"best held" sort never scrambles the timeline into nonsense.
   function render() {
     const mode = sortSel.value;
-    let list = rows.slice();
-    if (mode === 'short') list.sort((a, b) => (a.reading_min || 99) - (b.reading_min || 99));
-    // group by month, preserving order
     stream.innerHTML = '';
     const groups = new Map<number, any[]>();
-    for (const p of list) { const k = monthKey(new Date(p.pub_date)); if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(p); }
-    const keys = mode === 'short' ? [...groups.keys()] : [...groups.keys()].sort((a, b) => b - a);
-    for (const k of keys) {
+    for (const p of rows) { const k = monthKey(new Date(p.pub_date)); if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(p); }
+    for (const k of [...groups.keys()].sort((a, b) => b - a)) {
+      const arr = groups.get(k)!.slice();
+      if (mode === 'short') arr.sort((a, b) => (a.reading_min || 99) - (b.reading_min || 99));
+      else if (mode === 'held') arr.sort((a, b) => heldScore(b) - heldScore(a));
       const head = document.createElement('div'); head.className = 'grp'; head.dataset.grp = String(k);
-      head.innerHTML = `<h2>${esc(monthLabel(new Date(groups.get(k)![0].pub_date)))}</h2><span class="rule"></span>`;
+      head.innerHTML = `<h2>${esc(monthLabel(new Date(arr[0].pub_date)))}</h2><span class="rule"></span>`;
       stream.appendChild(head);
       const wrap = document.createElement('div'); wrap.className = 'post-list'; wrap.dataset.grp = String(k);
-      for (const p of groups.get(k)!) wrap.appendChild(rowEl(p));
+      for (const p of arr) wrap.appendChild(rowEl(p));
       stream.appendChild(wrap);
     }
     apply();
@@ -256,11 +304,20 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     });
   }
 
+  // A subject (tag) click is a real subject filter, not a substring search: it token-matches
+  // the post's tags, so "RAG" is never satisfied by the word "fragmentation". Typed text still
+  // searches the whole row. Either narrows the count and mirrors the active subject on its chip.
+  let subject: string | null = null;
   function apply() {
     const term = (q.value || '').trim().toLowerCase();
+    const subj = subject ? subject.toLowerCase() : null;
+    const filtered = !!term || !!subj;
     let shown = 0;
     stream.querySelectorAll('.post').forEach((el) => {
-      const on = !term || (el as HTMLElement).dataset.text!.indexOf(term) > -1;
+      const d = el as HTMLElement;
+      const okSubj = !subj || (' ' + (d.dataset.tags || '').toLowerCase() + ' ').indexOf(' ' + subj + ' ') > -1;
+      const okTerm = !term || d.dataset.text!.indexOf(term) > -1;
+      const on = okSubj && okTerm;
       el.classList.toggle('is-hidden', !on);
       if (on) shown++;
     });
@@ -271,10 +328,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       if (head) head.classList.toggle('is-hidden', !any);
     });
     collapse();
-    count.classList.toggle('on', !!term);
-    count.textContent = term ? (shown === 1 ? 'One match' : `${shown} matches`) : '';
+    count.classList.toggle('on', filtered);
+    count.textContent = filtered ? (shown === 1 ? 'One match' : `${shown} matches`) : '';
     empty.classList.toggle('on', shown === 0);
-    moreBtn.hidden = !!term || before === null;
+    stream.querySelectorAll('button.tag').forEach((b) => b.classList.toggle('on', !!subj && ((b as HTMLElement).dataset.tag || '').toLowerCase() === subj));
+    moreBtn.hidden = filtered || before === null;
   }
 
   async function load() {
@@ -294,13 +352,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     moreBtn.disabled = false;
   }
 
+  // A tag sets the subject (and mirrors it in the search field); clicking the active one clears it.
   stream.addEventListener('click', (e) => {
     const t = (e.target as HTMLElement).closest('button.tag') as HTMLElement | null;
-    if (t) { q.value = t.dataset.tag || ''; apply(); q.focus(); }
+    if (!t) return;
+    const v = t.dataset.tag || '';
+    if (subject && subject.toLowerCase() === v.toLowerCase()) { subject = null; q.value = ''; }
+    else { subject = v; q.value = v; }
+    apply();
   });
-  q.addEventListener('input', apply);
+  q.addEventListener('input', () => { subject = null; apply(); });
   sortSel.addEventListener('change', render);
   moreBtn.addEventListener('click', load);
-  empty.querySelector('[data-reset]')?.addEventListener('click', (e) => { e.preventDefault(); q.value = ''; sortSel.value = 'new'; render(); });
+  empty.querySelector('[data-reset]')?.addEventListener('click', (e) => { e.preventDefault(); q.value = ''; subject = null; sortSel.value = 'new'; render(); });
   load();
 </script>
