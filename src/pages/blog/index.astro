@@ -27,6 +27,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       <p class="lede">Nothing is ranked, promoted or trending. Work arrives in order, read live from the database — start something rather than scroll past it.</p>
     </header>
 
+    <!-- Where you left off: the signed-in reader's own in-progress pieces (public.
+         my_reading_continues). Hidden for anonymous readers and when nothing is mid-read. -->
+    <section class="rez" id="rez" hidden>
+      <div class="slab"><span class="eyebrow">Where you left off</span><span class="line"></span><button class="drop" type="button" id="rezclear">Clear</button></div>
+      <div class="rezgrid" id="rezgrid"></div>
+    </section>
+
     <!-- Fields shelf: the map. Client-rendered from public.list_public_fields, each tile a
          generative plate. Hidden until at least one field is public (>=2 series). -->
     <section class="fieldsec" id="fieldshelf" hidden>
@@ -148,6 +155,28 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   .curve line.base { stroke: var(--rule); stroke-width: 1; }
   .curve circle.cliff { fill: var(--paper); stroke: var(--accent); stroke-width: 1.3; }
   #stream .post.is-hidden, #stream .grp.is-hidden, #stream .post-list.is-hidden { display: none; }
+
+  /* ——— where you left off ——— the reader's resume strip (cards JS-created) */
+  #rez { padding: 6px 0 clamp(30px, 4vw, 44px); }
+  #rez .slab { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  #rez .slab .eyebrow { font-family: var(--sans); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-faint); }
+  #rez .slab .line { height: 1px; flex: 1; background: var(--rule); }
+  #rez .slab .drop { font-family: var(--sans); font-size: 12px; color: var(--ink-faint); background: none; border: 0; cursor: pointer; padding: 0; }
+  #rez .slab .drop:hover { color: var(--accent); }
+  #rez .rezgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  #rez .rzc { display: block; border: 1px solid var(--rule); border-radius: 4px; background: var(--card); padding: 13px 15px 11px; transition: border-color .2s, transform .2s; }
+  #rez .rzc:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--rule)); transform: translateY(-1px); }
+  #rez .rzc .top { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+  #rez .rzc .mono { width: 26px; height: 26px; flex: none; border-radius: 999px; border: 1px solid var(--rule); background: var(--paper-2); display: grid; place-items: center; font-family: var(--serif-display); font-size: 10.5px; font-weight: 600; color: var(--ink-soft); letter-spacing: .03em; }
+  #rez .rzc h3 { font-family: var(--serif-display); font-weight: 600; font-size: 15.5px; line-height: 1.28; letter-spacing: -.01em; margin: 1px 0 0; color: var(--ink); min-width: 0; text-wrap: pretty; }
+  #rez .rzc:hover h3 { color: var(--accent); }
+  #rez .rzc .bar { display: flex; gap: 2px; margin: 11px 0 8px; }
+  #rez .rzc .bar i { flex: 1; height: 3px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 60%, transparent); }
+  #rez .rzc .bar i.todo { background: color-mix(in srgb, var(--ink) 14%, transparent); }
+  #rez .rzc .st { font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); display: flex; gap: 7px; align-items: baseline; }
+  #rez .rzc .st em { font-style: normal; color: var(--accent); font-variant-numeric: tabular-nums; }
+  #rez .rzc .st .sep { color: var(--rule); }
+  @media (max-width: 900px) { #rez .rezgrid { grid-template-columns: 1fr; } }
 
   /* ——— the fields shelf (the map) ——— tiles are JS-created, so styled globally under #fieldshelf */
   #fieldshelf { padding: clamp(24px, 3.4vw, 40px) 0 clamp(30px, 4vw, 48px); }
@@ -458,7 +487,26 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     (document.getElementById('waysin') as HTMLElement).hidden = false;
   }
 
+  // Where you left off: the reader's own in-progress pieces (public.my_reading_continues).
+  // Non-link cards for now — the whole feed's post permalinks land with a later slice.
+  async function loadContinue() {
+    const { data, error } = await supabase.rpc('my_reading_continues', { p_limit: 3 });
+    if (error || !data || !data.length) return;   // anonymous or nothing mid-read → stay hidden
+    const grid = document.getElementById('rezgrid')!;
+    grid.innerHTML = data.map((r: any) => {
+      const TICKS = 15, filled = Math.max(1, Math.min(TICKS, Math.round((r.pct / 100) * TICKS)));
+      let bar = ''; for (let i = 1; i <= TICKS; i++) bar += `<i class="${i <= filled ? '' : 'todo'}"></i>`;
+      const minLeft = Math.max(1, Math.round((r.reading_min || 1) * (1 - (r.pct || 0) / 100)));
+      return `<div class="rzc"><div class="top"><span class="mono">${esc(initials(r.author_name))}</span><h3>${esc(r.title)}</h3></div>`
+        + `<div class="bar">${bar}</div>`
+        + `<div class="st"><span><em>${r.pct}%</em> read</span><span class="sep">·</span><span><em>${minLeft} min</em> left</span></div></div>`;
+    }).join('');
+    (document.getElementById('rez') as HTMLElement).hidden = false;
+  }
+  document.getElementById('rezclear')?.addEventListener('click', () => { (document.getElementById('rez') as HTMLElement).hidden = true; });
+
   load();
+  loadContinue();
   loadFields();
   loadWays();
 </script>
