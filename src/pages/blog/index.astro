@@ -72,24 +72,26 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #stream .grp { display: flex; align-items: baseline; gap: 16px; padding: 36px 0 10px; }
   #stream .grp h2 { font-family: var(--serif-display); font-weight: 600; font-size: 22px; margin: 0; letter-spacing: -.01em; }
   #stream .grp .rule { flex: 1; height: 1px; background: var(--rule); }
-  #stream .post { display: grid; grid-template-columns: auto 1fr; gap: 0 clamp(12px, 1.6vw, 18px); padding: 22px 0; }
-  #stream .post .rail { position: relative; grid-row: 1 / span 2; width: 36px; }
+  #stream .post { position: relative; display: grid; grid-template-columns: 36px auto minmax(0, 1fr) auto; column-gap: clamp(12px, 1.6vw, 16px); padding: 22px 0; align-items: start; }
+  #stream .post .rail { grid-column: 1; align-self: start; width: 36px; }
   #stream .mono { width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--rule); background: var(--paper-2); display: grid; place-items: center; margin: 0 auto; position: relative; z-index: 1; font-family: var(--serif-display); font-size: 13px; font-weight: 600; color: var(--ink-soft); letter-spacing: .03em; transition: border-color .2s, color .2s; }
   #stream .post:hover .mono { border-color: var(--accent); color: var(--accent); }
   #stream .post.cont .mono { display: none; }
   /* One continuous spine per author run: real line elements with OVERLAPPING offsets
      (padding is 22px, so -24 overlaps ~2px each side — no sub-pixel breaks). The run
      never crosses a month header because collapse() resets per group. */
-  #stream .post .line { position: absolute; left: 50%; transform: translateX(-50%); width: 1px; background: var(--rule-soft); display: none; }
-  #stream .post.runstart .line { display: block; top: 44px; bottom: -26px; }
-  #stream .post.cont .line { display: block; top: -26px; bottom: -26px; }
-  #stream .post.cont.runend .line { bottom: auto; height: 41px; }
-  #stream .post .bead { position: absolute; left: 50%; top: 15px; width: 6px; height: 6px; margin-left: -3px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 55%, transparent); display: none; transition: background .2s, transform .2s; }
+  /* The spine is anchored to .post (full-height, zero gap between rows), not the rail —
+     so it never depends on grid-cell height. Offsets are from .post's box (22px padding);
+     consecutive rows touch, so cont segments overlap 4px → continuous. */
+  #stream .post .line { position: absolute; left: 18px; transform: translateX(-50%); width: 1px; background: var(--rule-soft); display: none; }
+  #stream .post.runstart .line { display: block; top: 62px; bottom: -4px; }
+  #stream .post.cont .line { display: block; top: -4px; bottom: -4px; }
+  #stream .post.cont.runend .line { bottom: auto; height: 34px; }
+  #stream .post .bead { position: absolute; left: 18px; top: 30px; width: 6px; height: 6px; margin-left: -3px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 55%, transparent); display: none; transition: background .2s, transform .2s; }
   #stream .post.cont .bead { display: block; }
   #stream .post.cont:hover .bead { background: var(--accent); transform: scale(1.3); }
-  #stream .pmain { display: flex; align-items: flex-start; gap: clamp(13px, 1.6vw, 18px); min-width: 0; }
-  #stream .ptext { min-width: 0; flex: 1; }
-  #stream .picon { position: relative; width: 108px; height: 108px; flex: none; border: 1px solid var(--rule-soft); border-radius: 3px; background: var(--paper-2); overflow: hidden; transition: border-color .25s; }
+  #stream .picon { grid-column: 2; align-self: start; position: relative; width: 108px; height: 108px; border: 1px solid var(--rule-soft); border-radius: 3px; background: var(--paper-2); overflow: hidden; transition: border-color .25s; }
+  #stream .ptext { grid-column: 3; min-width: 0; }
   #stream .picon::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 110% at 22% 14%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 68%); }
   #stream .post:hover .picon { border-color: color-mix(in srgb, var(--accent) 32%, var(--rule)); }
   #stream .byline { display: flex; align-items: baseline; gap: 9px; margin: 0 0 7px; font-family: var(--sans); font-size: 12.5px; flex-wrap: wrap; }
@@ -109,16 +111,23 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #stream .pcrumb .ticks i { width: 11px; height: 3px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 60%, transparent); }
   #stream .pcrumb .ticks i.todo { background: color-mix(in srgb, var(--ink) 16%, transparent); }
   #stream .pcrumb .ticks i.here { background: var(--accent); height: 6px; }
-  #stream .aside { grid-column: 2; display: flex; align-items: baseline; gap: 10px; margin-top: 12px; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
+  #stream .aside { grid-column: 4; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 2px; text-align: right; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+  #stream .aside .curve { display: block; width: 74px; height: 24px; overflow: visible; margin-top: 4px; }
+  #stream .curve path.fill { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
+  #stream .curve path.line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; }
+  #stream .curve line.base { stroke: var(--rule); stroke-width: 1; }
+  #stream .curve circle.cliff { fill: var(--paper); stroke: var(--accent); stroke-width: 1.3; }
   #stream .post.is-hidden, #stream .grp.is-hidden, #stream .post-list.is-hidden { display: none; }
   @media (max-width: 620px) {
-    #stream .post { grid-template-columns: 1fr; }
-    #stream .post .rail { grid-row: auto; margin-bottom: 8px; width: auto; }
+    #stream .post { grid-template-columns: auto minmax(0, 1fr); }
+    #stream .post .rail { grid-column: 1; grid-row: 1 / span 2; align-self: start; }
     #stream .post.cont .mono { display: grid; opacity: .4; width: 30px; height: 30px; }
     #stream .post.cont .byline { display: flex; }
     #stream .post .line, #stream .post .bead { display: none !important; }
     #stream .picon { display: none; }
-    #stream .aside { grid-column: 1; }
+    #stream .ptext { grid-column: 2; grid-row: 1; }
+    #stream .aside { grid-column: 2; grid-row: 2; flex-direction: row; align-items: baseline; text-align: left; margin-top: 8px; }
+    #stream .aside .curve { margin-top: 0; margin-left: auto; }
   }
 </style>
 
@@ -155,9 +164,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       const names = p.author_names.filter(Boolean);
       const head = `<span class="nm">${esc(names[0])}</span>`;
       const rest = names.length === 2 ? `<span class="co">& ${esc(names[1])}</span>` : `<span class="co">& ${names.length - 1} others</span>`;
-      return head + rest + `<span class="hd">@${esc(p.primary_handle)}</span>`;
+      return head + rest;
     }
-    return `<span class="nm">${esc(p.primary_name)}</span><span class="hd">@${esc(p.primary_handle)}</span>`;
+    return `<span class="nm">${esc(p.primary_name)}</span>`;
+  }
+
+  // The reading shape: readers-remaining at each decile → a retention curve (a shape,
+  // not a score). The steepest drop gets a "cliff" dot. Empty when there's no data yet.
+  const retention = new Map<string, number[]>();
+  function curveSvg(samples: number[] | undefined) {
+    if (!samples || !samples.length) return '';
+    const W = 86, top = 3, bot = 24;
+    const pts = samples.map((s, i) => [(i / (samples.length - 1)) * W, top + (100 - Math.max(0, Math.min(100, s))) / 100 * (bot - top)]);
+    const all = [[0, pts[0][1]], ...pts];
+    const d = all.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+    let ni = -1, md = 0;
+    for (let i = 1; i < pts.length; i++) { const dd = pts[i][1] - pts[i - 1][1]; if (dd > md) { md = dd; ni = i; } }
+    const cliff = md > 5 && ni > 0 ? `<circle class="cliff" cx="${pts[ni][0].toFixed(1)}" cy="${pts[ni][1].toFixed(1)}" r="2.4"></circle>` : '';
+    return `<svg class="curve" viewBox="0 0 86 28" aria-label="Reading shape: how many readers stayed to the end"><path class="fill" d="${d} L86 28 L0 28 Z"></path><path class="line" d="${d}"></path><line class="base" x1="0" y1="27" x2="86" y2="27"></line>${cliff}</svg>`;
   }
 
   function crumb(p: any) {
@@ -178,18 +202,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     el.dataset.rt = String(p.reading_min || 1);
     const tags = (p.tags || []).slice(0, 4).map((t: string) => `<button class="tag" type="button" data-tag="${esc(t)}">${esc(t)}</button>`).join('');
     el.innerHTML =
-      `<div class="rail"><span class="mono">${esc(initials(p.primary_name))}</span><span class="line"></span><span class="bead"></span></div>` +
-      `<div class="pmain">` +
-        `<div class="ptext">` +
-          `<p class="byline">${byline(p)}</p>` +
-          `<h3>${esc(p.title)}</h3>` +
-          (p.description ? `<p class="sum">${esc(p.description)}</p>` : '') +
-          (tags ? `<div class="tags">${tags}</div>` : '') +
-          crumb(p) +
-        `</div>` +
-        `<span class="picon" aria-hidden="true"></span>` +
+      `<div class="rail"><span class="mono">${esc(initials(p.primary_name))}</span></div>` +
+      `<span class="line"></span><span class="bead"></span>` +
+      `<span class="picon" aria-hidden="true"></span>` +
+      `<div class="ptext">` +
+        `<p class="byline">${byline(p)}</p>` +
+        `<h3>${esc(p.title)}</h3>` +
+        (p.description ? `<p class="sum">${esc(p.description)}</p>` : '') +
+        (tags ? `<div class="tags">${tags}</div>` : '') +
+        crumb(p) +
       `</div>` +
-      `<div class="aside"><span>${esc(fmtDate(p.pub_date))}</span><span>${esc(p.reading_min || 1)} min</span></div>`;
+      `<div class="aside"><span class="dt">${esc(fmtDate(p.pub_date))}</span><span class="rt">${esc(p.reading_min || 1)} min</span>${curveSvg(retention.get(p.slug))}</div>`;
     return el;
   }
 
@@ -261,6 +284,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const got = data || [];
     rows = rows.concat(got);
     before = got.length === PAGE ? got[got.length - 1].pub_date : null;
+    // Pull the reading shapes for this page's posts (best-effort; the feed renders without them).
+    const slugs = got.map((p: any) => p.slug).filter((s: string) => !retention.has(s));
+    if (slugs.length) {
+      const { data: ret } = await supabase.rpc('feed_retention', { p_slugs: slugs });
+      (ret || []).forEach((r: any) => { if (r.samples) retention.set(r.slug, r.samples); });
+    }
     render();
     moreBtn.disabled = false;
   }

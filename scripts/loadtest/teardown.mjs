@@ -16,6 +16,8 @@ async function main() {
     // Reader interactions tied to lt- posts (the rest cascade when the user is deleted).
     const rp = await pool.query(`delete from public.reader_progress where post_slug like '${LT.prefix}%'`);
     const nt = await pool.query(`delete from public.notes         where post_id  like '${LT.prefix}%'`);
+    const an = await pool.query(`delete from public.analytics_events where session like 'lt-%' or slug like '${LT.prefix}%'`);
+    console.log(`analytics events removed: ${an.rowCount}`);
     // Content (joins cascade from posts/series/fields). posts.author_id is ON DELETE
     // RESTRICT, so posts MUST go before the auth users are deleted below.
     const po = await pool.query(`delete from content.posts  where slug like '${LT.prefix}%'`);
