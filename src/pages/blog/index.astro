@@ -27,6 +27,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       <p class="lede">Nothing is ranked, promoted or trending. Work arrives in order, read live from the database — start something rather than scroll past it.</p>
     </header>
 
+    <!-- Fields shelf: the map. Client-rendered from public.list_public_fields, each tile a
+         generative plate. Hidden until at least one field is public (>=2 series). -->
+    <section class="fieldsec" id="fieldshelf" hidden>
+      <div class="slab"><span class="eyebrow">Fields</span><span class="line"></span></div>
+      <div class="shelf" id="shelf"></div>
+    </section>
+
     <div class="filters">
       <label class="search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.6-3.6"></path></svg>
@@ -133,6 +140,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #stream .curve line.base { stroke: var(--rule); stroke-width: 1; }
   #stream .curve circle.cliff { fill: var(--paper); stroke: var(--accent); stroke-width: 1.3; }
   #stream .post.is-hidden, #stream .grp.is-hidden, #stream .post-list.is-hidden { display: none; }
+
+  /* ——— the fields shelf (the map) ——— tiles are JS-created, so styled globally under #fieldshelf */
+  #fieldshelf { padding: clamp(24px, 3.4vw, 40px) 0 clamp(30px, 4vw, 48px); }
+  #fieldshelf .slab { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  #fieldshelf .slab .eyebrow { font-family: var(--sans); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-faint); }
+  #fieldshelf .slab .line { height: 1px; flex: 1; background: var(--rule); }
+  #fieldshelf .shelf { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; padding: 2px 2px 6px; }
+  #fieldshelf .ftile { position: relative; display: block; height: 172px; border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--paper-2); transition: border-color .2s, transform .2s; }
+  #fieldshelf .ftile:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--rule)); transform: translateY(-2px); }
+  #fieldshelf .ftile .plate { position: absolute; inset: 0; }
+  #fieldshelf .ftile .plate::after { content: ""; position: absolute; inset: 0; background: radial-gradient(105% 95% at var(--wx, 20%) var(--wy, 12%), color-mix(in srgb, var(--accent) var(--wo, 13%), transparent), transparent 66%); }
+  #fieldshelf .ftile .plate svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #fieldshelf .ftile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 34px 15px 13px; background: linear-gradient(transparent, color-mix(in srgb, var(--paper-2) 88%, transparent) 46%, var(--paper-2)); }
+  #fieldshelf .ftile h3 { font-family: var(--serif-display); font-weight: 600; font-size: 18.5px; line-height: 1.2; letter-spacing: -.015em; margin: 0; color: var(--ink); text-wrap: pretty; }
+  #fieldshelf .ftile:hover h3 { color: var(--accent); }
+  #fieldshelf .ftile .fm { display: block; margin-top: 6px; font-family: var(--sans); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  @media (max-width: 760px) { #fieldshelf .shelf { grid-template-columns: 1fr; } }
+
   @media (max-width: 620px) {
     #stream .post { grid-template-columns: auto minmax(0, 1fr); }
     #stream .post .rail { grid-column: 1; grid-row: 1 / span 2; align-self: start; }
@@ -148,6 +173,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 <script>
   import { supabase } from '../../lib/supabase';
+  import { initFieldPlates } from '../../lib/field-plates.js';
 
   const stream = document.getElementById('stream')!;
   const q = document.getElementById('q') as HTMLInputElement;
@@ -365,5 +391,23 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   sortSel.addEventListener('change', render);
   moreBtn.addEventListener('click', load);
   empty.querySelector('[data-reset]')?.addEventListener('click', (e) => { e.preventDefault(); q.value = ''; subject = null; sortSel.value = 'new'; render(); });
+
+  // The fields shelf (the map). Independent of the stream; stays hidden if no field is public yet.
+  async function loadFields() {
+    const { data, error } = await supabase.rpc('list_public_fields', { p_limit: 8 });
+    if (error || !data || !data.length) return;
+    const shelf = document.getElementById('shelf')!;
+    const washes = [[20, 12, 13], [78, 80, 11], [50, 20, 12], [30, 72, 12]];
+    shelf.innerHTML = data.map((f: any, i: number) => {
+      const w = washes[i % washes.length];
+      const meta = `${f.series_count} series · ${f.published_posts} of ${f.total_posts} published`;
+      return `<div class="ftile"><span class="plate" data-field-plate="${esc(f.plate_spec || '')}" style="--wx:${w[0]}%;--wy:${w[1]}%;--wo:${w[2]}%"></span>`
+        + `<span class="cap"><h3>${esc(f.title)}</h3><span class="fm">${esc(meta)}</span></span></div>`;
+    }).join('');
+    initFieldPlates(shelf);
+    (document.getElementById('fieldshelf') as HTMLElement).hidden = false;
+  }
+
   load();
+  loadFields();
 </script>

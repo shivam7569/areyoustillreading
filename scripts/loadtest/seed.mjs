@@ -91,25 +91,28 @@ async function main() {
     }
     console.log(`  posts: ${postCount}`);
 
-    // ── one series (first 5 posts) + one field per author ───────────────────
+    // ── one field of TWO series per author ──────────────────────────────────
+    // A field is public only once it gathers >=2 series, so seed two per field: series 1
+    // over posts 1–5, series 2 over posts 6–10. Both are self-membership → accepted, so
+    // the field crumb populates and the field shows on the shelf.
     for (const a of authors) {
-      const sres = await pool.query(
-        `insert into content.series (owner_id, slug, title, summary, total, status)
-         values ($1,$2,$3,'A synthetic series.',5,'in-progress') returning id`,
-        [a.id, `${LT.prefix}series-${a.i}`, `LT Series ${a.i}`],
-      );
-      const posts = await pool.query('select id from content.posts where author_id=$1 order by slug limit 5', [a.id]);
-      let pos = 1;   // Part numbers are 1-based (what a reader sees as "Part N of 5")
-      for (const p of posts.rows) await pool.query('insert into content.series_posts (series_id, post_id, position, accepted) values ($1,$2,$3,true)', [sres.rows[0].id, p.id, pos++]);
-      // A field needs >=2 series to be public; one synthetic series each keeps this simple (field stays "not public yet").
       const fres = await pool.query(
         `insert into content.fields (owner_id, slug, title, summary, mark) values ($1,$2,$3,'A synthetic field.','0${(a.i % 9) + 1}') returning id`,
         [a.id, `${LT.prefix}field-${a.i}`, `LT Field ${a.i}`],
       );
-      // Put the series in the field (self-membership → accepted) so the feed's field crumb populates.
-      await pool.query('insert into content.field_series (field_id, series_id, position, accepted) values ($1,$2,0,true)', [fres.rows[0].id, sres.rows[0].id]);
+      for (let sIdx = 1; sIdx <= 2; sIdx++) {
+        const sres = await pool.query(
+          `insert into content.series (owner_id, slug, title, summary, total, status)
+           values ($1,$2,$3,'A synthetic series.',5,'in-progress') returning id`,
+          [a.id, `${LT.prefix}series-${a.i}-${sIdx}`, `LT Series ${a.i}.${sIdx}`],
+        );
+        const posts = await pool.query('select id from content.posts where author_id=$1 order by slug offset $2 limit 5', [a.id, (sIdx - 1) * 5]);
+        let pos = 1;   // Part numbers are 1-based (what a reader sees as "Part N of 5")
+        for (const p of posts.rows) await pool.query('insert into content.series_posts (series_id, post_id, position, accepted) values ($1,$2,$3,true)', [sres.rows[0].id, p.id, pos++]);
+        await pool.query('insert into content.field_series (field_id, series_id, position, accepted) values ($1,$2,$3,true)', [fres.rows[0].id, sres.rows[0].id, sIdx - 1]);
+      }
     }
-    console.log(`  series + fields: ${authors.length} each`);
+    console.log(`  fields (2 series each): ${authors.length}`);
 
     // ── readers ─────────────────────────────────────────────────────────────
     const readers = [];
