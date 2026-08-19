@@ -199,7 +199,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #fieldshelf .slab .line { height: 1px; flex: 1; background: var(--rule); }
   #fieldshelf .slab .more-link { font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; text-decoration: none; transition: color .2s; }
   #fieldshelf .slab .more-link:hover { color: var(--accent); }
-  #fieldshelf .shelf { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; padding: 2px 2px 6px; }
+  /* Fields shelf: two columns (2×2 for the four fields), one column on mobile. Never more. */
+  #fieldshelf .shelf { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 2px 2px 6px; }
   #fieldshelf .ftile { position: relative; display: block; height: 172px; border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--paper-2); transition: border-color .2s, transform .2s; }
   #fieldshelf .ftile:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--rule)); transform: translateY(-2px); }
   #fieldshelf .ftile .plate { position: absolute; inset: 0; }
@@ -209,7 +210,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #fieldshelf .ftile h3 { font-family: var(--serif-display); font-weight: 600; font-size: 18.5px; line-height: 1.2; letter-spacing: -.015em; margin: 0; color: var(--ink); text-wrap: pretty; }
   #fieldshelf .ftile:hover h3 { color: var(--accent); }
   #fieldshelf .ftile .fm { display: block; margin-top: 6px; font-family: var(--sans); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
-  @media (max-width: 760px) { #fieldshelf .shelf { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { #fieldshelf .shelf { grid-template-columns: 1fr; } }
 
   /* ——— ways in ——— three routes by reading shape (cards + a mini curve each) */
   #waysin { padding: 0 0 clamp(34px, 4.4vw, 50px); }
