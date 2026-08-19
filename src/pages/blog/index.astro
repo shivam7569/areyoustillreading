@@ -121,9 +121,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
      keeps the row content aligned with the section while the fill extends 14px past it — so the
      round monogram sits INSIDE the fill instead of tangent to its sharp edge. */
   #stream .post { position: relative; display: grid; grid-template-columns: 36px auto minmax(0, 1fr) auto; column-gap: clamp(12px, 1.6vw, 16px); padding: 22px 14px; margin: 0 -14px; border-radius: 10px; align-items: start; transition: background .18s ease; }
-  #stream .post .rail { grid-column: 1; align-self: start; width: 36px; }
-  #stream .mono { width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--rule); background: var(--paper-2); display: grid; place-items: center; margin: 0 auto; position: relative; z-index: 1; font-family: var(--serif-display); font-size: 13px; font-weight: 600; color: var(--ink-soft); letter-spacing: .03em; transition: border-color .2s, color .2s; }
-  #stream .post:hover .mono { border-color: var(--accent); color: var(--accent); }
+  /* Each cell is pinned to row 1 (mark · picon · text · date-curve, top-aligned) — without it the
+     auto-placer split them across two rows (aside alone up top, the rest pushed ~125px down). Set
+     per-item so the mobile media queries below still override cleanly. */
+  #stream .post .rail { grid-column: 1; grid-row: 1; align-self: start; width: 36px; display: flex; flex-direction: column; align-items: center; padding-top: 3px; }
+  /* The author's mark: initials set in the display serif with a hairline beneath — type is
+     people, the square icon slot is the artwork. Not a filled avatar disc. */
+  #stream .mono { position: relative; z-index: 1; flex: none; font-family: var(--serif-display); font-weight: 600; font-size: 13.5px; line-height: 1; letter-spacing: .12em; color: var(--ink-soft); padding: 0 1px 7px; transition: color .2s; }
+  #stream .mono::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--rule); transition: background .2s; }
+  #stream .post:hover .mono { color: var(--accent); }
+  #stream .post:hover .mono::after { background: var(--accent); }
   #stream .post.cont .mono { display: none; }
   /* One continuous spine per author run: real line elements with OVERLAPPING offsets
      (padding is 22px, so -24 overlaps ~2px each side — no sub-pixel breaks). The run
@@ -132,14 +139,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
      so it never depends on grid-cell height. Offsets are from .post's box (22px padding);
      consecutive rows touch, so cont segments overlap 4px → continuous. */
   #stream .post .spine { position: absolute; left: 32px; transform: translateX(-50%); width: 1px; background: var(--rule-soft); display: none; }
-  #stream .post.runstart .spine { display: block; top: 62px; bottom: -4px; }
+  #stream .post.runstart .spine { display: block; top: 48px; bottom: -4px; }
   #stream .post.cont .spine { display: block; top: -4px; bottom: -4px; }
   #stream .post.cont.runend .spine { bottom: auto; height: 34px; }
-  #stream .post .bead { position: absolute; left: 32px; top: 30px; width: 6px; height: 6px; margin-left: -3px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 55%, transparent); display: none; transition: background .2s, transform .2s; }
+  #stream .post .bead { position: absolute; left: 32px; top: 26px; width: 6px; height: 6px; margin-left: -3px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 55%, transparent); display: none; transition: background .2s, transform .2s; }
   #stream .post.cont .bead { display: block; }
   #stream .post.cont:hover .bead { background: var(--accent); transform: scale(1.3); }
-  #stream .picon { grid-column: 2; align-self: start; position: relative; width: 108px; height: 108px; border: 1px solid var(--rule-soft); border-radius: 3px; background: var(--paper-2); overflow: hidden; transition: border-color .25s; }
-  #stream .ptext { grid-column: 3; min-width: 0; }
+  #stream .picon { grid-column: 2; grid-row: 1; align-self: start; position: relative; width: 108px; height: 108px; border: 1px solid var(--rule-soft); border-radius: 3px; background: var(--paper-2); overflow: hidden; transition: border-color .25s; }
+  #stream .ptext { grid-column: 3; grid-row: 1; min-width: 0; }
   #stream .picon::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 110% at 22% 14%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 68%); }
   #stream .post:hover .picon { border-color: color-mix(in srgb, var(--accent) 32%, var(--rule)); }
   #stream .byline { display: flex; align-items: baseline; gap: 9px; margin: 0 0 7px; font-family: var(--sans); font-size: 12.5px; flex-wrap: wrap; }
@@ -167,7 +174,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #stream .pcrumb .ticks i { width: 11px; height: 3px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 60%, transparent); }
   #stream .pcrumb .ticks i.todo { background: color-mix(in srgb, var(--ink) 16%, transparent); }
   #stream .pcrumb .ticks i.here { background: var(--accent); height: 6px; }
-  #stream .aside { grid-column: 4; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 2px; text-align: right; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+  #stream .aside { grid-column: 4; grid-row: 1; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 2px; text-align: right; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
   .curve { display: block; overflow: hidden; cursor: default; }
   #stream .aside .curve { width: 86px; height: 28px; margin-top: 6px; }
   .curve path.fill { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
@@ -187,7 +194,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #rez .rzc { display: block; border: 1px solid var(--rule); border-radius: 4px; background: var(--card); padding: 13px 15px 11px; transition: border-color .2s, transform .2s; }
   #rez .rzc:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--rule)); transform: translateY(-1px); }
   #rez .rzc .top { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
-  #rez .rzc .mono { width: 26px; height: 26px; flex: none; border-radius: 999px; border: 1px solid var(--rule); background: var(--paper-2); display: grid; place-items: center; font-family: var(--serif-display); font-size: 10.5px; font-weight: 600; color: var(--ink-soft); letter-spacing: .03em; }
+  #rez .rzc .mono { position: relative; flex: none; font-family: var(--serif-display); font-weight: 600; font-size: 11.5px; line-height: 1; letter-spacing: .1em; color: var(--ink-soft); padding: 0 1px 6px; }
+  #rez .rzc .mono::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--rule); }
   #rez .rzc h3 { font-family: var(--serif-display); font-weight: 600; font-size: 15.5px; line-height: 1.28; letter-spacing: -.01em; margin: 1px 0 0; color: var(--ink); min-width: 0; text-wrap: pretty; }
   #rez .rzc:hover h3 { color: var(--accent); }
   #rez .rzc .bar { display: flex; gap: 2px; margin: 11px 0 8px; }
@@ -239,7 +247,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   @media (max-width: 620px) {
     #stream .post { grid-template-columns: auto minmax(0, 1fr); }
     #stream .post .rail { grid-column: 1; grid-row: 1 / span 2; align-self: start; }
-    #stream .post.cont .mono { display: grid; opacity: .4; width: 30px; height: 30px; }
+    #stream .post.cont .mono { display: block; opacity: .4; }
     #stream .post.cont .byline { display: flex; }
     #stream .post .spine, #stream .post .bead { display: none !important; }
     #stream .picon { display: none; }
