@@ -75,6 +75,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       </section>
     </div>
   </div>
+
+  <!-- Fast, themed reading-shape tooltip (positioned by JS over the hovered curve). -->
+  <div class="shape-tip" id="shapeTip" role="tooltip" aria-hidden="true"></div>
 </BaseLayout>
 
 <style>
@@ -94,6 +97,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   .legend svg { width: 50px; height: 16px; overflow: visible; flex: none; }
   .more { padding: 26px 0 0; display: flex; }
   .feed-foot { padding: clamp(40px, 5.5vw, 68px) 0 clamp(56px, 8vw, 96px); }
+
+  /* The reading-shape tooltip — themed to the site (paper card, hairline rule, accent whisker). */
+  .shape-tip { position: fixed; z-index: 80; pointer-events: none; max-width: 236px; padding: 8px 11px 8px 12px;
+    font-family: var(--sans); font-size: 12px; line-height: 1.42; letter-spacing: .004em; color: var(--ink-soft);
+    background: var(--card); border: 1px solid var(--rule); border-left: 2px solid var(--accent); border-radius: 6px;
+    box-shadow: 0 10px 26px -12px color-mix(in srgb, var(--ink) 42%, transparent), 0 1px 2px color-mix(in srgb, var(--ink) 8%, transparent);
+    opacity: 0; transform: translateY(3px); transition: opacity .12s ease, transform .12s ease; text-wrap: pretty; }
+  .shape-tip.on { opacity: 1; transform: translateY(0); }
+  .shape-tip::after { content: ""; position: absolute; left: var(--tip-arrow, 50%); top: 100%; transform: translateX(-50%) rotate(45deg);
+    width: 7px; height: 7px; background: var(--card); border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin-top: -4px; }
+  .shape-tip.below::after { top: auto; bottom: 100%; margin-top: 0; margin-bottom: -4px; transform: translateX(-50%) rotate(225deg); }
 </style>
 
 <!-- Rows are created by client JS (no Astro scope attribute) → style them globally,
@@ -148,7 +162,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #stream .pcrumb .ticks i.todo { background: color-mix(in srgb, var(--ink) 16%, transparent); }
   #stream .pcrumb .ticks i.here { background: var(--accent); height: 6px; }
   #stream .aside { grid-column: 4; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 2px; text-align: right; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
-  .curve { display: block; overflow: hidden; }
+  .curve { display: block; overflow: hidden; cursor: default; }
   #stream .aside .curve { width: 86px; height: 28px; margin-top: 6px; }
   .curve path.fill { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
   .curve path.line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; }
@@ -271,20 +285,67 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   // not a score). The steepest drop gets a "cliff" dot. Empty when there's no data yet.
   const retention = new Map<string, number[]>();
   const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+  // Stable per-slug seed → each post draws a fixed but varied tooltip line (feed feels human).
+  const hashSeed = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return Math.abs(h); };
+  const pick = <T,>(arr: T[], seed: number) => arr[seed % arr.length];
 
-  // A short, honest sentence for the hover tooltip: what this shape says, no numbers as a score.
-  function shapeText(samples: number[]) {
+  // Pools of on-brand tooltip lines — a per-post seed picks one, so the feed reads varied, not
+  // templated. Tier by where the curve ends; a notch clause (with {x}) appends on a sharp drop.
+  const SHAPE_LINES = {
+    hold: [
+      'Nearly everyone who started stayed to the end',
+      'The piece held its line to the bottom',
+      'Few slipped away before the final paragraph',
+      'Readers followed this one clean through',
+      'It carried them right to the last line',
+      'Attention never wavered, first word to last',
+      'Almost no one set it down early',
+    ],
+    core: [
+      'A loyal few stayed the course; the rest slipped away',
+      'Held its true readers, lost the skimmers',
+      'The committed stayed on while the curious wandered off partway',
+      'Kept a devoted handful, let the crowd go',
+      'Thinned early to a faithful core that finished it',
+      'Only the invested made it to the last line',
+      'Not for everyone, and the right ones knew it',
+    ],
+    loses: [
+      'Readers drifted off well before the last line',
+      'Halfway in, the room began to thin',
+      'Held a crowd early, then quietly emptied out',
+      'Few readers reached the closing thought',
+      'Attention slipped its grip partway through',
+      'Most closed the tab long before the end',
+      'A slow leak from the first turn onward',
+    ],
+    // Position-focused (the "where"), worded to avoid echoing the tier lines' verbs.
+    notch: [
+      ', with the sharp fall just past {x}%',
+      ', the steep drop landing near {x}%',
+      ' — the break lands around {x}%',
+      ' — a clean cliff at {x}%',
+      '; most who left did so near {x}%',
+      '; the floor gives way around {x}%',
+    ],
+  };
+
+  // One short, engaging line for the hover tooltip — what the shape says about the reading,
+  // never a number as a score. {x} is a position along the piece, not a retention figure.
+  function shapeText(samples: number[], seed: number) {
     const finish = samples[samples.length - 1] ?? 0;
     let ni = -1, md = 0;
     for (let i = 1; i < samples.length; i++) { const drop = samples[i - 1] - samples[i]; if (drop > md) { md = drop; ni = i; } }
-    const held = finish >= 70 ? 'Holds most readers to the end.' : finish >= 45 ? 'Keeps a committed core to the end.' : 'Loses many readers before the end.';
-    const notch = md >= 14 && ni > 0 ? ` The steepest drop is around ${ni * 10}% in.` : '';
-    return `Reading shape — ${held}${notch}`;
+    const bucket = finish >= 70 ? 'hold' : finish >= 45 ? 'core' : 'loses';
+    const tier = pick(SHAPE_LINES[bucket], seed);
+    // a notch (a sharp shed of readers) only belongs where the piece actually lost the room
+    const notch = bucket !== 'hold' && md >= 14 && ni > 0 ? pick(SHAPE_LINES.notch, (seed >> 4) + 1).replace('{x}', String(ni * 10)) : '';
+    return `${tier}${notch}`;
   }
 
   // Smooth curve through the decile points (Catmull-Rom → cubic bézier), clamped inside the
   // box so the line can never leave the graph however sharp the drop.
-  function curveSvg(samples: number[] | undefined) {
+  function curveSvg(samples: number[] | undefined, seed = 0) {
     if (!samples || !samples.length) return '';
     const W = 86, top = 3.5, bot = 22.5;
     const y = (s: number) => top + (100 - clamp(s, 0, 100)) / 100 * (bot - top);
@@ -301,9 +362,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     for (let i = 1; i < P.length; i++) { const dd = P[i][1] - P[i - 1][1]; if (dd > md) { md = dd; ni = i; } }
     // Skip a cliff dot within 3px of either edge — overflow:hidden would clip it in half.
     const cliff = md > 3 && ni > 0 && P[ni][0] >= 3 && P[ni][0] <= 83 ? `<circle class="cliff" cx="${P[ni][0]}" cy="${P[ni][1]}" r="2.4"></circle>` : '';
-    const label = esc(shapeText(samples));
+    const label = esc(shapeText(samples, seed));
     // xMinYMid pins x=0 to the box's left edge at every size — never let the line drift out of frame.
-    return `<svg class="curve" viewBox="0 0 86 28" preserveAspectRatio="xMinYMid meet" role="img" aria-label="${label}"><title>${label}</title><path class="fill" d="${d} L86 28 L0 28 Z"></path><path class="line" d="${d}"></path><line class="base" x1="0" y1="27" x2="86" y2="27"></line>${cliff}</svg>`;
+    // Message rides on data-shape (read by the custom fast tooltip), not a slow native <title>.
+    return `<svg class="curve" viewBox="0 0 86 28" preserveAspectRatio="xMinYMid meet" role="img" aria-label="${label}" data-shape="${label}"><path class="fill" d="${d} L86 28 L0 28 Z"></path><path class="line" d="${d}"></path><line class="base" x1="0" y1="27" x2="86" y2="27"></line>${cliff}</svg>`;
   }
 
   // Field above, series line below (name · part · progress ticks). Rendered as styled text,
@@ -341,7 +403,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         (tags ? `<div class="tags">${tags}</div>` : '') +
         crumb(p) +
       `</div>` +
-      `<div class="aside"><span class="dt">${esc(fmtDate(p.pub_date))}</span><span class="rt">${esc(p.reading_min || 1)} min</span>${curveSvg(retention.get(p.slug))}</div>`;
+      `<div class="aside"><span class="dt">${esc(fmtDate(p.pub_date))}</span><span class="rt">${esc(p.reading_min || 1)} min</span>${curveSvg(retention.get(p.slug), hashSeed(p.slug))}</div>`;
     return el;
   }
 
@@ -480,7 +542,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const grid = document.getElementById('wgrid')!;
     grid.innerHTML = ['holds', 'hard', 'quick'].filter((r) => byRoute[r]).map((r) => {
       const d = byRoute[r], w = WAYS[r];
-      return `<div class="way"><span class="wk"><b>${esc(w.label)}</b>${curveSvg(d.samples)}</span>`
+      return `<div class="way"><span class="wk"><b>${esc(w.label)}</b>${curveSvg(d.samples, hashSeed(d.slug))}</span>`
         + `<h3>${esc(d.title)}</h3><span class="wm">${esc(d.author_name)} · ${esc(d.reading_min || 1)} min</span>`
         + `<p>${esc(w.copy)}</p></div>`;
     }).join('');
@@ -504,6 +566,35 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     (document.getElementById('rez') as HTMLElement).hidden = false;
   }
   document.getElementById('rezclear')?.addEventListener('click', () => { (document.getElementById('rez') as HTMLElement).hidden = true; });
+
+  // Reading-shape tooltip — a fast, themed hover box. The native <title> is too slow (~700ms)
+  // for readers to discover; this shows in 90ms and is styled to the site.
+  const tip = document.getElementById('shapeTip')!;
+  let tipTimer = 0;
+  function placeTip(curve: Element) {
+    const msg = curve.getAttribute('data-shape'); if (!msg) return;
+    tip.textContent = msg;
+    const cr = curve.getBoundingClientRect(), tr = tip.getBoundingClientRect();
+    let left = cr.left + cr.width / 2 - tr.width / 2;
+    left = Math.max(8, Math.min(window.innerWidth - tr.width - 8, left));
+    const above = cr.top - tr.height - 10, below = above < 8;
+    tip.classList.toggle('below', below);
+    tip.style.left = `${Math.round(left)}px`;
+    tip.style.top = `${Math.round(below ? cr.bottom + 10 : above)}px`;
+    tip.style.setProperty('--tip-arrow', `${Math.round(cr.left + cr.width / 2 - left)}px`);
+    tip.classList.add('on'); tip.setAttribute('aria-hidden', 'false');
+  }
+  function hideTip() { clearTimeout(tipTimer); tip.classList.remove('on'); tip.setAttribute('aria-hidden', 'true'); }
+  document.addEventListener('mouseover', (e) => {
+    const c = (e.target as HTMLElement).closest?.('.curve'); if (!c) return;
+    clearTimeout(tipTimer); tipTimer = window.setTimeout(() => placeTip(c), 90);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const c = (e.target as HTMLElement).closest?.('.curve'); if (!c) return;
+    if (e.relatedTarget && c.contains(e.relatedTarget as Node)) return;  // still inside the same curve
+    hideTip();
+  });
+  window.addEventListener('scroll', hideTip, { passive: true });
 
   load();
   loadContinue();
