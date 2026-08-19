@@ -12,6 +12,11 @@
     "astro": "astro",
     "test": "vitest run",
     "test:watch": "vitest",
+    "backfill": "node scripts/backfill-content.mjs",
+    "verify:content": "node scripts/verify-content-bytediff.mjs",
+    "loadtest:seed": "node scripts/loadtest/seed.mjs",
+    "loadtest:probe": "node scripts/loadtest/probe.mjs",
+    "loadtest:teardown": "node scripts/loadtest/teardown.mjs",
     "deploy": "npm run build && wrangler pages deploy dist --project-name=areyoustillreading",
     "deploy:preview": "npm run build && wrangler pages deploy dist --project-name=areyoustillreading --branch=preview"
   },
@@ -37,6 +42,7 @@
     "@types/node": "^26.1.1",
     "hast-util-from-html-isomorphic": "^2.0.0",
     "pagefind": "^1.5.2",
+    "pg": "^8.13.1",
     "unist-util-visit": "^5.1.0",
     "vitest": "^4.1.10",
     "wrangler": "^4.114.0"
