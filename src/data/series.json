@@ -7,6 +7,30 @@
       "total": 1,
       "status": "",
       "planned": []
+    },
+    {
+      "slug": "untitled-series",
+      "title": "f1",
+      "summary": "",
+      "total": 1,
+      "status": "",
+      "planned": []
+    },
+    {
+      "slug": "untitled-series-2",
+      "title": "f2",
+      "summary": "",
+      "total": 1,
+      "status": "",
+      "planned": []
+    },
+    {
+      "slug": "untitled-series-3",
+      "title": "f3",
+      "summary": "",
+      "total": 1,
+      "status": "",
+      "planned": []
     }
   ]
 }
