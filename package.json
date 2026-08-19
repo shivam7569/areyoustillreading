@@ -12,6 +12,7 @@
     "astro": "astro",
     "test": "vitest run",
     "test:watch": "vitest",
+    "db:apply": "node scripts/apply-sql.mjs",
     "backfill": "node scripts/backfill-content.mjs",
     "verify:content": "node scripts/verify-content-bytediff.mjs",
     "loadtest:seed": "node scripts/loadtest/seed.mjs",

@@ -1,0 +1,102 @@
+---
+/*
+ * =============================================================================
+ * src/pages/explore.astro  ·  ROUTE: "/explore"
+ * =============================================================================
+ * Phase 2 preview of the multi-author platform. This page is rendered CLIENT-SIDE
+ * from the new public read API (public.list_public_posts, a SECURITY DEFINER RPC
+ * over the content.* schema) via the anon Supabase client — so it shows every
+ * author's published work, read LIVE from Postgres with no rebuild. It is an
+ * interim visualization; production serving moves to the edge (SSR) later. It does
+ * not touch any existing route.
+ * =============================================================================
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Explore — areyoustillreading" description="Every author's published work, in one feed — read live from the database." wide>
+  <div class="wrap">
+    <header class="page-head">
+      <div class="kicker"><span class="line"></span><span class="eyebrow">Explore · live from the database</span></div>
+      <h1>Every author, <em>one feed.</em></h1>
+      <p class="lede">A first look at the multi-author platform: this list is read <strong>live from the new <code>content</code> tables in Postgres</strong>, aggregating every author's published work. Nothing here is baked into the build — it's fetched on load. (Author pages and permalinks come next.)</p>
+    </header>
+
+    <div class="stat" id="stat" aria-live="polite">Loading the feed…</div>
+    <div class="feed" id="feed"></div>
+    <div class="more-wrap"><button class="more" id="more" type="button" hidden>Load more</button></div>
+  </div>
+</BaseLayout>
+
+<style>
+  /* Elements rendered by Astro (scoped styling is fine). */
+  .stat { padding: 26px 2px; font-family: var(--sans); font-size: 14px; color: var(--ink-faint); border-top: 1px solid var(--rule); }
+  .feed { display: block; }
+  .more-wrap { display: flex; justify-content: center; padding: 34px 0 clamp(56px, 8vw, 96px); }
+  .more { font-family: var(--sans); font-size: 14px; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 999px; padding: 11px 26px; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+  .more:hover { border-color: var(--accent); }
+</style>
+
+<!-- Cards are created by client JS, so they carry no Astro scope attribute — style
+     them globally, contained under #feed (an id unique to this page → no leakage). -->
+<style is:global>
+  #feed .pcard { display: flex; justify-content: space-between; gap: 28px; padding: 22px 4px; border-top: 1px solid var(--rule); }
+  #feed .pcard:first-child { border-top: 0; }
+  #feed .main { flex: 1; min-width: 0; }
+  #feed .by { display: flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 11px; letter-spacing: 0.06em; color: var(--ink-faint); margin-bottom: 6px; }
+  #feed .by .h { color: var(--accent); font-weight: 600; letter-spacing: 0.02em; }
+  #feed .by .dot { opacity: 0.5; }
+  #feed h3 { font-family: var(--serif-display); font-weight: 600; font-size: 20px; line-height: 1.25; letter-spacing: -0.01em; margin: 0; }
+  #feed p { font-family: var(--sans); font-size: 14.5px; line-height: 1.55; color: var(--ink-soft); margin: 5px 0 0; max-width: 62ch; }
+  #feed .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  #feed .tag { font-family: var(--sans); font-size: 11px; color: var(--ink-soft); border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; }
+  #feed .aside { flex: none; text-align: right; white-space: nowrap; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }
+  @media (max-width: 560px) { #feed .pcard { flex-direction: column; gap: 10px; } #feed .aside { flex-direction: row; gap: 12px; text-align: left; } }
+</style>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const feed = document.getElementById('feed')!;
+  const stat = document.getElementById('stat')!;
+  const moreBtn = document.getElementById('more') as HTMLButtonElement;
+  const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+  const fmt = (d: string) => { const t = Date.parse(d); return isNaN(t) ? '' : new Date(t).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); };
+
+  let before: string | null = null;
+  let total = 0;
+  const PAGE = 25;
+
+  function card(p: any) {
+    const tags = (p.tags || []).slice(0, 3).map((t: string) => `<span class="tag">${esc(t)}</span>`).join('');
+    const el = document.createElement('article');
+    el.className = 'pcard';
+    el.innerHTML =
+      `<div class="main">` +
+        `<div class="by"><span class="h">@${esc(p.handle)}</span><span class="dot">·</span><span>${esc(p.pen_name)}</span></div>` +
+        `<h3>${esc(p.title)}</h3>` +
+        `<p>${esc(p.description)}</p>` +
+        (tags ? `<div class="tags">${tags}</div>` : '') +
+      `</div>` +
+      `<div class="aside"><span>${esc(fmt(p.pub_date))}</span><span>${esc(p.reading_min || 1)} min</span></div>`;
+    return el;
+  }
+
+  async function load() {
+    moreBtn.disabled = true;
+    const { data, error } = await supabase.rpc('list_public_posts', { p_limit: PAGE, p_before: before });
+    if (error) { stat.textContent = 'Could not load the feed: ' + error.message; return; }
+    const rows = data || [];
+    rows.forEach((p: any) => feed.appendChild(card(p)));
+    total += rows.length;
+    if (rows.length) before = rows[rows.length - 1].pub_date;
+    stat.textContent = `${total} post${total === 1 ? '' : 's'} across every author — read live from Postgres.`;
+    const done = rows.length < PAGE;
+    moreBtn.hidden = done;
+    moreBtn.disabled = false;
+    if (!total) stat.textContent = 'No published posts yet.';
+  }
+
+  moreBtn.addEventListener('click', load);
+  load();
+</script>
