@@ -87,6 +87,25 @@ export async function onRequest(context) {
     return next();
   }
 
+  // ── Legacy /blog/<slug> → canonical /@handle/slug (the one-URL collapse) ──────
+  // Every post lives at exactly one URL (/@handle/slug); the old single-author file URLs
+  // 301 to it. Only a MIGRATED file post resolves (get_blog_canonical filters on source_path);
+  // /blog itself, /blog/tags/…, and any non-post slug return nothing and fall through to the
+  // static page / 404. One RPC per /blog/<one-segment> GET — cheap and rare.
+  const blogPost = url.pathname.match(/^\/blog\/([^/]+)\/?$/);
+  if (blogPost && (request.method === 'GET' || request.method === 'HEAD')) {
+    try {
+      const rows = await permalinkRpc(env, 'get_blog_canonical', { p_slug: decodeURIComponent(blogPost[1]) });
+      const row = Array.isArray(rows) ? rows[0] : (rows && rows.handle ? rows : null);
+      if (row && row.handle) {
+        return new Response(null, {
+          status: 301,
+          headers: { location: `/@${row.handle}/${row.slug}${url.search}`, 'cache-control': 'public, max-age=0, must-revalidate' },
+        });
+      }
+    } catch { /* resolver hiccup → fall through to the static page (never worse than today) */ }
+  }
+
   if (!shouldOverlay(url, request.method)) return next();
   if (!env || !env.POSTS_HTML) return next();
 
