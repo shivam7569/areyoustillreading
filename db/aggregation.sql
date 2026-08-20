@@ -56,7 +56,9 @@ returns table (
   involved_handles citext[],
   involved_names   text[],
   tags            text[],
-  latest          timestamptz
+  latest          timestamptz,
+  part_mins       int[],          -- published parts' reading times in order (drives the series plate)
+  owner_slug      text            -- the first published part's slug (a link into the series)
 )
 language sql stable security definer set search_path = public, content, extensions as $$
   with pub as (   -- published, accepted parts of each series, with their authors + tags
@@ -75,7 +77,13 @@ language sql stable security definer set search_path = public, content, extensio
     (select array_agg(distinct pr2.handle) from content.profiles pr2 where pr2.id in (se.owner_id) or pr2.id in (select author_id from pub p2 where p2.series_id = se.id)),
     (select array_agg(distinct pr2.pen_name) from content.profiles pr2 where pr2.id in (se.owner_id) or pr2.id in (select author_id from pub p2 where p2.series_id = se.id)),
     (select array_agg(distinct t) from (select unnest(p3.tags) t from pub p3 where p3.series_id = se.id) u where t is not null),
-    max(p.pub_date)
+    max(p.pub_date),
+    coalesce((select array_agg(coalesce(po.reading_min, 1) order by sp.position)
+      from content.series_posts sp join content.posts po on po.id = sp.post_id
+      where sp.series_id = se.id and sp.accepted and po.status = 'published' and po.visibility = 'public' and po.deleted_at is null), '{}'),
+    (select po.slug from content.series_posts sp join content.posts po on po.id = sp.post_id
+      where sp.series_id = se.id and sp.accepted and po.status = 'published' and po.visibility = 'public' and po.deleted_at is null
+      order by sp.position limit 1)
   from content.series se
   join content.profiles pr on pr.id = se.owner_id
   left join pub p on p.series_id = se.id
