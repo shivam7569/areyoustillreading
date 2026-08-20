@@ -67,7 +67,15 @@ const posts = await getCollection('blog', ({ data }) => !data.draft);
 // Reshape the collection into the map OGImageRoute expects: { [id]: pageData }.
 // The key (post.id) is what becomes the `/og/<id>.png` path segment; the value
 // (post.data) is the validated frontmatter we read title/description from.
-const pages = Object.fromEntries(posts.map((post) => [post.id, post.data]));
+//
+// Plus a single BRANDED DEFAULT card at `/og/aysr.png`. DB-served posts (/@handle/slug)
+// are dynamic and unknown at build time, so they can't get a per-post PNG here; they point
+// their og:image at this default so the share card is a valid branded image, never a 404.
+// (Per-post OG for DB posts is a follow-on: a runtime satori/resvg-wasm Function.)
+const pages = {
+  ...Object.fromEntries(posts.map((post) => [post.id, post.data])),
+  aysr: { title: 'areyoustillreading', description: 'Considered essays on LLM engineering and the systems underneath.' },
+};
 
 // OGImageRoute builds and returns Astro's two required route exports for us:
 //   - getStaticPaths: enumerates one static path per entry in `pages`.

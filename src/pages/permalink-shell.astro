@@ -18,7 +18,8 @@
  *
  * SENTINELS (edge does targeted string replacement — no DOM selectors, can't drift):
  *   AYSRZZTITLE → title (in <title>/<h1>/og/twitter)   AYSRZZDESC → description
- *   AYSRZZID    → slug (og:image path)                  AYSRZZURL  → canonical absolute URL
+ *   AYSRZZURL   → canonical absolute URL                 AYSRZZUUID → post UUID (island keys)
+ *   AYSRZZAUTHOR → primary author name (Highlights)      og:image is the branded /og/aysr.png default
  *   <div data-shell-crumb>  → field/series crumb HTML (or empty)
  *   <div data-shell-byline> → the multi-author byline inner HTML
  *   <div data-shell-body>   → the rendered, sanitized post body HTML
@@ -40,7 +41,7 @@ import ReaderProgress from '../components/ReaderProgress.astro';
 import site from '../data/site.json';
 const c = (site as any).post || {};
 ---
-<BaseLayout title="AYSRZZTITLE" description="AYSRZZDESC" image="/og/AYSRZZID.png" wide>
+<BaseLayout title="AYSRZZTITLE" description="AYSRZZDESC" image="/og/aysr.png" wide>
   {/* Reading-progress bar (driven by the inline script below) + the reader-progress island
       (records the signed-in reader's furthest point → "Continue" + read-marks). */}
   <div class="progress" id="pg"></div>
