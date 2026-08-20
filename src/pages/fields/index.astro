@@ -1,85 +1,228 @@
 ---
 /*
- * =============================================================================
- * src/pages/fields/index.astro  ·  ROUTE: "/fields"
- * =============================================================================
- * The Fields index — the "Field" entry in the Blog dropdown. Lists every PUBLIC
- * field (a field is public only once it holds ≥2 public series; getPublicFields
- * enforces that). Each field shows its chosen generative mark (field-marks.mjs),
- * a summary, running totals, and its member series. Empty until two series belong
- * together — shown as a sentence, not a status.
+ * /fields — every public field across all authors, grouped by author (Claude Design "fields" template,
+ * wired to the DB). Live from public.list_public_fields_full; a field appears under EACH involved
+ * author with its role. The generative field MARK (one of ten, parameterised by the field's real
+ * series) is drawn by src/lib/field-marks.js. The design's "crossings" section (author-annotated
+ * handoffs between series, with quoted passages) runs on data we don't collect, so it's omitted
+ * rather than faked. A field is public only with ≥2 series and a published part.
  */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import SubscribeForm from '../../components/SubscribeForm.astro';
-import site from '../../data/site.json';
-import { getPublicFields } from '../../lib/fields';
-import { markSvg } from '../../lib/field-marks.mjs';
-import { washFor } from '../../lib/series-plate.mjs';
-
-const f = (site as any).fields || {};
-const fields = await getPublicFields();
-
-const fmtMonth = (d?: Date) => (d ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' }) : '');
-const STATUS_WORD: Record<string, string> = { 'in-progress': 'running', complete: 'complete', paused: 'paused' };
-const seriesMeta = (s: { total: number; parts: any[]; status: string }) =>
-  s.status === 'complete' ? `${s.total} parts · complete` : `${s.parts.length} of ${s.total} · ${STATUS_WORD[s.status] || 'running'}`;
-const markData = (field: { series: { total: number; parts: any[] }[] }) => field.series.map((s) => ({ n: s.total, pub: s.parts.length }));
 ---
 
-<BaseLayout title={f.indexSeo?.title || 'Field — areyoustillreading'} description={f.indexSeo?.description || 'Subject areas that gather several series — read one and stop, or follow the whole thing through.'} wide>
+<BaseLayout title="Fields — areyoustillreading" wide>
   <div class="wrap">
-    <header class="page-head">
-      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="fields.indexEyebrow">{f.indexEyebrow || 'Fields'}</span></div>
-      <h1><span data-cms="fields.indexTitle">{f.indexTitle || 'Some arguments'}</span> <em data-cms="fields.indexTitleEm">{f.indexTitleEm || 'outgrow a series.'}</em></h1>
-      <p class="lede" data-cms="fields.indexLede">{f.indexLede || 'A field is a subject I keep returning to — several series that answer different halves of the same question. Read one series and stop, or follow the whole thing through.'}</p>
+    <header class="page-head fdhead">
+      <div class="kicker"><span class="line"></span><span class="eyebrow">Fields</span></div>
+      <h1>A field is where <em>several series converge.</em></h1>
+      <p class="lede">One series answers a question. A field is what happens when the answers start needing each other — several runs, sometimes by different people, that add up to a body of work. A field opens here only once it holds two series.</p>
+      <p class="fdcount" id="fdcount" hidden></p>
     </header>
 
-    {fields.length > 0 ? (
-      <>
-        {fields.map((field) => {
-          const w = washFor(field.slug);
-          return (
-            <article class="field">
-              <a class="fart" href={`/fields/${field.slug}/`} style={`--wx:${w.x};--wy:${w.y};--wo:${w.o}`} aria-label={field.title} set:html={markSvg(field.mark, markData(field))} />
-              <div>
-                <h2><a href={`/fields/${field.slug}/`}>{field.title}</a></h2>
-                {field.summary && <p class="sum">{field.summary}</p>}
-                <div class="fmeta">
-                  <span><em>{field.seriesCount} series</em> · {field.partsTotal} parts</span>
-                  <span>{field.publishedTotal} published</span>
-                  {field.first && <span>Since {fmtMonth(field.first)}</span>}
-                </div>
-                <ol class="fseries">
-                  {field.series.map((s) => (
-                    <li><a href={`/fields/${field.slug}/`}>
-                      <span class={s.status === 'complete' ? 'd' : 'd open'}></span>
-                      <span class="t">{s.title}</span>
-                      <span class="lead"></span>
-                      <span class="m">{seriesMeta(s)}</span>
-                    </a></li>
-                  ))}
-                </ol>
-              </div>
-            </article>
-          );
-        })}
-        <div class="series-foot">
-          <div class="sub-inner">
-            <SubscribeForm heading={f.newsletterHeading || 'Follow the fields'} blurb={f.newsletterBlurb || 'New parts and new series go out by email as they publish — no noise, unsubscribe from any email in one click.'} headingKey="fields.newsletter.heading" blurbKey="fields.newsletter.blurb" />
-          </div>
+    <div id="fddir"><p class="feedlede" id="fdloading" style="padding:26px 0">Loading fields…</p></div>
+
+    <div class="fdlegend" id="fdlegend" hidden>
+      <span class="fdsw"><i></i> published</span>
+      <span class="fdsw"><i class="open"></i> planned</span>
+      <p>Every field carries a generated mark: one strand, band or cluster per member series, one node per part — a <b style="color:var(--accent);font-weight:600">solid dot</b> where the part is out, a hollow ring where it is still to come. The mark states the field's real shape, not a logo.</p>
+    </div>
+
+    <section class="fdspec" id="fdempty" hidden>
+      <div class="fdblank">
+        <div class="fdart"></div>
+        <div class="fdbt">
+          <h3>No fields yet.</h3>
+          <p>A field opens the moment an author's second series joins the same subject. Until then the series stand on their own, in <a class="link" href="/series">the series index</a>.</p>
+          <div class="fdbm">A single series is never dressed up as a field to fill this page.</div>
         </div>
-      </>
-    ) : (
-      <div class="fnone">
-        <h2 data-cms="fields.emptyTitle">{f.emptyTitle || 'No fields yet'}</h2>
-        <p data-cms="fields.emptyBody">{f.emptyBody || 'A field appears here once two series belong together. Until then there are only series, which is not a bad way to read either.'}</p>
-        <a class="btn btn-ghost" href="/series"><span data-cms="fields.emptyLink">{f.emptyLink || 'Browse the series'}</span> <span class="arrow">→</span></a>
       </div>
-    )}
+    </section>
+
+    <div class="series-foot">
+      <section class="letter" id="subscribe">
+        <SubscribeForm heading="Follow a field" blurb="A short email whenever a piece is published — including the next part of a field you're following. Nothing else." />
+      </section>
+    </div>
   </div>
 </BaseLayout>
 
-<style>
-  .series-foot { padding: clamp(44px, 6vw, 72px) 0 clamp(56px, 8vw, 96px); }
-  .sub-inner { max-width: 720px; }
+<style is:global>
+  /* Ported from the Claude Design "fields" template (crossings section omitted). GLOBAL because the
+     bands are injected at runtime; ships only on /fields. Tokens from global.css. */
+  .fdhead { padding: clamp(48px,7vw,96px) 0 0; }
+  .fdhead .kicker { display:flex; align-items:center; gap:14px; margin-bottom:22px; }
+  .fdhead .kicker .line { height:1px; width:48px; background:var(--accent); opacity:.6; }
+  .fdhead h1 { font-family:var(--serif-display); font-weight:600; font-size:clamp(34px,5vw,58px); line-height:1.04; letter-spacing:-.022em; margin:0 0 .4em; max-width:16ch; }
+  .fdhead h1 em { font-style:italic; color:var(--accent); }
+  .fdhead .lede { font-size:clamp(17px,2.1vw,21px); line-height:1.6; color:var(--ink-soft); max-width:60ch; margin:0; }
+  .mono { position:relative; flex:none; font-family:var(--serif-display); font-weight:600; font-size:12px; line-height:1; letter-spacing:.1em; color:var(--ink-soft); padding:0 1px 6px; transition:color .2s; }
+  .mono::after { content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:var(--rule); transition:background .2s; }
+  .mono.lg { font-size:19px; letter-spacing:.15em; color:var(--accent); padding-bottom:9px; }
+  .mono.lg::after { background:color-mix(in srgb,var(--accent) 45%,transparent); }
+  .fdcount { display:flex; align-items:baseline; gap:13px; flex-wrap:wrap; margin-top:24px; padding-top:17px; border-top:1px solid var(--rule); font-family:var(--sans); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+  .fdcount b { font-family:var(--serif-display); font-size:18px; font-weight:600; letter-spacing:-.01em; text-transform:none; color:var(--accent); }
+  .fdcount .dot { color:var(--rule); } .fdcount .fdplain { letter-spacing:0; text-transform:none; font-size:12.5px; }
+
+  .fdahead { display:flex; align-items:flex-end; gap:clamp(14px,2.2vw,24px); flex-wrap:wrap; padding:clamp(34px,4.4vw,54px) 0 clamp(16px,2vw,20px); }
+  .fdahead h2 { display:flex; align-items:center; gap:12px; font-family:var(--serif-display); font-weight:600; font-size:clamp(23px,2.9vw,31px); line-height:1; letter-spacing:-.02em; margin:0; }
+  .fdahead h2 a { color:var(--ink); } .fdahead h2 a:hover { color:var(--accent); }
+  .fdahead .fdnote { margin:0 0 3px; font-family:var(--sans); font-size:12.5px; line-height:1.5; color:var(--ink-faint); max-width:34ch; }
+  .fdahead .fdtop { margin-left:auto; display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding-bottom:3px; }
+  .fdahead .fdtop .fdlb { font-family:var(--sans); font-size:9.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .tag { font-family:var(--sans); font-size:11.5px; letter-spacing:.03em; color:var(--ink-faint); border:1px solid var(--rule); border-radius:999px; padding:3px 10px; }
+  a.tag:hover { border-color:var(--accent); color:var(--accent); }
+  @media(max-width:800px){ .fdahead .fdtop { margin-left:0; } }
+
+  .fband { display:grid; grid-template-columns:300px minmax(0,1fr); gap:clamp(26px,4vw,56px); padding:clamp(28px,3.6vw,42px) 0 clamp(32px,4.2vw,48px); border-top:1px solid var(--rule); }
+  @media(max-width:900px){ .fband { grid-template-columns:1fr; gap:22px; } }
+  .frail { align-self:start; }
+  .fmark { position:relative; display:block; aspect-ratio:3/2; margin:-4px 0 0 -20px; -webkit-mask-image:radial-gradient(104% 94% at 32% 50%,#000 16%,rgba(0,0,0,.6) 52%,transparent 80%),linear-gradient(to bottom,transparent,#000 15%,#000 85%,transparent); -webkit-mask-composite:source-in; mask-image:radial-gradient(104% 94% at 32% 50%,#000 16%,rgba(0,0,0,.6) 52%,transparent 80%),linear-gradient(to bottom,transparent,#000 15%,#000 85%,transparent); mask-composite:intersect; }
+  .fmark::after { content:""; position:absolute; inset:-14%; background:radial-gradient(80% 72% at var(--wx,20%) var(--wy,14%),color-mix(in srgb,var(--accent) var(--wo,13%),transparent),transparent 70%); pointer-events:none; }
+  .fmark svg { position:absolute; inset:0; width:100%; height:100%; display:block; overflow:visible; }
+  .fledger { margin:clamp(10px,1.4vw,16px) 0 0; border-top:1px solid var(--rule); }
+  .fledger div { display:flex; align-items:baseline; gap:12px; padding:9px 1px; border-bottom:1px solid var(--rule-soft); font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); }
+  .fledger .fdk { letter-spacing:.14em; text-transform:uppercase; font-size:9.5px; }
+  .fledger .fdv { margin-left:auto; font-family:var(--serif-display); font-size:15.5px; font-weight:600; letter-spacing:-.01em; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .fledger .fdv.fdq { font-family:var(--sans); font-size:12px; font-weight:400; color:var(--ink-soft); letter-spacing:0; }
+
+  .fdrole { display:flex; align-items:center; gap:9px; flex-wrap:wrap; font-family:var(--sans); font-size:9.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:12px; }
+  .fdrole .fdsh { color:var(--accent); }
+  .fband h3 { font-family:var(--serif-display); font-weight:600; font-size:clamp(28px,3.5vw,40px); line-height:1.06; letter-spacing:-.022em; margin:0 0 14px; text-wrap:pretty; }
+  .fband h3 a { color:var(--ink); } .fband:hover h3 a { color:var(--accent); }
+  .fband .fdsum { margin:0 0 18px; font-size:clamp(16.5px,2vw,18.5px); line-height:1.58; color:var(--ink-soft); max-width:60ch; text-wrap:pretty; }
+  .fband .fdsum em { font-style:italic; color:var(--ink); }
+  .fdwho { display:flex; align-items:baseline; flex-wrap:wrap; row-gap:8px; padding:0 0 18px; font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); }
+  .fdwho .fdlb { letter-spacing:.14em; text-transform:uppercase; font-size:9.5px; margin-right:15px; }
+  .fdwho .fdpair { display:inline-flex; align-items:baseline; gap:9px; padding-right:17px; margin-right:17px; border-right:1px solid var(--rule); }
+  .fdwho .fdpair:last-child { padding-right:0; margin-right:0; border-right:0; }
+  .fdwho .fdpair .mono { font-size:10.5px; letter-spacing:.13em; padding:0; color:var(--accent); }
+  .fdwho .fdpair .mono::after { display:none; }
+  .fdwho a { font-family:var(--serif-display); font-size:15.5px; letter-spacing:-.005em; color:var(--ink-soft); }
+  .fdwho a:hover { color:var(--accent); }
+
+  .flist { list-style:none; margin:0; padding:0; border-top:1px solid var(--rule); }
+  .flist li { border-bottom:1px solid var(--rule-soft); }
+  .flist a { display:grid; grid-template-columns:22px minmax(0,1fr) 116px 92px 76px; align-items:center; gap:clamp(10px,1.6vw,20px); padding:13px 2px; transition:padding-left .22s; }
+  .flist a:hover { padding-left:7px; }
+  @media(max-width:1080px){ .flist a { grid-template-columns:22px minmax(0,1fr) 100px 84px; } .flist .fdmins { display:none; } }
+  @media(max-width:680px){ .flist a { grid-template-columns:22px minmax(0,1fr) auto; row-gap:6px; } .flist .fdspine { display:none; } }
+  .flist .fdord { font-family:var(--sans); font-size:10.5px; letter-spacing:.1em; color:var(--ink-faint); font-variant-numeric:tabular-nums; }
+  .flist .fdt { min-width:0; }
+  .flist .fdt b { display:block; font-family:var(--serif-display); font-weight:600; font-size:17.5px; line-height:1.25; letter-spacing:-.01em; color:var(--ink); }
+  .flist a:hover .fdt b { color:var(--accent); }
+  .flist .fdt span { display:flex; align-items:center; gap:8px; margin-top:5px; font-family:var(--sans); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); }
+  .flist .fdt span .mono { font-size:10.5px; letter-spacing:.08em; padding-bottom:5px; }
+  .flist .fdspine { display:flex; gap:3px; }
+  .flist .fdspine i { flex:1; height:5px; border-radius:1px; background:transparent; box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 26%,transparent); }
+  .flist .fdspine i.fdon { background:var(--accent); box-shadow:none; }
+  .flist .fdst { font-family:var(--sans); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .flist .fdst.fdq { color:var(--ink-faint); }
+  .flist .fdmins { font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+
+  .fdlegend { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:clamp(24px,3vw,32px) 0 0; border-top:1px solid var(--rule); margin-top:clamp(4px,1vw,10px); font-family:var(--sans); font-size:11.5px; line-height:1.55; color:var(--ink-faint); }
+  .fdlegend .fdsw { display:flex; align-items:center; gap:7px; flex:none; }
+  .fdlegend .fdsw i { width:8px; height:8px; border-radius:999px; background:var(--accent); display:block; }
+  .fdlegend .fdsw i.open { background:transparent; box-shadow:inset 0 0 0 1.4px color-mix(in srgb,var(--accent) 70%,transparent); }
+  .fdlegend p { margin:0; max-width:82ch; }
+  .fdspec { padding:clamp(38px,5vw,62px) 0 0; }
+  .fdblank { display:flex; gap:clamp(22px,3.2vw,36px); align-items:flex-start; flex-wrap:wrap; border:1px solid var(--rule); border-radius:6px; background:var(--card); padding:clamp(24px,3.4vw,42px); }
+  .fdblank .fdart { position:relative; width:150px; height:100px; flex:none; border:1px solid var(--rule-soft); border-radius:4px; background:var(--paper-2); overflow:hidden; }
+  .fdblank .fdart::after { content:""; position:absolute; inset:0; background:radial-gradient(120% 110% at 24% 16%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 70%); }
+  .fdblank .fdbt { min-width:0; flex:1; }
+  .fdblank h3 { font-family:var(--serif-display); font-weight:600; font-size:clamp(21px,2.5vw,26px); line-height:1.16; letter-spacing:-.018em; margin:0 0 12px; }
+  .fdblank p { margin:0; font-size:16px; line-height:1.6; color:var(--ink-soft); max-width:52ch; }
+  .fdblank .fdbm { margin-top:17px; padding-top:14px; border-top:1px solid var(--rule-soft); font-family:var(--sans); font-size:12px; color:var(--ink-faint); }
+  .series-foot { padding:clamp(44px,6vw,72px) 0 clamp(52px,7vw,88px); } .series-foot .subscribe { max-width:720px; }
 </style>
+
+<script>
+  import { supabase } from '../../lib/supabase';
+  import { initFieldMarks } from '../../lib/field-marks.js';
+
+  const $ = (id: string) => document.getElementById(id)!;
+  const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+  const initials = (name: string) => { const w = String(name || '').trim().split(/\s+/).filter(Boolean); return ((w.length >= 2 ? w[0][0] + w[1][0] : (w[0] || '?').slice(0, 2)) || '?').toUpperCase(); };
+  const hash = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return Math.abs(h); };
+  const wash = (slug: string) => { const h = hash(slug); return `--wx:${12 + (h % 68)}%;--wy:${10 + ((h >> 6) % 76)}%;--wo:${11 + ((h >> 12) % 4)}%`; };
+  const hrsMin = (m: number) => { const h = Math.floor(m / 60), r = m % 60; return h ? `${h} hr${r ? ' ' + r + ' min' : ''}` : `${m} min`; };
+  const monthYr = (d: string) => { const t = Date.parse(d); return isNaN(t) ? '' : new Date(t).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); };
+  const fieldUrl = (f: any) => `/@${esc(f.owner_handle)}/f/${esc(f.slug)}`;
+
+  function memberHtml(f: any, ms: any, i: number) {
+    const total = ms.total || ms.published || 1;
+    let spine = ''; for (let k = 0; k < Math.min(total, 8); k++) spine += `<i class="${k < ms.published ? 'fdon' : ''}"></i>`;
+    const st = ms.status === 'complete' ? 'complete' : ms.status === 'paused' ? 'paused' : 'running';
+    const stCls = ms.status === 'complete' || ms.status === 'paused' ? ' fdq' : '';
+    return `<li><a href="/@${esc(ms.owner_handle)}/s/${esc(ms.slug)}">
+      <span class="fdord">${String(i + 1).padStart(2, '0')}</span>
+      <span class="fdt"><b>${esc(ms.title)}</b><span><span class="mono">${esc(initials(ms.owner_name))}</span>${esc(ms.owner_name)}</span></span>
+      <span class="fdspine">${spine}</span>
+      <span class="fdst${stCls}">${ms.published} of ${total} · ${esc(st)}</span>
+      <span class="fdmins">${ms.mins || 0} min</span>
+    </a></li>`;
+  }
+
+  function bandHtml(f: any, viewer: string) {
+    const involved = (f.involved_handles || []).map(String);
+    const names = (f.involved_names || []).map(String);
+    const isOwner = viewer === String(f.owner_handle);
+    let role;
+    if (isOwner) role = `<span>Runs this field</span>${involved.length > 1 ? '<span class="fdsh">· shared</span>' : ''}`;
+    else role = `<span class="fdsh">Shared</span><span>· run by</span><span class="mono">${esc(initials(f.owner_name))}</span><a href="/@${esc(f.owner_handle)}" style="color:var(--ink-soft);text-transform:none;letter-spacing:0;font-weight:400;font-size:11.5px">${esc(f.owner_name)}</a>`;
+    const who = involved.map((h: string, i: number) => `<span class="fdpair"><span class="mono">${esc(initials(names[i] || h))}</span><a href="/@${esc(h)}">${esc(names[i] || h)}</a></span>`).join('');
+    const members = (f.member_series || []).map((ms: any, i: number) => memberHtml(f, ms, i)).join('');
+    return `<article class="fband">
+      <div class="frail">
+        <a class="fmark" href="${fieldUrl(f)}" data-field-mark="${esc(f.mark)}" data-field-series="${esc(f.plate_spec)}" style="${wash(f.slug)}" aria-label="${esc(f.title)}"></a>
+        <div class="fledger">
+          <div><span class="fdk">Series</span><span class="fdv">${f.series_count}</span></div>
+          <div><span class="fdk">Parts</span><span class="fdv">${f.total_posts}</span></div>
+          <div><span class="fdk">Published</span><span class="fdv">${f.published_posts}</span></div>
+          <div><span class="fdk">End to end</span><span class="fdv fdq">${hrsMin(f.total_mins || 0)}</span></div>
+          ${f.running_since ? `<div><span class="fdk">Running since</span><span class="fdv fdq">${esc(monthYr(f.running_since))}</span></div>` : ''}
+        </div>
+      </div>
+      <div>
+        <div class="fdrole">${role}</div>
+        <h3><a href="${fieldUrl(f)}">${esc(f.title)}</a></h3>
+        ${f.summary ? `<p class="fdsum">${esc(f.summary)}</p>` : ''}
+        ${who ? `<p class="fdwho"><span class="fdlb">Written by</span>${who}</p>` : ''}
+        <ol class="flist">${members}</ol>
+      </div>
+    </article>`;
+  }
+
+  async function boot() {
+    let fields: any[] = [];
+    try { const { data } = await supabase.rpc('list_public_fields_full', { p_limit: 40 }); fields = data || []; }
+    catch { $('fddir').innerHTML = '<p class="feedlede" style="padding:26px 0">Couldn’t load fields.</p>'; return; }
+    if (!fields.length) { $('fddir').innerHTML = ''; $('fdempty').hidden = false; return; }
+
+    // page-head counts
+    const series = fields.reduce((a, f) => a + (f.series_count || 0), 0);
+    const pub = fields.reduce((a, f) => a + (f.published_posts || 0), 0);
+    const multi = fields.filter((f) => (f.involved_handles || []).length > 1).length;
+    $('fdcount').innerHTML = `<span><b>${fields.length}</b> field${fields.length === 1 ? '' : 's'}</span><span class="dot">·</span><span><b>${series}</b> series</span><span class="dot">·</span><span><b>${pub}</b> essays published</span>${multi ? `<span class="dot">·</span><span class="fdplain">${multi} span more than one author</span>` : ''}`;
+    $('fdcount').hidden = false;
+
+    // group each field under every involved author
+    const byAuthor = new Map<string, { handle: string; name: string; items: any[] }>();
+    for (const f of fields) {
+      const involved = (f.involved_handles || []).map(String);
+      const names = (f.involved_names || []).map(String);
+      involved.forEach((h: string, i: number) => {
+        if (!h) return;
+        if (!byAuthor.has(h)) byAuthor.set(h, { handle: h, name: names[i] || h, items: [] });
+        byAuthor.get(h)!.items.push(f);
+      });
+    }
+    const blocks = [...byAuthor.values()].sort((a, b) => b.items.length - a.items.length);
+    $('fddir').innerHTML = blocks.map((b) =>
+      `<div class="fdahead"><h2><span class="mono lg">${esc(initials(b.name))}</span><a href="/@${esc(b.handle)}">${esc(b.name)}</a></h2></div>${b.items.map((f: any) => bandHtml(f, b.handle)).join('')}`
+    ).join('');
+    initFieldMarks($('fddir'));
+    $('fdlegend').hidden = false;
+  }
+  boot();
+</script>
