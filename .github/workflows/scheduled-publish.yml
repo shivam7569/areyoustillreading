@@ -36,14 +36,9 @@ jobs:
           node-version: 20
       - name: Flip any due scheduled posts to published
         run: node scripts/publish-scheduled.mjs
-      # DB posts scheduled via the Studio's "Your page" destination: a status flip that is
-      # instant (the reader serves from the DB — no commit, no rebuild). Fail-safe: the script
-      # skips cleanly if the Supabase secrets aren't set, so it never breaks the file flip above.
-      - name: Flip any due scheduled DB posts to published (instant, no rebuild)
-        run: node scripts/flip-scheduled-db.mjs
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # NB: DB posts scheduled via the Studio's "Your page" destination are flipped live by a
+      # pg_cron job INSIDE Supabase (db/content-schedule.sql), not here — a DB flip is instant
+      # (the reader serves from the DB, no rebuild) and needs no GitHub secret.
       - name: Commit + push if anything went live
         id: commit
         run: |

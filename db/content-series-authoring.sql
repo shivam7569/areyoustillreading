@@ -25,8 +25,17 @@ begin
   if coalesce(nullif(btrim(p_series_slug), ''), '') = '' then raise exception 'series slug required'; end if;
   v_status := case when p_status in ('in-progress','complete','paused') then p_status::content.series_state else 'in-progress'::content.series_state end;
 
-  -- find-or-create the caller's own (non-deleted) series by slug
+  -- find-or-create the caller's own (non-deleted) series. Match by slug FIRST, else by TITLE
+  -- (case-insensitive) — a backfilled series' slug came from the file `series` frontmatter and
+  -- can differ from the editor's slugify(title) (e.g. title "The retrieval stack" slugifies to
+  -- "the-retrieval-stack" but the existing series is "retrieval-demo"), which would otherwise
+  -- create a DUPLICATE. Title match reuses the existing series instead.
   select id into v_series_id from content.series where owner_id = p_caller and slug = p_series_slug and deleted_at is null;
+  if v_series_id is null and coalesce(nullif(btrim(p_series_title), ''), '') <> '' then
+    select id into v_series_id from content.series
+      where owner_id = p_caller and lower(btrim(title)) = lower(btrim(p_series_title)) and deleted_at is null
+      order by created_at limit 1;
+  end if;
   if v_series_id is null then
     insert into content.series (owner_id, slug, title, summary, total, status, planned)
       values (p_caller, p_series_slug, coalesce(p_series_title, ''), coalesce(p_summary, ''), p_total, v_status, coalesce(p_planned, '{}'))

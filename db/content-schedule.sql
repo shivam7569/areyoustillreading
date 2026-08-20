@@ -61,4 +61,16 @@ revoke all on function public.flip_scheduled_posts()                            
 grant execute on function public.author_schedule_post(uuid,uuid,text,text,int,timestamptz) to service_role;
 grant execute on function public.flip_scheduled_posts()                                    to service_role;
 
+-- ── auto-flip via pg_cron (self-contained INSIDE Supabase — no external cron, no GH secret) ──
+-- flip_scheduled_posts() runs every minute, so a scheduled DB post goes live within ~1 min of its
+-- time. This is the primary mechanism (a DB flip is instant — the reader serves from the DB, no
+-- rebuild). Idempotent: enable the extension, drop any prior job of this name, then (re)schedule.
+create extension if not exists pg_cron;
+do $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname = 'flip-scheduled-posts';
+exception when others then null;  -- no prior job, or cron not ready — the schedule below still runs
+end $$;
+select cron.schedule('flip-scheduled-posts', '* * * * *', 'select public.flip_scheduled_posts()');
+
 notify pgrst, 'reload schema';
