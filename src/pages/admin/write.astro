@@ -1756,7 +1756,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // updates rather than colliding on the unique per-author slug). Series/field attach is a
     // later slice — DB posts publish standalone for now.
     let dbPostId = null;
-    async function publishToDb({ title, description, slug, body, tags, draft, token, penName, email, series }, status) {
+    async function publishToDb({ title, description, slug, body, tags, draft, token, penName, email, series, scheduleAt }, status) {
       status.textContent = 'Saving…';
       let saveJson;
       try {
@@ -1771,7 +1771,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         if (!saveRes.ok || !saveJson.post_id) { status.textContent = (saveJson && saveJson.error) || 'Could not save.'; return; }
       } catch (e) { status.textContent = 'Could not save: ' + ((e && e.message) || e); return; }
       dbPostId = saveJson.post_id;
-      if (draft) { status.textContent = 'Draft saved.'; return; }
+      // A pure draft (Save as draft) stops here; a SCHEDULED post still renders + is committed
+      // with a future publish_at (draft is also set for scheduling, so exclude it here).
+      if (draft && !scheduleAt) { status.textContent = 'Draft saved.'; return; }
 
       status.textContent = 'Rendering…';
       let bodyHtml, bodyText, readingMin;
@@ -1782,15 +1784,21 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         readingMin = Math.max(1, Math.round(bodyText.split(/\s+/).filter(Boolean).length / 200));
       } catch (e) { status.textContent = 'Could not render: ' + ((e && e.message) || e); return; }
 
-      status.textContent = 'Publishing…';
+      status.textContent = scheduleAt ? 'Scheduling…' : 'Publishing…';
       try {
         const pubRes = await fetch('/api/author/publish', {
           method: 'POST',
           headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ post_id: dbPostId, body_html: bodyHtml, body_text: bodyText, reading_min: readingMin, email: !!email, title, description }),
+          body: JSON.stringify({ post_id: dbPostId, body_html: bodyHtml, body_text: bodyText, reading_min: readingMin, email: !!email, title, description, schedule: scheduleAt || undefined }),
         });
         const pj = await pubRes.json().catch(() => ({}));
-        if (!pubRes.ok || !pj.url) { status.textContent = (pj && pj.error) || 'Could not publish.'; return; }
+        if (!pubRes.ok || (!pj.url && !pj.scheduled)) { status.textContent = (pj && pj.error) || 'Could not publish.'; return; }
+        // Scheduled → it isn't live yet, so don't jump to the page; the cron flips it live when due.
+        if (pj.scheduled) {
+          const when = pj.publish_at ? new Date(pj.publish_at).toLocaleString() : 'the scheduled time';
+          status.textContent = 'Scheduled for ' + when + ' — it will go live automatically.';
+          return;
+        }
         // Reflect the (best-effort) subscriber email in the status before the live-jump.
         if (email && pj.email && typeof pj.email.sent === 'number' && pj.email.sent > 0) {
           status.textContent = 'Published — emailed ' + pj.email.sent + ' subscriber' + (pj.email.sent === 1 ? '' : 's') + '. Opening your page…';
@@ -1798,7 +1806,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           status.textContent = 'Published — opening your page…';
         }
         window.location.href = pj.url;
-      } catch (e) { status.textContent = 'Could not publish: ' + ((e && e.message) || e); }
+      } catch (e) { status.textContent = 'Could not ' + (scheduleAt ? 'schedule' : 'publish') + ': ' + ((e && e.message) || e); }
     }
 
     // Publish.
@@ -1853,7 +1861,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           planned: $('pm-series-planned').value.split('\n').map((x) => x.trim()).filter(Boolean),
         } : null;
         $('pm-publish').disabled = true;
-        try { await publishToDb({ title, description, slug, body, tags: pubTags, draft, token, penName, email: emailSubs, series }, status); }
+        try { await publishToDb({ title, description, slug, body, tags: pubTags, draft, token, penName, email: emailSubs, series, scheduleAt: whenChoice === 'later' ? scheduleAt : null }, status); }
         finally { $('pm-publish').disabled = false; }
         return;
       }

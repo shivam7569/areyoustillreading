@@ -43,6 +43,21 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Could not vet content' }, 400);
   }
 
+  // Schedule (a future publish) instead of going live now — stores the vetted body + status
+  // 'scheduled' + publish_at; the cron (scripts/flip-scheduled-db.mjs) flips it live when due.
+  if (typeof p.schedule === 'string' && p.schedule) {
+    const sr = await svcRpc(env, 'author_schedule_post', {
+      p_caller: gate.userId, p_post_id: post_id, p_body_html: body_html,
+      p_body_text: typeof body_text === 'string' ? body_text : '',
+      p_reading_min: Number.isFinite(reading_min) ? Math.max(1, Math.round(reading_min)) : null,
+      p_publish_at: p.schedule,
+    });
+    if (!sr.ok) return rpcError(sr);
+    const row = Array.isArray(sr.data) ? sr.data[0] : sr.data;
+    if (!row || !row.slug || !row.handle) return json({ error: 'Schedule returned no location' }, 502);
+    return json({ ok: true, scheduled: true, publish_at: row.publish_at, slug: row.slug, handle: row.handle, url: `/@${row.handle}/${row.slug}` });
+  }
+
   const r = await svcRpc(env, 'author_publish', {
     p_caller: gate.userId,
     p_post_id: post_id,
