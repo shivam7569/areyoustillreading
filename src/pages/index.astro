@@ -321,12 +321,14 @@ import SubscribeForm from '../components/SubscribeForm.astro';
   @media(max-width:700px){.tape{height:78px}}
   .seg{position:relative;display:flex;flex-direction:column;justify-content:flex-end;padding:9px 9px 10px;border:1px solid var(--rule);border-radius:3px;background:transparent;text-align:left;cursor:pointer;overflow:hidden;transition:border-color .22s,background .22s}
   .seg::before{content:"";position:absolute;inset:0;background:color-mix(in srgb,var(--accent) 14%,transparent);opacity:0;transition:opacity .22s}
-  .seg .mn{position:relative;font-family:var(--serif-display);font-weight:600;font-size:17px;line-height:1;letter-spacing:-.01em;color:var(--ink-faint);font-variant-numeric:tabular-nums;transition:color .22s}
-  .seg .who{position:relative;margin-top:6px;font-family:var(--sans);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .22s}
+  /* Only the pieces you're spending on carry a number; the rest recede to quiet bars sized by
+     length, so a crowded fortnight reads as a calm ruler instead of a wall of figures. */
+  .seg .mn{position:relative;font-family:var(--serif-display);font-weight:600;font-size:17px;line-height:1;letter-spacing:-.01em;color:var(--ink-faint);font-variant-numeric:tabular-nums;opacity:0;transition:color .22s,opacity .22s}
   .seg.fits{border-color:color-mix(in srgb,var(--accent) 58%,var(--rule))}
   .seg.fits::before{opacity:1}
-  .seg.fits .mn{color:var(--accent)}
-  .seg.fits .who{color:var(--ink-soft)}
+  .seg.fits .mn{color:var(--accent);opacity:1}
+  .seg.next .mn{opacity:.55}
+  .seg:hover .mn{opacity:1}
   .seg:hover{border-color:var(--accent)}
   .seg.next{border-style:dashed;border-color:color-mix(in srgb,var(--accent) 45%,var(--rule))}
   .cut{position:absolute;left:0;top:-12px;bottom:-12px;width:1px;background:var(--accent);pointer-events:none;transition:left .22s}
@@ -537,7 +539,7 @@ import SubscribeForm from '../components/SubscribeForm.astro';
   // ——— the mark (tape / dial) ———
   function initMark() {
     const tape = $('mkTape'); if (!tape) return;
-    const P = state.tape.map((p) => ({ t: p.title, by: p.primary_name, m: initials(p.primary_name), base: Math.max(1, p.reading_min || 1), handle: p.primary_handle, slug: p.slug }));
+    const P = state.tape.map((p) => ({ t: p.title, by: p.primary_name, base: Math.max(1, p.reading_min || 1), handle: p.primary_handle, slug: p.slug }));
     if (!P.length) return;
     ($('markband') as HTMLElement).hidden = false;
     const rt = (p: any) => displayMin(p.base);
@@ -552,7 +554,7 @@ import SubscribeForm from '../components/SubscribeForm.astro';
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'seg'; b.style.flex = p.base + ' 1 0'; b.dataset.i = String(i);
       b.title = p.t + ' — ' + rt(p) + ' min';
-      b.innerHTML = `<span class="mn">${rt(p)}</span><span class="who">${esc(p.m)}</span>`;
+      b.innerHTML = `<span class="mn">${rt(p)}</span>`;
       tape.appendChild(b);
     });
     const cut = document.createElement('span'); cut.className = 'cut'; cut.innerHTML = '<i></i>'; tape.appendChild(cut);
