@@ -915,39 +915,30 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     if (editSlug) {
       statusEl.textContent = 'Loading…';
       try {
-        const { data } = await supabase.auth.getSession();
-        const token = data.session && data.session.access_token;
-        const res = await fetch(`/api/admin/post?slug=${encodeURIComponent(editSlug)}`, {
-          headers: token ? { Authorization: 'Bearer ' + token } : {},
-        });
-        const j = await res.json();
-        if (!res.ok) throw new Error(j.error || 'Could not load post');
-        const fm = j.frontmatter || {};
-        // Strip the frontmatter block; re-add the title as an H1 so the editor shows
-        // it the way a new post starts (publish strips the leading H1 back out). Also
-        // strip PUBLISH-injected cell outputs so they don't round-trip into the editor
-        // as literal text — the live cells re-run to regenerate fresh output on publish.
-        const bodyOnly = stripCellOutputs(String(j.markdown || '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, ''));
-        const title = typeof fm.title === 'string' && fm.title ? fm.title : editSlug;
+        // Load the DB post (the ONE store) for re-editing: author_get_post returns the caller's own
+        // post's Markdown + metadata. body_md is stored WITHOUT the leading "# Title" H1, so re-add
+        // it the way a new post starts (publish strips it back out); strip any injected cell outputs.
+        const { data, error } = await supabase.rpc('author_get_post', { p_slug: editSlug });
+        if (error) throw error;
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row) throw new Error('Post not found');
+        const bodyOnly = stripCellOutputs(String(row.body_md || ''));
+        const title = row.title || editSlug;
         startDoc = `# ${title}\n\n${bodyOnly.replace(/^\n+/, '')}`;
         editing = {
-          slug: editSlug,
+          id: row.id,
+          slug: row.slug || editSlug,
           title,
-          description: typeof fm.description === 'string' ? fm.description : '',
-          tags: Array.isArray(fm.tags) ? fm.tags.map(String) : [],
-          pubDate: typeof fm.pubDate === 'string' ? fm.pubDate.slice(0, 10) : '',
-          draft: fm.draft === true,
-          // Prefill the Series field with the human name (seriesTitle), falling
-          // back to the slug; the Part # from seriesOrder.
-          series: typeof fm.seriesTitle === 'string' && fm.seriesTitle
-            ? fm.seriesTitle
-            : (typeof fm.series === 'string' ? fm.series : ''),
-          seriesOrder: fm.seriesOrder != null && fm.seriesOrder !== '' ? String(fm.seriesOrder) : '',
-          seriesTotal: fm.seriesTotal != null && fm.seriesTotal !== '' ? String(fm.seriesTotal) : '',
-          seriesStatus: typeof fm.seriesStatus === 'string' ? fm.seriesStatus : '',
-          seriesPlanned: Array.isArray(fm.seriesPlanned) ? fm.seriesPlanned.map(String) : [],
-          // Paywall state (frontmatter flag) so the access picker prefills correctly.
-          gateable: fm.gateable === true,
+          description: row.description || '',
+          tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
+          pubDate: row.pub_date ? String(row.pub_date).slice(0, 10) : '',
+          draft: row.status === 'draft' || row.status === 'scheduled',
+          series: row.series_title || row.series_slug || '',
+          seriesOrder: row.series_part != null ? String(row.series_part) : '',
+          seriesTotal: row.series_total != null ? String(row.series_total) : '',
+          seriesStatus: '',
+          seriesPlanned: [],
+          gateable: row.gateable === true,
         };
         restoredMsg = 'Editing “' + title + '”';
       } catch (e) {
@@ -1744,9 +1735,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // the server adds an inert-guard backstop. A DB publish is synchronous — on success the
     // post is already live at /@handle/slug (no rebuild), so we navigate straight there.
     // `dbPostId` persists the created row's id across saves within a session (so a re-save
-    // updates rather than colliding on the unique per-author slug). Series/field attach is a
-    // later slice — DB posts publish standalone for now.
-    let dbPostId = null;
+    // updates rather than colliding on the unique per-author slug). Seeded from `editing` when
+    // reopening an existing post, so the FIRST save targets that post (UPDATE) and preserves its
+    // original pub_date. Series/field attach is a later slice — DB posts publish standalone for now.
+    let dbPostId = (typeof editing !== 'undefined' && editing && editing.id) ? editing.id : null;
     async function publishToDb({ title, description, slug, body, tags, draft, token, penName, email, series, scheduleAt }, status) {
       status.textContent = 'Saving…';
       let saveJson;

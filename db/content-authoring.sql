@@ -133,6 +133,34 @@ language sql stable security definer set search_path = public, content, extensio
   order by po.updated_at desc;
 $$;
 
+-- ── load ONE of the caller's own posts for editing (Markdown + metadata) ─────
+-- The DB authoring loop needs a read-back: my_posts lists posts but omits the body. This returns
+-- the caller's own post by slug WITH body_md/body_doc so the editor can reopen + re-publish it.
+-- is_post_author-gated → an author only loads posts they (co-)author.
+drop function if exists public.author_get_post(text);
+create or replace function public.author_get_post(p_slug text)
+returns table (
+  id uuid, slug text, title text, description text, tags text[],
+  body_md text, body_doc jsonb, status text, pub_date timestamptz, publish_at timestamptz,
+  gateable boolean, author_byline text,
+  series_slug text, series_title text, series_part int, series_total int
+)
+language sql stable security definer set search_path = public, content, extensions as $$
+  select po.id, po.slug, po.title, po.description, po.tags,
+    po.body_md, po.body_doc, po.status::text, po.pub_date, po.publish_at,
+    po.gateable, po.author_byline,
+    ser.slug, ser.title, ser.part, ser.total
+  from content.posts po
+  left join lateral (
+    select se.slug, se.title, sp.position as part, se.total
+    from content.series_posts sp join content.series se on se.id = sp.series_id and se.deleted_at is null
+    where sp.post_id = po.id and sp.accepted order by se.created_at limit 1
+  ) ser on true
+  where po.slug = p_slug and content.is_post_author(po.id, auth.uid()) and po.deleted_at is null
+  order by (po.author_id = auth.uid()) desc
+  limit 1;
+$$;
+
 -- ── self-service ONE-TIME @handle claim (onboarding) ─────────────────────────
 -- Distinct, clear errors (invalid/reserved/taken) so the UI can react. Only claims
 -- when no handle is set yet; changing an existing handle stays owner-mediated.
@@ -206,11 +234,13 @@ grant execute on function public.author_unpublish(uuid,uuid,text)          to se
 
 revoke all on function public.my_profile()                     from public, anon;
 revoke all on function public.my_posts()                       from public, anon;
+revoke all on function public.author_get_post(text)            from public, anon;
 revoke all on function public.claim_my_handle(text)            from public, anon;
 revoke all on function public.update_my_profile(text,text,text) from public, anon;
 revoke all on function public.set_my_pen_name(text)            from public, anon;
 grant execute on function public.my_profile()                     to authenticated;
 grant execute on function public.my_posts()                       to authenticated;
+grant execute on function public.author_get_post(text)            to authenticated;
 grant execute on function public.claim_my_handle(text)            to authenticated;
 grant execute on function public.update_my_profile(text,text,text) to authenticated;
 grant execute on function public.set_my_pen_name(text)            to authenticated;
