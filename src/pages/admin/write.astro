@@ -1756,7 +1756,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // updates rather than colliding on the unique per-author slug). Series/field attach is a
     // later slice — DB posts publish standalone for now.
     let dbPostId = null;
-    async function publishToDb({ title, description, slug, body, tags, draft, token, penName, email }, status) {
+    async function publishToDb({ title, description, slug, body, tags, draft, token, penName, email, series }, status) {
       status.textContent = 'Saving…';
       let saveJson;
       try {
@@ -1765,7 +1765,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
           // Date the post today on first create; on a re-save (dbPostId set) omit it so
           // author_save_post preserves the original pub_date (coalesce).
-          body: JSON.stringify({ post_id: dbPostId, slug, title, description, tags, body_md: body, author_byline: penName, pub_date: dbPostId ? undefined : new Date().toISOString() }),
+          body: JSON.stringify({ post_id: dbPostId, slug, title, description, tags, body_md: body, author_byline: penName, pub_date: dbPostId ? undefined : new Date().toISOString(), series }),
         });
         saveJson = await saveRes.json().catch(() => ({}));
         if (!saveRes.ok || !saveJson.post_id) { status.textContent = (saveJson && saveJson.error) || 'Could not save.'; return; }
@@ -1841,8 +1841,19 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       // file/GitHub/KV machinery below. Reuses the same collected title/description/
       // slug/tags/body + the browser render; the server inert-guards + commits it.
       if ($('pm-dest') && $('pm-dest').value === 'db') {
+        // Read the series fields (the same inputs the file path uses) into a compact object.
+        const sName = $('pm-series').value.trim();
+        const sOrderN = parseInt($('pm-series-order').value, 10);
+        const sTotalN = parseInt($('pm-series-total').value, 10);
+        const series = sName ? {
+          slug: seriesSlugify(sName), title: sName,
+          order: Number.isFinite(sOrderN) && sOrderN > 0 ? sOrderN : null,
+          total: Number.isFinite(sTotalN) && sTotalN > 0 ? sTotalN : null,
+          status: $('pm-series-status').value.trim(),
+          planned: $('pm-series-planned').value.split('\n').map((x) => x.trim()).filter(Boolean),
+        } : null;
         $('pm-publish').disabled = true;
-        try { await publishToDb({ title, description, slug, body, tags: pubTags, draft, token, penName, email: emailSubs }, status); }
+        try { await publishToDb({ title, description, slug, body, tags: pubTags, draft, token, penName, email: emailSubs, series }, status); }
         finally { $('pm-publish').disabled = false; }
         return;
       }

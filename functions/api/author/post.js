@@ -42,7 +42,28 @@ export async function onRequestPost({ request, env }) {
     p_author_byline: typeof author_byline === 'string' ? author_byline : '',
   });
   if (!r.ok) return rpcError(r);
-  return json({ ok: true, post_id: r.data });
+  const postId = r.data;
+
+  // Series membership (optional): attach to / detach from the author's OWN series. A post
+  // lives in at most one series (the RPC detaches it from the caller's others). Non-fatal —
+  // a series-attach hiccup shouldn't lose the saved draft, so we surface it but still return.
+  const s = (p && p.series) || null;
+  if (s && typeof s.slug === 'string' && s.slug.trim()) {
+    const sr = await svcRpc(env, 'author_attach_series', {
+      p_caller: gate.userId, p_post_id: postId,
+      p_series_slug: s.slug, p_series_title: typeof s.title === 'string' ? s.title : '',
+      p_summary: typeof s.summary === 'string' ? s.summary : '',
+      p_total: Number.isFinite(s.total) ? s.total : null,
+      p_status: typeof s.status === 'string' ? s.status : '',
+      p_planned: Array.isArray(s.planned) ? s.planned.filter((x) => typeof x === 'string') : [],
+      p_position: Number.isFinite(s.order) ? s.order : 0,
+    });
+    if (!sr.ok) return json({ ok: true, post_id: postId, seriesError: (sr.data && sr.data.message) || 'Series not attached' });
+  } else {
+    // No series set — make sure a prior membership is cleared (idempotent; harmless for a new post).
+    await svcRpc(env, 'author_clear_series', { p_caller: gate.userId, p_post_id: postId });
+  }
+  return json({ ok: true, post_id: postId });
 }
 
 export async function onRequestDelete({ request, env }) {
