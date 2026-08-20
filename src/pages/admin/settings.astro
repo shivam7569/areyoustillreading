@@ -18,7 +18,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       <header><h2>Account</h2></header>
       <div class="pb flush">
         <div class="setrow"><div class="k">Signed in as<small id="acct">…</small></div><div class="f"><button class="btn btn-sm" id="signout" type="button">Sign out</button></div></div>
-        <div class="setrow"><div class="k">Pen name<small>Your byline on every published post. Changes go live instantly — every post, new and old.</small></div><div class="f" style="gap:0.5rem;flex-wrap:wrap"><input id="pen-input" class="inp" type="text" placeholder="Your name" autocomplete="off" spellcheck="false" style="width:220px" aria-label="Pen name" /><button class="btn btn-sm" id="pen-save" type="button">Save</button><span class="muted" id="pen-status" style="font-size:0.85rem"></span></div></div>
+        <div class="setrow"><div class="k">Pen name<small>Your byline on every post — and your public page address (your&nbsp;@handle) is made from it. Changes go live instantly.</small></div><div class="f" style="gap:0.5rem;flex-wrap:wrap"><input id="pen-input" class="inp" type="text" placeholder="Your name" autocomplete="off" spellcheck="false" style="width:220px" aria-label="Pen name" /><button class="btn btn-sm" id="pen-save" type="button">Save</button><span class="muted" id="pen-status" style="font-size:0.85rem"></span></div></div>
       </div>
     </div>
 
@@ -87,32 +87,38 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     const el = document.getElementById('acct');
     if (el) el.textContent = data.session?.user?.email ? data.session.user.email : 'Signed in';
 
-    // Pen name — the blog byline (site.json.post.author). Editing it here writes
-    // site.json via /api/admin/site, which the copy overlay reflects on EVERY post's
-    // byline in seconds (bylines are anchored data-cms="post.author"), no rebuild.
+    // Pen name — the author's ONE identity store: content.profiles.pen_name, via set_my_pen_name.
+    // Saving sets the byline on every DB post AND regenerates your @handle from the name. We also
+    // mirror it into the legacy site.json byline (data-cms="post.author") so the OLD file posts keep
+    // the same name during the transition — that mirror goes away once the file path is retired.
     const penInput = document.getElementById('pen-input') as HTMLInputElement | null;
     const penSave = document.getElementById('pen-save');
     const penStatus = document.getElementById('pen-status');
     let siteContent: any = null;
     if (penInput && penSave && penStatus) {
       try {
-        const r = await adminFetch('/api/admin/site');
-        const d = await r.json();
-        if (r.ok && d && d.content) { siteContent = d.content; penInput.value = (d.content.post && d.content.post.author) || ''; }
-        else penStatus.textContent = 'Could not load.';
+        const { data: prof } = await supabase.rpc('my_profile');
+        const row = Array.isArray(prof) ? prof[0] : prof;
+        try { const r = await adminFetch('/api/admin/site'); const d = await r.json(); if (r.ok && d && d.content) siteContent = d.content; } catch {}
+        // The DB pen name is the source of truth; fall back to the legacy file byline if unset.
+        penInput.value = (row && row.pen_name) || (siteContent && siteContent.post && siteContent.post.author) || '';
       } catch { penStatus.textContent = 'Could not load.'; }
       penSave.addEventListener('click', async () => {
         const name = penInput.value.trim();
         if (!name) { penStatus.textContent = 'Enter a name.'; return; }
-        if (!siteContent) { penStatus.textContent = 'Not loaded — reload the page.'; return; }
         penStatus.textContent = 'Saving…';
-        siteContent.post = siteContent.post || {};
-        siteContent.post.author = name;
         try {
-          const r = await adminFetch('/api/admin/site', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: siteContent }) });
-          const d = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
-          penStatus.textContent = d.instant ? 'Saved — live now.' : 'Saved. Live on the next rebuild.';
+          // 1) THE store: content.profiles.pen_name + regenerate the @handle from it.
+          const { data: rows, error } = await supabase.rpc('set_my_pen_name', { p_pen_name: name });
+          if (error) throw error;
+          const handle = Array.isArray(rows) ? (rows[0] && rows[0].handle) : (rows && rows.handle);
+          // 2) Legacy mirror: keep the old file posts' byline in sync (dropped when files retire).
+          if (siteContent) {
+            siteContent.post = siteContent.post || {};
+            siteContent.post.author = name;
+            try { await adminFetch('/api/admin/site', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: siteContent }) }); } catch {}
+          }
+          penStatus.textContent = handle ? ('Saved — your page is @' + handle) : 'Saved — live now.';
         } catch (e: any) { penStatus.textContent = 'Save failed: ' + (e?.message || e); }
       });
     }

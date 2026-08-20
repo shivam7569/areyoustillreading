@@ -18,22 +18,25 @@
  * Stack: static Astro build hosted on Cloudflare Pages, with Pages Functions
  * (functions/api/*) for the few dynamic bits, Supabase for auth + data, and
  * Dodo for payments/premium (this page touches only auth + publish; it does
- * not talk to Dodo directly). Data flow when you hit Publish:
+ * not talk to Dodo directly). Data flow when you hit Publish (ONE path — into the DB):
  *
- *   editor.astro (this file)                     ← author writes, gets Markdown
- *        │  POST /api/publish  { slug, content } + Supabase JWT (Bearer)
+ *   write.astro (this file)                      ← author writes, gets Markdown; the
+ *        │                                          browser renders body_html in-page
+ *        │  POST /api/author/post    { slug, title, body_md, body_html, … } + JWT
+ *        │  POST /api/author/publish { post_id, body_html, … }               + JWT
  *        ▼
- *   functions/api/publish.js (Pages Function)    ← re-verifies is_admin, then
- *        │  GitHub Contents API commit                commits src/content/blog/<slug>.md
+ *   functions/api/author/*.js (Pages Functions)  ← requireAuthor, then service-role RPCs
+ *        │  author_save_post → content.posts (draft)     assertInert(body_html) then
+ *        │  author_publish   → content.publish_post       commits status='published'
  *        ▼
- *   GitHub repo → Cloudflare Pages Git build      ← rebuild redeploys the site
- *        ▼
- *   /blog/<slug>/  goes live (Astro content collection renders the .md)
+ *   /@handle/slug  goes live INSTANTLY — the reader edge middleware serves body_html
+ *   from content.posts via get_public_post. No file, no GitHub commit, no rebuild.
  *
- * So this page never writes files itself and holds no repo credentials; it just
- * hands a Markdown blob + the user's JWT to the Function, which is the trusted
- * boundary. The published site renders the SAME fenced code (```d2 diagrams via
- * plugins/rehype-d2.mjs at build; ```python plots) so editor preview == live.
+ * So this page never writes files or repo state; it renders body_html in the browser
+ * (the pipeline sanitises mid-render) and hands { body_md, body_html } + the user's JWT
+ * to the gated Function, which is the trusted boundary (a light inert-guard backstops
+ * the submitted HTML). The reader renders the SAME fenced code (```d2, ```python) so
+ * editor preview == live. Every post has exactly ONE canonical URL: /@handle/slug.
  *
  * KEY IMPORTS / DEPENDENCIES (see the <script> import block for the full list)
  * ---------------------------------------------------------------------------
@@ -48,7 +51,7 @@
  *   - ../../lib/admin-gate           whenAdmin/cachedAdmin — boot the editor only for an admin
  *   - ../../layouts/AdminLayout.astro dashboard shell + client access gate
  * WHAT DEPENDS ON THIS FILE: nothing imports it (it is a leaf route). It is the
- * sole producer of requests to functions/api/publish.js.
+ * sole producer of requests to functions/api/author/{post,publish}.js.
  *
  * IMPORTANT DESIGN DECISIONS / NON-OBVIOUS GOTCHAS
  * ------------------------------------------------
