@@ -28,10 +28,24 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import ShareBar from '../components/ShareBar.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
 import PlotlyReader from '../components/PlotlyReader.astro';
+// The per-post reader islands, identical to BlogPost.astro. They read the post key from a
+// data-* attribute, so passing the AYSRZZUUID sentinel bakes it into the markup and the edge
+// (assemble-permalink) replaces it with the DB post's UUID — globally unique, unlike the
+// per-author slug, so two authors reusing a slug never share a highlights/notes/comments bucket.
+import Feedback from '../components/Feedback.astro';
+import Highlights from '../components/Highlights.astro';
+import Notes from '../components/Notes.astro';
+import Comments from '../components/Comments.astro';
+import ReaderProgress from '../components/ReaderProgress.astro';
 import site from '../data/site.json';
 const c = (site as any).post || {};
 ---
 <BaseLayout title="AYSRZZTITLE" description="AYSRZZDESC" image="/og/AYSRZZID.png" wide>
+  {/* Reading-progress bar (driven by the inline script below) + the reader-progress island
+      (records the signed-in reader's furthest point → "Continue" + read-marks). */}
+  <div class="progress" id="pg"></div>
+  <ReaderProgress slug="AYSRZZUUID" />
+
   <div class="wrap">
     <div class="measure">
       <header class="art-head">
@@ -58,6 +72,9 @@ const c = (site as any).post || {};
   <div class="wrap">
     <div class="measure">
       <div class="after">
+        {/* "Did it hold?" — anonymous reader-feedback poll (one tap, no account). */}
+        <Feedback postId="AYSRZZUUID" />
+
         <ShareBar url="AYSRZZURL" title="AYSRZZTITLE" />
         <div data-hide-admin>
           <SubscribeForm
@@ -68,11 +85,28 @@ const c = (site as any).post || {};
           />
         </div>
         <div class="all-link"><a href="/blog"><span>{c.browseAllPrefix || 'Browse all'}</span> essays &rarr;</a></div>
+
+        {/* Interactive per-post islands (Supabase + RLS; keyed by the DB post UUID). */}
+        <Highlights postId="AYSRZZUUID" author="AYSRZZAUTHOR" title="AYSRZZTITLE" />
+        <Notes postId="AYSRZZUUID" />
+        <Comments postId="AYSRZZUUID" />
       </div>
     </div>
   </div>
 
   <PlotlyReader />
+
+  {/* Reading-progress bar: width tracks scroll depth (matches BlogPost.astro). */}
+  <script>
+    const pg = document.getElementById('pg');
+    if (pg) {
+      const h = document.documentElement;
+      const update = () => { const max = h.scrollHeight - h.clientHeight; pg.style.width = max > 0 ? (h.scrollTop / max) * 100 + '%' : '0'; };
+      document.addEventListener('scroll', update, { passive: true });
+      window.addEventListener('resize', update, { passive: true });
+      update();
+    }
+  </script>
 </BaseLayout>
 
 {/* is:global — the crumb + byline HTML is INJECTED by the edge (no Astro scope attribute), so
@@ -81,6 +115,8 @@ const c = (site as any).post || {};
 <style is:global>
   /* Article-head + byline styling, matching BlogPost.astro so a DB post reads identically to
      a statically-built one. (The body prose lives in global.css via .post-body.) */
+  .progress { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--accent); z-index: 60; transition: width 0.1s linear; }
+  @media (prefers-reduced-motion: reduce) { .progress { transition: none; } }
   .art-head { padding: clamp(40px, 6vw, 76px) 0 clamp(20px, 3vw, 36px); }
   .backlink { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); display: inline-flex; align-items: center; gap: 8px; margin-bottom: 32px; transition: color 0.2s; }
   .backlink:hover { color: var(--accent); }
