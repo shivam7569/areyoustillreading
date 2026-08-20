@@ -437,9 +437,8 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
     document.getElementById('ac-initial').textContent = val.charAt(0);
     closeNameEdit();
     try { await supabase.auth.updateUser({ data: { name: val } }); } catch {}
-    // The pen name IS the author identity: also update content.profiles.pen_name AND regenerate the
-    // @handle from it, so the byline + your /@handle page everywhere follow the pen name. No-op for
-    // a plain reader (no author profile). Changing it moves your page to the new /@handle.
+    // If this user is an author, keep content.profiles.pen_name (the byline) in sync too. The
+    // @handle is permanent (set at onboarding) and is NOT changed here. No-op for a plain reader.
     try {
       const { data: rows } = await supabase.rpc('set_my_pen_name', { p_pen_name: val });
       const h = Array.isArray(rows) ? (rows[0] && rows[0].handle) : (rows && rows.handle);

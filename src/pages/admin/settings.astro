@@ -18,7 +18,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       <header><h2>Account</h2></header>
       <div class="pb flush">
         <div class="setrow"><div class="k">Signed in as<small id="acct">…</small></div><div class="f"><button class="btn btn-sm" id="signout" type="button">Sign out</button></div></div>
-        <div class="setrow"><div class="k">Pen name<small>Your byline on every post — and your public page address (your&nbsp;@handle) is made from it. Changes go live instantly.</small></div><div class="f" style="gap:0.5rem;flex-wrap:wrap"><input id="pen-input" class="inp" type="text" placeholder="Your name" autocomplete="off" spellcheck="false" style="width:220px" aria-label="Pen name" /><button class="btn btn-sm" id="pen-save" type="button">Save</button><span class="muted" id="pen-status" style="font-size:0.85rem"></span></div></div>
+        <div class="setrow"><div class="k">Pen name<small>Your display name — the byline on every post you write. Your page address (your&nbsp;@handle) is set once and stays fixed. Changes go live instantly.</small></div><div class="f" style="gap:0.5rem;flex-wrap:wrap"><input id="pen-input" class="inp" type="text" placeholder="Your name" autocomplete="off" spellcheck="false" style="width:220px" aria-label="Pen name" /><button class="btn btn-sm" id="pen-save" type="button">Save</button><span class="muted" id="pen-status" style="font-size:0.85rem"></span></div></div>
       </div>
     </div>
 
@@ -87,10 +87,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     const el = document.getElementById('acct');
     if (el) el.textContent = data.session?.user?.email ? data.session.user.email : 'Signed in';
 
-    // Pen name — the author's ONE identity store: content.profiles.pen_name, via set_my_pen_name.
-    // Saving sets the byline on every DB post AND regenerates your @handle from the name. We also
-    // mirror it into the legacy site.json byline (data-cms="post.author") so the OLD file posts keep
-    // the same name during the transition — that mirror goes away once the file path is retired.
+    // Pen name — the author's display/byline name: content.profiles.pen_name, via set_my_pen_name.
+    // It sets the byline on every DB post; it does NOT touch the @handle (that's claimed once at
+    // onboarding and permanent). We also mirror it into the legacy site.json byline
+    // (data-cms="post.author") so the OLD file posts keep the same name during the transition —
+    // that mirror goes away once the file path is retired.
     const penInput = document.getElementById('pen-input') as HTMLInputElement | null;
     const penSave = document.getElementById('pen-save');
     const penStatus = document.getElementById('pen-status');

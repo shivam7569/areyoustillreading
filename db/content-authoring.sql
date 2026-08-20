@@ -171,15 +171,15 @@ begin
   where id = v_uid;
 end $$;
 
--- ── pen name IS the identity: set pen_name AND derive the @handle from it ─────
--- The one pen-name store. Changing your pen name updates content.profiles.pen_name (the byline
--- shown everywhere) AND regenerates your @handle from it (slugified, deduped, non-reserved) — the
--- handle only churns when the slug actually changes, so an unrelated edit keeps your links stable.
--- No-op-safe for readers (no profile) — the caller ignores the 'no author profile' error.
+-- ── set the pen name (display byline) ONLY — the @handle is PERMANENT ─────────
+-- The @handle is claimed once at onboarding (claim_my_handle) and never changes, so a reader's
+-- links to an author never break. The pen name is just the display/byline name and can change
+-- freely WITHOUT moving anyone's /@handle URL. Returns the (unchanged) handle so callers can show
+-- it. No-op-safe for readers (no profile) — the caller ignores the 'no author profile' error.
 create or replace function public.set_my_pen_name(p_pen_name text)
 returns table (handle citext, pen_name text)
 language plpgsql security definer set search_path = public, content, extensions as $$
-declare v_uid uuid := auth.uid(); v_name text; v_slug text; v_handle citext;
+declare v_uid uuid := auth.uid(); v_name text; v_handle citext;
 begin
   if v_uid is null then raise exception 'not signed in'; end if;
   v_name := btrim(coalesce(p_pen_name, ''));
@@ -187,14 +187,8 @@ begin
   if not exists (select 1 from content.profiles where id = v_uid and deleted_at is null) then
     raise exception 'no author profile';
   end if;
-  v_slug := content.slugify(v_name);
+  update content.profiles set pen_name = v_name, updated_at = now() where id = v_uid;
   select p.handle into v_handle from content.profiles p where p.id = v_uid;
-  -- keep the current handle when it already matches the new pen-name slug (avoids a self-collision
-  -- in unique_handle and needless churn); otherwise mint a fresh unique handle from the pen name.
-  if v_handle is null or lower(v_handle::text) <> v_slug then
-    v_handle := content.unique_handle(v_name);
-  end if;
-  update content.profiles set pen_name = v_name, handle = v_handle, updated_at = now() where id = v_uid;
   return query select v_handle, v_name;
 end $$;
 
