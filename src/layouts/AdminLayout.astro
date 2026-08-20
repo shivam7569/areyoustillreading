@@ -318,8 +318,8 @@ const navGroups = [
           paintWho(r.email);
           applyRole(r);
           // An invited author who hasn't claimed their permanent @handle must onboard first.
-          if (r.role === 'author' && !r.onboarded && !location.pathname.startsWith('/admin/profile')) {
-            location.href = '/admin/profile?onboard=1';
+          if (r.role === 'author' && !r.onboarded && !location.pathname.startsWith('/admin/onboarding')) {
+            location.href = '/admin/onboarding';
             return;
           }
           markAdmin(r);

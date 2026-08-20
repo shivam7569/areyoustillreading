@@ -1,0 +1,201 @@
+---
+/*
+ * /admin/onboarding — first-run for a freshly invited author (Claude Design "studio-onboarding").
+ * A calm, nav-less full screen: claim your PERMANENT @handle (framed + live-checked), set the pen
+ * name (changeable), bio, picture (monogram fallback), with a live preview of the /@handle masthead.
+ * Standalone (no Studio nav — there's nothing to navigate to until the page exists). Client-gated:
+ * only a signed-in author with no handle stays here; anyone else is bounced. Writes go to the
+ * authenticated RPCs claim_my_handle + update_my_profile.
+ */
+import BaseHead from '../../components/BaseHead.astro';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead title="Set up your page — Studio" description="Claim your handle and set your byline." />
+    <meta name="robots" content="noindex, nofollow" />
+    <script is:inline>
+      (function () { var r = document.documentElement, t = null; try { t = localStorage.getItem('ays.theme'); } catch (e) {} if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; r.setAttribute('data-theme', t); })();
+    </script>
+    <style>
+      .onwrap { max-width:1060px; margin:0 auto; padding:clamp(30px,5vw,72px) clamp(18px,3vw,32px) clamp(40px,6vw,80px); }
+      .ontop { display:flex; align-items:center; gap:12px; padding-bottom:clamp(24px,3.4vw,38px); }
+      .ontop .stwm { font-family:var(--serif-display); font-size:19px; font-weight:600; letter-spacing:-.01em; color:var(--ink); }
+      .ontop .stwm .are { color:var(--accent); }
+      .ontop .stlab { font-family:var(--sans); font-size:9px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint); border:1px solid var(--rule); border-radius:2px; padding:2px 5px; }
+      .ontop .onwho { margin-left:auto; font-family:var(--sans); font-size:12px; color:var(--ink-faint); }
+      .onsteps { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-bottom:clamp(20px,2.6vw,28px); font-family:var(--sans); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+      .onsteps b { color:var(--accent); font-weight:600; } .onsteps i { width:18px; height:1px; background:var(--rule); display:block; }
+      .onhead { max-width:56ch; margin-bottom:clamp(24px,3.4vw,36px); }
+      .onhead .stk { font-family:var(--sans); font-size:10px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); }
+      .onhead h1 { font-family:var(--serif-display); font-weight:600; font-size:clamp(30px,4.4vw,46px); line-height:1.04; letter-spacing:-.024em; margin:13px 0 0; }
+      .onhead h1 em { font-style:italic; color:var(--accent); }
+      .onhead p { margin:15px 0 0; font-size:clamp(16px,2vw,18px); line-height:1.6; color:var(--ink-soft); }
+      .ongrid { display:grid; grid-template-columns:minmax(0,1fr) 372px; gap:clamp(22px,3.4vw,44px); align-items:start; }
+      @media(max-width:940px){ .ongrid { grid-template-columns:1fr; } }
+      .onperm { border:1px solid color-mix(in srgb,var(--accent) 45%,var(--rule)); border-radius:5px; background:var(--card); padding:19px 20px 18px; margin-bottom:20px; }
+      .onperm .onwarn { display:flex; align-items:flex-start; gap:10px; margin:12px 0 0; padding-top:12px; border-top:1px solid var(--rule-soft); font-family:var(--sans); font-size:12px; line-height:1.55; color:var(--ink-soft); }
+      .onperm .onwarn svg { width:15px; height:15px; color:var(--accent); flex:none; margin-top:1px; }
+      .onperm .onwarn b { color:var(--ink); font-weight:600; }
+      .onhandle { display:flex; align-items:center; background:var(--paper-2); border:1px solid var(--rule); border-radius:3px; overflow:hidden; }
+      .onhandle .onpre { font-family:var(--mono); font-size:14px; color:var(--ink-faint); padding:11px 0 11px 13px; white-space:nowrap; }
+      .onhandle input { flex:1; min-width:0; font-family:var(--mono); font-size:14px; color:var(--ink); background:none; border:0; padding:11px 13px 11px 2px; }
+      .onhandle input:focus { outline:none; }
+      .onhandle:focus-within { outline:2px solid var(--accent); outline-offset:-1px; border-color:transparent; }
+      .onavrow { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+      .onavrow .onup { font-family:var(--sans); font-size:12.5px; color:var(--ink-soft); border:1px solid var(--rule); border-radius:3px; padding:8px 14px; cursor:pointer; background:transparent; }
+      .onavrow .onup:hover { border-color:var(--accent); color:var(--accent); }
+      .ongo { display:flex; align-items:center; gap:15px; flex-wrap:wrap; margin-top:clamp(20px,2.6vw,28px); padding-top:clamp(18px,2.4vw,24px); border-top:1px solid var(--rule); }
+      .ongo .onlater { font-family:var(--sans); font-size:12.5px; color:var(--ink-faint); background:none; border:0; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+      .ongo .onlater:hover { color:var(--accent); }
+      .onprev { position:sticky; top:20px; border:1px solid var(--rule); border-radius:6px; background:var(--card); overflow:hidden; box-shadow:var(--shadow); }
+      .onprev .onph { display:flex; align-items:center; gap:9px; padding:10px 14px; border-bottom:1px solid var(--rule); background:var(--paper-2); font-family:var(--sans); font-size:10px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+      .onprev .onph i { width:6px; height:6px; border-radius:999px; background:var(--accent); flex:none; }
+      .onprev .onpb { padding:22px 22px 20px; }
+      .onprev .onurl { font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); word-break:break-all; }
+      .onprev .onkick { display:flex; align-items:center; gap:11px; margin:16px 0 0; }
+      .onprev h2 { font-family:var(--serif-display); font-weight:600; font-size:clamp(24px,3vw,30px); line-height:1.04; letter-spacing:-.022em; margin:14px 0 0; color:var(--ink); overflow-wrap:break-word; }
+      .onprev .onbio { margin:12px 0 0; font-size:15px; line-height:1.58; color:var(--ink-soft); }
+      .onprev .onsig { margin:16px 0 0; padding-top:13px; border-top:1px solid var(--rule); font-family:var(--sans); font-size:11.5px; line-height:1.7; color:var(--ink-faint); }
+      .onprev .onsig b { color:var(--ink-soft); font-weight:500; }
+      /* subset of studio-editorial.css used here */
+      .stf { margin-bottom:16px; } .stf .stl { display:block; font-family:var(--sans); font-size:10px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:8px; }
+      .stin, .stta { width:100%; box-sizing:border-box; font-family:var(--sans); font-size:14px; color:var(--ink); background:var(--paper-2); border:1px solid var(--rule); border-radius:3px; padding:11px 13px; }
+      .stta { font-family:var(--serif-body); font-size:15px; line-height:1.6; min-height:96px; resize:vertical; }
+      .stin:focus, .stta:focus { outline:2px solid var(--accent); outline-offset:-1px; border-color:transparent; }
+      .stfh { margin:8px 0 0; font-family:var(--sans); font-size:11.5px; line-height:1.5; color:var(--ink-faint); } .stfh b { color:var(--ink-soft); font-weight:500; }
+      .stmono { position:relative; flex:none; font-family:var(--serif-display); font-weight:600; font-size:12px; line-height:1; letter-spacing:.1em; color:var(--ink-soft); padding:0 1px 6px; }
+      .stmono::after { content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:var(--rule); }
+      .stmono.stlg { font-size:18px; letter-spacing:.14em; color:var(--accent); padding-bottom:8px; } .stmono.stlg::after { background:color-mix(in srgb,var(--accent) 45%,transparent); }
+      .stav { display:grid; place-items:center; width:38px; height:38px; flex:none; border-radius:999px; border:1px solid var(--rule); background:var(--paper-2); font-family:var(--serif-display); font-weight:600; font-size:14px; letter-spacing:.06em; color:var(--ink-soft); }
+      .stav.stbig { width:80px; height:80px; font-size:27px; letter-spacing:.1em; color:var(--accent); border-color:color-mix(in srgb,var(--accent) 34%,var(--rule)); }
+      .stcheck { display:flex; align-items:center; gap:9px; margin-top:9px; font-family:var(--sans); font-size:12px; } .stcheck i { width:7px; height:7px; border-radius:999px; flex:none; background:var(--ink-faint); }
+      .stcheck.stok { color:var(--accent); } .stcheck.stok i { background:var(--accent); } .stcheck.stbad { color:#b4453a; } .stcheck.stbad i { background:#b4453a; }
+      #ongate { display:grid; place-items:center; min-height:70vh; font-family:var(--sans); color:var(--ink-faint); }
+      #ongate[hidden] { display:none; }   /* ID display:grid would otherwise beat [hidden]{display:none} */
+    </style>
+  </head>
+  <body>
+    <div id="ongate">Checking…</div>
+    <div class="onwrap" id="onmain" hidden>
+      <div class="ontop">
+        <span class="stwm"><span class="are">are</span>youstillreading</span>
+        <span class="stlab">Studio</span>
+        <span class="onwho" id="onwho"></span>
+      </div>
+      <p class="onsteps"><b>Set up your page</b><i></i><span>Then write</span></p>
+      <div class="onhead">
+        <span class="stk">Welcome</span>
+        <h1>Your page needs <em>a name and an address.</em></h1>
+        <p>One screen, then you can write. The address is permanent and the name is not, which is the only thing worth reading carefully below.</p>
+      </div>
+      <div class="ongrid">
+        <div>
+          <div class="onperm">
+            <div class="stf" style="margin-bottom:0">
+              <span class="stl">Your address</span>
+              <div class="onhandle"><span class="onpre">areyoustillreading.dev/@</span><input id="onH" placeholder="yourhandle" aria-label="Your handle" autocomplete="off" spellcheck="false"></div>
+              <p class="stcheck" id="onChk"><i></i><span></span></p>
+            </div>
+            <p class="onwarn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+              <span><b>This is your web address and it cannot be changed later.</b> Every essay you publish, every link anyone sends, and every citation of your work will use it. Lower case, letters, numbers and underscores. Reserved words — admin, studio, api, letter, fields, series — are not available.</span>
+            </p>
+          </div>
+          <div class="stf">
+            <span class="stl">Pen name</span>
+            <input class="stin" id="onN" placeholder="Your name" aria-label="Pen name">
+            <p class="stfh">Your byline. <b>This one you can change whenever you like</b> — it is a display name, not an address, so changing it never breaks a link.</p>
+          </div>
+          <div class="stf">
+            <span class="stl">A short bio</span>
+            <textarea class="stta" id="onB" aria-label="Bio"></textarea>
+            <p class="stfh">Two sentences, on your page under your name. You can leave it empty and add it later.</p>
+          </div>
+          <div class="stf">
+            <span class="stl">Picture</span>
+            <div class="onavrow"><span class="stav stbig" id="onAv">—</span><div><button class="onup" type="button" disabled title="Coming soon">Upload a picture</button><p class="stfh" style="margin-top:9px">Optional. Without one your initials stand in, set in the display serif — which is what most people here keep.</p></div></div>
+          </div>
+          <div class="ongo">
+            <button class="btn btn-primary" type="button" id="onGo">Claim @<span id="onGoH">…</span> and open my page <span class="arrow">→</span></button>
+            <span class="stfh" id="onStatus" style="margin:0"></span>
+          </div>
+        </div>
+        <aside class="onprev">
+          <div class="onph"><i></i>Your page, as readers will see it</div>
+          <div class="onpb">
+            <p class="onurl" id="onUrl">areyoustillreading.dev/@…</p>
+            <div class="onkick"><span class="stmono stlg" id="onMk">—</span><span style="font-family:var(--sans);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)" id="onAt">@…</span></div>
+            <h2 id="onName">Your name</h2>
+            <p class="onbio" id="onBio">No bio yet. You can add one whenever you like.</p>
+            <p class="onsig"><b>Nothing published yet.</b><br>When your first essay goes out it appears here, with the shape of how it was read. Series and fields appear once you have them.</p>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      import { supabase } from '../../lib/supabase';
+      const $ = (id: string) => document.getElementById(id) as HTMLElement;
+      const RESERVED = ['admin', 'studio', 'api', 'letter', 'letters', 'fields', 'field', 'series', 's', 'f', 'blog', 'posts', 'post', 'about', 'account', 'settings', 'signin', 'login', 'logout', 'signup', 'projects', 'resume', 'explore', 'home', 'www', 'me', 'staff'];
+      const initials = (s: string) => { const w = s.trim().split(/[\s._-]+/).filter(Boolean); return (!w.length ? '—' : (w.length > 1 ? w[0][0] + w[1][0] : w[0].slice(0, 2)).toUpperCase()); };
+
+      (async () => {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) { location.href = '/login'; return; }
+        const { data: prof } = await supabase.rpc('my_profile');
+        const p = Array.isArray(prof) ? prof[0] : prof;
+        if (!p) { location.href = '/account'; return; }          // a reader, not an author
+        if (p.handle) { location.href = '/admin'; return; }        // already onboarded
+        $('ongate').hidden = true; $('onmain').hidden = false;
+        $('onwho').textContent = 'Signed in as ' + (data.session.user.email || '');
+        if (p.pen_name) ($('onN') as HTMLInputElement).value = p.pen_name;
+        wire();
+      })();
+
+      function checkHandle() {
+        const v = ($('onH') as HTMLInputElement).value.trim().toLowerCase();
+        const c = $('onChk'); let msg = '', cls = '';
+        if (!v) { msg = 'Pick something. This is the part that cannot change.'; }
+        else if (!/^[a-z0-9_]+$/.test(v)) { msg = 'Lower case letters, numbers and underscores only.'; cls = 'stbad'; }
+        else if (v.length < 3) { msg = 'At least three characters.'; cls = 'stbad'; }
+        else if (v.length > 24) { msg = 'Twenty-four characters at most.'; cls = 'stbad'; }
+        else if (RESERVED.indexOf(v) > -1) { msg = '“' + v + '” is reserved by the site.'; cls = 'stbad'; }
+        else { msg = 'Looks good — availability is confirmed when you claim it.'; cls = 'stok'; }
+        c.className = 'stcheck ' + cls;
+        c.innerHTML = '<i></i><span>' + msg + '</span>';
+        $('onUrl').textContent = 'areyoustillreading.dev/@' + (v || '…');
+        $('onAt').textContent = '@' + (v || '…');
+        $('onGoH').textContent = v || '…';
+        return cls !== 'stbad' && !!v;
+      }
+      function syncName() { const v = (($('onN') as HTMLInputElement).value.trim()) || 'Your name'; $('onName').textContent = v; const m = initials(v); $('onMk').textContent = m; $('onAv').textContent = m; }
+      function syncBio() { const v = ($('onB') as HTMLTextAreaElement).value.trim(); $('onBio').textContent = v || 'No bio yet. You can add one whenever you like.'; }
+
+      function wire() {
+        $('onH').addEventListener('input', checkHandle);
+        $('onN').addEventListener('input', syncName);
+        $('onB').addEventListener('input', syncBio);
+        checkHandle(); syncName(); syncBio();
+        $('onGo').addEventListener('click', async () => {
+          const handle = ($('onH') as HTMLInputElement).value.trim().toLowerCase();
+          const pen = ($('onN') as HTMLInputElement).value.trim();
+          const bio = ($('onB') as HTMLTextAreaElement).value.trim();
+          if (!checkHandle()) { $('onStatus').textContent = 'Fix your handle first.'; return; }
+          if (!pen) { $('onStatus').textContent = 'Add a pen name.'; return; }
+          ($('onGo') as HTMLButtonElement).disabled = true; $('onStatus').textContent = 'Claiming…';
+          try {
+            const { error: e1 } = await supabase.rpc('claim_my_handle', { p_handle: handle });
+            if (e1) throw e1;
+            await supabase.rpc('update_my_profile', { p_pen_name: pen, p_bio: bio, p_avatar_url: null });
+            location.href = '/admin';
+          } catch (e: any) {
+            $('onStatus').textContent = (e && e.message) ? e.message.replace('handle taken', 'That handle is taken — try another.') : 'Could not claim that handle.';
+            ($('onGo') as HTMLButtonElement).disabled = false;
+          }
+        });
+      }
+    </script>
+  </body>
+</html>
