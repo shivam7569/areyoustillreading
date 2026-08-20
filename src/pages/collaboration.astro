@@ -1,0 +1,283 @@
+---
+/*
+ * /collaboration — a reader-facing explainer of how collaboration works on the platform (Claude
+ * Design "collaboration"). Four demonstrated surfaces: inviting a co-author, live co-editing,
+ * cross-author requests, and the requests inbox. Static/illustrative by design — it documents the
+ * model rather than driving live data; the only interactivity is the inbox tab filter.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Collaboration — areyoustillreading" wide>
+  <div class="wrap">
+    <header class="page-head cohead">
+      <div class="kicker"><span class="line"></span><span class="eyebrow">Collaboration</span></div>
+      <h1>Two people, <em>one argument.</em></h1>
+      <p class="lede">Four surfaces for work that belongs to more than one author: inviting a co-writer, editing together in real time, asking another author to take your work into their series or field, and the inbox where those asks are answered. Shared work appears on every involved author's page, marked as shared — never silently folded into one byline.</p>
+    </header>
+
+    <section class="coboard">
+      <div class="cotag"><span class="con">01</span><span class="cok">Invite a co-author</span></div>
+      <h2>Adding someone to a post you are already writing.</h2>
+      <p class="colede">Invitations go by email, because the person you want may not have an account yet. Until they accept, the post is yours alone and the invitation is visible only to you — a pending co-author never appears on a byline.</p>
+      <div class="coframe">
+        <div class="cochrome"><span class="cordot"></span>Studio · Write · The scheduler you didn't write<span class="coright">Draft · saved 2 minutes ago</span></div>
+        <div class="copad">
+          <div class="coinv">
+            <div>
+              <div class="cofield">
+                <span class="colbl">Invite by email</span>
+                <input class="coin" type="email" value="marta@kowalczyk.dev" aria-label="Co-author email" readonly>
+                <p class="cohint">They will get one email with the draft attached to it. If they already write here, it arrives in their Studio inbox instead.</p>
+              </div>
+              <div class="cofield">
+                <span class="colbl">What they can do</span>
+                <div class="corow"><div class="coseg"><button type="button" class="coon">Co-write</button><button type="button">Comment only</button></div><span class="cohint" style="margin:0">A co-writer shares the byline and can publish. A commenter cannot.</span></div>
+              </div>
+              <div class="corow" style="margin-top:20px"><button class="btn btn-primary btn-sm" type="button">Send the invitation</button><span class="cohint" style="margin:0">You can withdraw it any time before they accept.</span></div>
+              <span class="colbl" style="margin:26px 0 0;display:block">On this post</span>
+              <ul class="colist">
+                <li><span class="cochip" style="--c:var(--co-you)">DL</span><span class="conm"><b>deadletters</b><span>You · started this draft on 2 August</span></span><span class="costate cook">Author</span></li>
+                <li><span class="cochip" style="--c:var(--co-2)">MK</span><span class="conm"><b>Marta Kowalczyk</b><span>Accepted 14 August · wrote the queueing section</span></span><span class="costate cook">Co-writing</span><button class="cox" type="button" aria-label="Remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg></button></li>
+                <li><span class="cochip coidle" style="--c:var(--co-3)">PN</span><span class="conm"><b>priya@nadar.io</b><span>Invited 19 August · not opened yet</span></span><span class="costate copend">Pending</span><button class="cox" type="button" aria-label="Withdraw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg></button></li>
+              </ul>
+              <p class="cohint">Removing a co-writer leaves their words in the draft and takes their name off it. If they have already published with you, removing them needs their agreement — a byline is not yours to edit alone.</p>
+            </div>
+            <aside class="cobyl">
+              <span class="cok2">The byline, once they accept</span>
+              <h3>The scheduler you didn't write</h3>
+              <p class="coline"><span class="comono">DL</span><span class="conm2">deadletters</span><span>with</span><span class="comono">MK</span><span class="conm2">Marta Kowalczyk</span></p>
+              <p class="cowhere">This byline appears on <b>the post</b>, in <b>the feed</b>, on <b>both author pages</b>, and in <b>Serving at speed</b> as part 4 — marked <b>shared</b> in each place. Neither name is ever the smaller one.</p>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="coboard">
+      <div class="cotag"><span class="con">02</span><span class="cok">Live co-editing</span></div>
+      <h2>The same editor, with someone else in it.</h2>
+      <p class="colede">No mode to enter and no second window. When another co-writer opens the draft, three things appear: their mark in the presence row, their caret and selection in their own colour, and a line at the foot saying what they are doing. Everything else is the writing surface you already know.</p>
+      <div class="coframe">
+        <div class="cochrome"><span class="cordot"></span>Studio · Write<span class="coright">Every change saved · version history keeps who wrote what</span></div>
+        <div class="copres">
+          <span class="cofaces"><span class="cochip" style="--c:var(--co-you)" title="You">DL</span><span class="cochip" style="--c:var(--co-2)" title="Marta — editing now">MK</span><span class="cochip coidle" style="--c:var(--co-3)" title="Priya — reading">PN</span></span>
+          <span class="colive"><b>You, Marta and Priya</b> are here · Priya is reading</span>
+          <span class="cosync"><i></i>In sync</span>
+        </div>
+        <div class="wstage">
+          <div class="wcanvas">
+            <h3 class="wtitle">The scheduler you didn't write</h3>
+            <div class="coblk"><p class="wbody">Every serving stack has a scheduler. Most of them were never designed — they accumulated, one <code class="inl">if</code> at a time, until the order requests were served in became a property of the code rather than a decision anybody made.</p></div>
+            <div class="coblk" style="--c:var(--co-2)"><span class="cogut"><i></i></span><p class="wbody">A queue is a promise about order and a promise about waiting, and the two are usually in conflict. <span class="cosel" style="--c:var(--co-2)">Left to itself a queue will always choose throughput over the person waiting</span><span class="cocar" style="--c:var(--co-2)"><b>Marta</b></span>, because throughput is the thing it can measure.</p></div>
+            <div class="coblk"><p class="wbody">Write both promises down before you touch the code. Most of the argument disappears once they are on paper<span class="cocar" style="--c:var(--co-you)"></span></p></div>
+            <div class="coblk" style="--c:var(--co-3)"><span class="cogut"><i></i></span><p class="wbody"><span class="cosel" style="--c:var(--co-3)">The scheduler you didn't write is the one that decides which promise loses.</span> That decision is a policy, whether or not anyone wrote it down.</p></div>
+          </div>
+        </div>
+        <div class="cofoot"><span class="codoing"><span class="cochip cosm" style="--c:var(--co-2)">MK</span><b>Marta is editing the second paragraph</b><span class="coelip"><i></i><i></i><i></i></span></span><span class="coright2">Priya has a passage selected · no changes from her</span></div>
+      </div>
+      <p class="conote2"><b>Why colour and not avatars:</b> a mark is type in this system, so presence is the one exception — a filled chip means a person is in the room, not that a person wrote something. Colours are assigned in join order and never repeated while someone is present; plum is always you, so your own caret never needs a label.</p>
+    </section>
+
+    <section class="coboard">
+      <div class="cotag"><span class="con">03</span><span class="cok">Cross-author requests</span></div>
+      <h2>Asking to join someone else's series or field.</h2>
+      <p class="colede">A series belongs to whoever runs it, so a part cannot be added to it without asking. Same for a series joining a field. The ask is small on purpose: pick the target, say why in a sentence or two, send. The owner sees your work in place before deciding.</p>
+      <div class="coask">
+        <div class="coframe">
+          <div class="cochrome"><span class="cordot"></span>Compose · Ask to attach<span class="coright">From deadletters</span></div>
+          <div class="copad">
+            <span class="colbl" style="display:block;margin-bottom:9px">What you are attaching</span>
+            <div class="coseg" style="margin-bottom:18px"><button type="button" class="coon">A post → a series</button><button type="button">A series → a field</button></div>
+            <span class="colbl" style="display:block;margin-bottom:9px">Your post</span>
+            <ul class="copick" style="margin-bottom:18px"><li><button type="button" class="coon"><span class="cordo"></span><span class="cot"><b>Offline scores, online lies</b><span>Published 12 June · 12 min · no series</span></span><span class="comark">DL</span></button></li></ul>
+            <span class="colbl" style="display:block;margin-bottom:9px">Into</span>
+            <ul class="copick">
+              <li><button type="button" class="coon"><span class="cordo"></span><span class="cot"><b>Evaluation, honestly</b><span>Jhanvi Rao · 2 of 4 published · next slot is part 3</span></span><span class="comark">JR</span></button></li>
+              <li><button type="button"><span class="cordo"></span><span class="cot"><b>Serving at speed</b><span>Yours · 3 of 5 published</span></span><span class="comark">DL</span></button></li>
+            </ul>
+            <span class="colbl" style="display:block;margin:18px 0 9px">A short note</span>
+            <textarea class="conote" aria-label="Note to the series owner" readonly>This is the part your ¶2 already argues with — offline scores holding while the online ones rot. It reads better after yours than on its own, and I'm happy for it to be part 3 rather than keeping it loose.</textarea>
+            <div class="corow" style="margin-top:16px"><button class="btn btn-primary btn-sm" type="button">Send to Jhanvi</button><span class="cohint" style="margin:0">She can accept, decline, or suggest a different position.</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="coarrive">
+            <div class="cohd"><span class="cochip cosm" style="--c:var(--co-you)">DL</span>What Jhanvi receives</div>
+            <div class="cobd">
+              <h4>deadletters would like to add a post to <em>Evaluation, honestly</em></h4>
+              <p class="comsg">“This is the part your ¶2 already argues with — offline scores holding while the online ones rot. It reads better after yours than on its own.”</p>
+              <div class="cowould"><b>If you accept:</b> “Offline scores, online lies” becomes <b>part 3 of 4</b>, the two planned parts shift to 4 and 5, and the series shows as <b>shared</b> on both your page and his. His byline stays his.</div>
+              <p class="cofx"><span class="coacts"><button class="btn btn-primary btn-sm" type="button">Accept as part 3</button><button class="cominor" type="button">Choose another position</button><button class="cominor" type="button">Decline</button></span></p>
+              <p class="cohint" style="margin-top:14px">Declining sends nothing but the fact of it. There is no message box, deliberately — you do not owe anyone an essay about why.</p>
+            </div>
+          </div>
+          <p class="conote2"><b>The field version is the same shape:</b> pick one of your series, pick the field it belongs in, write the sentence. The difference is what acceptance does — a series joining a field can make that field <b>public for the first time</b>, since a field opens at two series.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="coboard">
+      <div class="cotag"><span class="con">04</span><span class="cok">Requests inbox</span></div>
+      <h2>Studio · Requests.</h2>
+      <p class="colede">Everything waiting on you, and everything waiting on someone else, in one list. No badges on the sidebar beyond a count, and nothing here expires quietly — a request sits until it is answered.</p>
+      <div class="coframe">
+        <div class="cochrome"><span class="cordot"></span>Studio · Requests<span class="coright">Three need you · two are with other people</span></div>
+        <div class="copad">
+          <div class="cotabs" id="cotabs">
+            <button type="button" class="coon" data-t="in">Needs you<span class="con2">3</span></button>
+            <button type="button" data-t="out">You asked<span class="con2">2</span></button>
+            <button type="button" data-t="done">Settled<span class="con2">4</span></button>
+          </div>
+          <ul class="coinbox" id="coin" data-view="in">
+            <li data-t="in"><span class="cochip cosm" style="--c:var(--co-2)">MK</span><div class="cowhat"><span class="cokind">Co-writing invitation</span><b>Marta Kowalczyk wants to co-write “The queue that ate the SLO”</b><p>“I have the incident timeline and none of the prose. Take the second half?”</p><span class="cometa"><span>Arrived 2 days ago</span><span>·</span><span>Draft, 1,100 words</span></span></div><div class="coside"><button class="btn btn-primary btn-sm" type="button">Accept</button><button class="cominor" type="button">Decline</button></div></li>
+            <li data-t="in"><span class="cochip cosm" style="--c:var(--co-3)">PN</span><div class="cowhat"><span class="cokind">Attach a post</span><b>Priya Nadar would like “What a GPU-hour actually costs” in <em>Serving at speed</em></b><p>“Your part 5 is about what fast costs. Mine is the invoice.”</p><span class="cometa"><span>Arrived yesterday</span><span>·</span><span>Would be part 4 of 6</span></span></div><div class="coside"><button class="btn btn-primary btn-sm" type="button">Accept as part 4</button><button class="cominor" type="button">Decline</button></div></li>
+            <li data-t="in"><span class="cochip cosm" style="--c:var(--co-2)">OB</span><div class="cowhat"><span class="cokind">Attach a series</span><b>Ola Berg would like <em>Diffusion, end to end</em> in your field <em>The maths underneath</em></b><p>“Two runs, one subject. It would open the field to readers.”</p><span class="cometa"><span>Arrived 4 days ago</span><span>·</span><span>Would make the field public</span></span></div><div class="coside"><button class="btn btn-primary btn-sm" type="button">Accept</button><button class="cominor" type="button">Decline</button></div></li>
+            <li data-t="out" class="cogone"><span class="cochip cosm" style="--c:var(--co-you)">DL</span><div class="cowhat"><span class="cokind coq">Attach a post · with Jhanvi Rao</span><b>“Offline scores, online lies” → <em>Evaluation, honestly</em></b><p>Sent with a note about her ¶2. She has opened it twice.</p><span class="cometa"><span>Sent 19 August</span><span>·</span><span>Proposed as part 3 of 4</span></span></div><div class="coside"><span class="costat cowait">Waiting</span><button class="cominor" type="button">Withdraw</button></div></li>
+            <li data-t="out" class="cogone"><span class="cochip cosm" style="--c:var(--co-you)">DL</span><div class="cowhat"><span class="cokind coq">Co-writing invitation · to priya@nadar.io</span><b>“The scheduler you didn't write”</b><p>Invitation by email. Not opened yet.</p><span class="cometa"><span>Sent 19 August</span></span></div><div class="coside"><span class="costat cowait">Not opened</span><button class="cominor" type="button">Withdraw</button></div></li>
+            <li data-t="done" class="cogone"><span class="cochip cosm" style="--c:var(--co-2)">MK</span><div class="cowhat"><span class="cokind coq">Co-writing invitation</span><b>“The scheduler you didn't write” with Marta Kowalczyk</b><p>Accepted. The byline now carries both names.</p><span class="cometa"><span>14 August</span></span></div><div class="coside"><span class="costat coyes">Accepted</span></div></li>
+            <li data-t="done" class="cogone"><span class="cochip cosm" style="--c:var(--co-3)">PN</span><div class="cowhat"><span class="cokind coq">Attach a post · to Priya Nadar</span><b>“The bill arrives in tokens” → <em>What things cost</em></b><p>Declined. No reason given, and none was asked for.</p><span class="cometa"><span>3 August</span></span></div><div class="coside"><span class="costat cono">Declined</span></div></li>
+          </ul>
+          <p class="coempty" id="coempty" style="display:none">Nothing here. When someone asks to join your work, or you ask to join theirs, it lands in this list.</p>
+        </div>
+      </div>
+      <p class="conote2"><b>One rule runs through all four surfaces:</b> nothing about shared work is decided by one person alone. A byline needs both names' agreement to change, a series owner decides what enters their run, and a declined request carries no explanation because none is owed.</p>
+    </section>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  /* Ported from the Claude Design "collaboration" template. Ships only on /collaboration. */
+  :root { --co-you:#5e3560; --co-2:#2f6b63; --co-3:#8a5a1e; }
+  :root[data-theme="dark"], :root:not([data-theme="light"]) { --co-you:#c98a4b; --co-2:#5fa89c; --co-3:#c9a05f; }
+  .cohead { padding: clamp(48px,7vw,96px) 0 clamp(20px,3vw,32px); }
+  .cohead .kicker { display:flex; align-items:center; gap:14px; margin-bottom:22px; }
+  .cohead .kicker .line { height:1px; width:48px; background:var(--accent); opacity:.6; }
+  .cohead h1 { font-family:var(--serif-display); font-weight:600; font-size:clamp(34px,5vw,58px); line-height:1.04; letter-spacing:-.022em; margin:0 0 .4em; }
+  .cohead h1 em { font-style:italic; color:var(--accent); }
+  .cohead .lede { font-size:clamp(16px,2vw,19px); line-height:1.6; color:var(--ink-soft); max-width:66ch; margin:0; }
+  .coboard { padding: clamp(34px,4.6vw,60px) 0 0; }
+  .coboard + .coboard { border-top:1px solid var(--rule); margin-top:clamp(34px,4.6vw,58px); }
+  .cotag { display:flex; align-items:baseline; gap:13px; flex-wrap:wrap; margin-bottom:14px; }
+  .cotag .con { font-family:var(--serif-display); font-weight:600; font-size:15px; color:var(--accent); font-variant-numeric:tabular-nums; }
+  .cotag .cok { font-family:var(--sans); font-size:10.5px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-faint); }
+  .coboard h2 { font-family:var(--serif-display); font-weight:600; font-size:clamp(24px,3vw,33px); line-height:1.08; letter-spacing:-.02em; margin:0; }
+  .coboard .colede { margin:12px 0 clamp(20px,2.6vw,28px); font-size:clamp(15.5px,1.9vw,17px); line-height:1.58; color:var(--ink-soft); max-width:62ch; text-wrap:pretty; }
+  .coframe { border:1px solid var(--rule); border-radius:6px; background:var(--paper-2); overflow:hidden; }
+  .cochrome { display:flex; align-items:center; gap:11px; flex-wrap:wrap; padding:11px 16px; border-bottom:1px solid var(--rule); background:var(--card); font-family:var(--sans); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+  .cochrome .cordot { width:6px; height:6px; border-radius:999px; background:var(--accent); flex:none; }
+  .cochrome .coright { margin-left:auto; letter-spacing:0; text-transform:none; font-size:12px; }
+  .copad { padding:clamp(20px,2.8vw,32px); }
+  .comono { position:relative; flex:none; font-family:var(--serif-display); font-weight:600; font-size:12px; line-height:1; letter-spacing:.1em; color:var(--ink-soft); padding:0 1px 6px; }
+  .comono::after { content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:var(--rule); }
+  .cochip { display:inline-flex; align-items:center; justify-content:center; width:29px; height:29px; flex:none; border-radius:999px; font-family:var(--serif-display); font-weight:600; font-size:11.5px; letter-spacing:.06em; color:#fff; background:var(--c); box-shadow:0 0 0 2px var(--card),0 0 0 3px color-mix(in srgb,var(--c) 45%,transparent); }
+  .cochip.coidle { opacity:.42; box-shadow:0 0 0 2px var(--card); } .cochip.cosm { width:23px; height:23px; font-size:10px; }
+  .coinv { display:grid; grid-template-columns:minmax(0,1fr) 344px; gap:clamp(20px,2.8vw,34px); align-items:start; }
+  @media(max-width:1000px){ .coinv { grid-template-columns:1fr; } }
+  .cofield { margin-bottom:16px; }
+  .cofield .colbl, .colbl { display:block; font-family:var(--sans); font-size:10px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:9px; }
+  .coin { width:100%; box-sizing:border-box; font-family:var(--sans); font-size:14px; color:var(--ink); background:var(--card); border:1px solid var(--rule); border-radius:3px; padding:11px 13px; }
+  .cohint { margin:8px 0 0; font-family:var(--sans); font-size:11.5px; line-height:1.5; color:var(--ink-faint); }
+  .corow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .coseg { display:inline-flex; border:1px solid var(--rule); border-radius:3px; overflow:hidden; background:var(--card); }
+  .coseg button { background:none; border:0; font-family:var(--sans); font-size:12.5px; color:var(--ink-soft); padding:9px 14px; cursor:pointer; }
+  .coseg button+button { border-left:1px solid var(--rule); }
+  .coseg button.coon { background:var(--accent); color:var(--on-accent); }
+  .colist { list-style:none; margin:0; padding:0; border-top:1px solid var(--rule); }
+  .colist li { display:flex; align-items:center; gap:12px; padding:13px 2px; border-bottom:1px solid var(--rule-soft); }
+  .colist .conm { min-width:0; }
+  .colist .conm b { display:block; font-family:var(--serif-display); font-weight:600; font-size:16px; line-height:1.2; letter-spacing:-.01em; color:var(--ink); }
+  .colist .conm span { display:block; margin-top:4px; font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); }
+  .costate { margin-left:auto; font-family:var(--sans); font-size:10px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; white-space:nowrap; flex:none; }
+  .costate.cook { color:var(--accent); } .costate.copend { color:var(--ink-faint); }
+  .cox { background:none; border:0; padding:3px; line-height:0; color:var(--ink-faint); cursor:pointer; flex:none; } .cox:hover { color:#b4453a; } .cox svg { width:14px; height:14px; }
+  .cobyl { border:1px solid var(--rule); border-radius:5px; background:var(--card); padding:17px 19px; }
+  .cobyl .cok2 { font-family:var(--sans); font-size:9.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .cobyl h3 { font-family:var(--serif-display); font-weight:600; font-size:20px; line-height:1.2; letter-spacing:-.014em; margin:11px 0 0; color:var(--ink); }
+  .cobyl .coline { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-top:11px; font-family:var(--sans); font-size:12px; color:var(--ink-faint); }
+  .cobyl .coline .conm2 { font-family:var(--serif-display); font-size:14.5px; color:var(--ink-soft); }
+  .cobyl .cowhere { margin:14px 0 0; padding-top:12px; border-top:1px solid var(--rule-soft); font-family:var(--sans); font-size:11.5px; line-height:1.65; color:var(--ink-faint); } .cobyl .cowhere b { color:var(--ink-soft); font-weight:500; }
+  .copres { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:11px 16px; border-bottom:1px solid var(--rule); background:var(--card); }
+  .copres .cofaces { display:flex; align-items:center; gap:7px; }
+  .copres .colive { font-family:var(--sans); font-size:12px; color:var(--ink-faint); } .copres .colive b { color:var(--ink-soft); font-weight:500; }
+  .copres .cosync { margin-left:auto; display:flex; align-items:center; gap:8px; font-family:var(--sans); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); }
+  .copres .cosync i { width:6px; height:6px; border-radius:999px; background:var(--co-2); display:block; animation:copulse 2.4s ease-in-out infinite; }
+  @keyframes copulse { 0%,100%{opacity:.35} 50%{opacity:1} }
+  .wstage { padding:clamp(16px,2vw,26px); background:var(--paper-2); min-width:0; }
+  .wcanvas { --gut:clamp(58px,5.6vw,92px); border:1px solid var(--rule); border-radius:5px; background:var(--card); padding:clamp(30px,3.6vw,56px) clamp(26px,4vw,58px) clamp(30px,3.6vw,56px) var(--gut); background-image:linear-gradient(var(--rule),var(--rule)); background-size:1px 100%; background-position:calc(var(--gut) - 24px) 0; background-repeat:no-repeat; box-shadow:0 20px 44px -34px rgba(0,0,0,.55); }
+  .wtitle { font-family:var(--serif-display); font-size:clamp(30px,4vw,42px); font-weight:600; letter-spacing:-.02em; line-height:1.08; color:var(--ink); margin:0 0 20px; }
+  .wbody { font-family:var(--serif-body); font-size:18.5px; line-height:1.76; color:var(--ink); margin:0; }
+  .wbody+.wbody { margin-top:1.05em; }
+  code.inl { font-family:var(--mono); font-size:.82em; background:var(--paper-2); border:1px solid var(--rule); border-radius:4px; padding:.1em .4em; color:var(--accent); }
+  .cosel { background:color-mix(in srgb,var(--c) 20%,transparent); box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--c) 55%,transparent); border-radius:1px; padding:.06em 0; }
+  .cocar { position:relative; display:inline-block; width:2px; height:1.08em; background:var(--c); vertical-align:-.2em; margin:0 1px; animation:coblink 1.15s steps(2,start) infinite; }
+  @keyframes coblink { 50%{opacity:0} }
+  .cocar b { position:absolute; left:-2px; bottom:calc(100% + 5px); font-family:var(--sans); font-size:10px; font-weight:600; letter-spacing:.06em; color:#fff; background:var(--c); padding:2px 6px; border-radius:2px; white-space:nowrap; }
+  .coblk { position:relative; } .coblk+.coblk { margin-top:1.05em; }
+  .coblk .cogut { position:absolute; left:calc(var(--gut) * -1 + 6px); top:.34em; display:flex; align-items:center; gap:5px; }
+  .coblk .cogut i { width:2px; height:17px; border-radius:1px; background:var(--c); display:block; }
+  .cofoot { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 16px; border-top:1px solid var(--rule); background:var(--card); font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); }
+  .cofoot .codoing { display:inline-flex; align-items:center; gap:8px; } .cofoot .codoing b { font-weight:500; color:var(--ink-soft); }
+  .cofoot .coelip { display:inline-flex; gap:2px; } .cofoot .coelip i { width:3px; height:3px; border-radius:999px; background:var(--ink-faint); display:block; animation:copulse 1.5s ease-in-out infinite; }
+  .cofoot .coelip i:nth-child(2){ animation-delay:.2s; } .cofoot .coelip i:nth-child(3){ animation-delay:.4s; } .cofoot .coright2 { margin-left:auto; }
+  .coask { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:clamp(18px,2.6vw,30px); align-items:start; }
+  @media(max-width:1000px){ .coask { grid-template-columns:1fr; } }
+  .copick { list-style:none; margin:0; padding:0; border:1px solid var(--rule); border-radius:4px; background:var(--card); overflow:hidden; }
+  .copick li+li { border-top:1px solid var(--rule-soft); }
+  .copick button { width:100%; display:flex; align-items:center; gap:11px; padding:12px 14px; background:none; border:0; text-align:left; cursor:pointer; font:inherit; }
+  .copick button:hover { background:var(--paper-2); }
+  .copick .cordo { width:14px; height:14px; border-radius:999px; border:1px solid var(--rule); flex:none; position:relative; }
+  .copick button.coon .cordo { border-color:var(--accent); } .copick button.coon .cordo::after { content:""; position:absolute; inset:3px; border-radius:999px; background:var(--accent); }
+  .copick .cot { min-width:0; flex:1; }
+  .copick .cot b { display:block; font-family:var(--serif-display); font-weight:600; font-size:15.5px; line-height:1.22; color:var(--ink); }
+  .copick .cot span { display:block; margin-top:4px; font-family:var(--sans); font-size:11px; color:var(--ink-faint); }
+  .copick .comark { font-family:var(--sans); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); flex:none; }
+  .conote { width:100%; box-sizing:border-box; min-height:96px; resize:vertical; font-family:var(--serif-body); font-size:15px; line-height:1.6; color:var(--ink); background:var(--card); border:1px solid var(--rule); border-radius:3px; padding:12px 14px; }
+  .coarrive { border:1px solid var(--rule); border-radius:5px; background:var(--card); overflow:hidden; }
+  .coarrive .cohd { display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid var(--rule-soft); font-family:var(--sans); font-size:10.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .coarrive .cobd { padding:17px 19px; }
+  .coarrive h4 { font-family:var(--serif-display); font-weight:600; font-size:19px; line-height:1.2; letter-spacing:-.014em; margin:0 0 10px; color:var(--ink); }
+  .coarrive .comsg { margin:0; padding-left:13px; border-left:2px solid color-mix(in srgb,var(--accent) 45%,transparent); font-family:var(--serif-body); font-size:15px; line-height:1.58; color:var(--ink-soft); }
+  .coarrive .cofx { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:16px; padding-top:14px; border-top:1px solid var(--rule-soft); font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); }
+  .coarrive .cofx .coacts { display:flex; gap:8px; flex-wrap:wrap; }
+  .cominor { background:transparent; border:1px solid var(--rule); border-radius:3px; font-family:var(--sans); font-size:12.5px; color:var(--ink-soft); padding:8px 14px; cursor:pointer; }
+  .cominor:hover { border-color:var(--accent); color:var(--accent); }
+  .cowould { margin:14px 0 0; padding:12px 14px; background:var(--paper-2); border-radius:3px; font-family:var(--sans); font-size:11.5px; line-height:1.6; color:var(--ink-faint); } .cowould b { color:var(--ink-soft); font-weight:500; }
+  .cotabs { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:16px; }
+  .cotabs button { font-family:var(--sans); font-size:12.5px; color:var(--ink-faint); background:transparent; border:1px solid var(--rule); border-radius:999px; padding:7px 14px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+  .cotabs button:hover { border-color:var(--accent); color:var(--accent); } .cotabs button.coon { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  .cotabs button .con2 { font-variant-numeric:tabular-nums; font-size:11px; opacity:.75; }
+  .coinbox { list-style:none; margin:0; padding:0; border-top:1px solid var(--rule); }
+  .coinbox li { display:grid; grid-template-columns:30px minmax(0,1fr) auto; gap:clamp(12px,1.8vw,20px); align-items:start; padding:16px 2px; border-bottom:1px solid var(--rule-soft); }
+  @media(max-width:720px){ .coinbox li { grid-template-columns:30px minmax(0,1fr); } .coinbox .coside { grid-column:2; } }
+  .coinbox li.cogone { display:none; }
+  .coinbox .cowhat { min-width:0; }
+  .coinbox .cokind { font-family:var(--sans); font-size:9.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); } .coinbox .cokind.coq { color:var(--ink-faint); }
+  .coinbox .cowhat b { display:block; font-family:var(--serif-display); font-weight:600; font-size:17px; line-height:1.26; letter-spacing:-.012em; margin-top:6px; color:var(--ink); }
+  .coinbox .cowhat p { margin:7px 0 0; font-size:14.5px; line-height:1.5; color:var(--ink-soft); max-width:60ch; }
+  .coinbox .cowhat .cometa { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-top:8px; font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); }
+  .coinbox .coside { display:flex; align-items:center; gap:9px; flex-wrap:wrap; justify-content:flex-end; }
+  .coinbox .costat { font-family:var(--sans); font-size:10px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; white-space:nowrap; }
+  .coinbox .costat.cowait { color:var(--ink-faint); } .coinbox .costat.coyes { color:var(--accent); } .coinbox .costat.cono { color:var(--ink-faint); opacity:.75; }
+  .coempty { padding:26px 2px; font-family:var(--sans); font-size:13.5px; line-height:1.6; color:var(--ink-faint); }
+  .conote2 { margin:16px 0 0; font-family:var(--sans); font-size:11.5px; line-height:1.6; color:var(--ink-faint); max-width:70ch; } .conote2 b { color:var(--ink-soft); font-weight:500; }
+  .coboard:last-child { padding-bottom: clamp(48px,7vw,88px); }
+</style>
+
+<script is:inline>
+  (function () {
+    var tabs = document.getElementById('cotabs'), list = document.getElementById('coin'), empty = document.getElementById('coempty');
+    if (!tabs) return;
+    function apply(t) {
+      var live = 0;
+      [].forEach.call(list.querySelectorAll('li'), function (li) { var on = li.dataset.t === t; li.classList.toggle('cogone', !on); if (on) live++; });
+      list.dataset.view = t; empty.style.display = live ? 'none' : '';
+    }
+    tabs.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      [].forEach.call(tabs.querySelectorAll('button'), function (x) { x.classList.toggle('coon', x === b); });
+      apply(b.dataset.t);
+    });
+    apply('in');
+  })();
+</script>
