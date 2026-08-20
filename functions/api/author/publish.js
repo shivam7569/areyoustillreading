@@ -13,6 +13,7 @@
  */
 import { requireAuthor, svcRpc, rpcError, json } from '../../../lib/require-author.js';
 import { assertInert, InertError } from '../../../lib/inert-guard.js';
+import { broadcastPost } from '../../../lib/broadcast.js';
 
 export async function onRequestPost({ request, env }) {
   const gate = await requireAuthor(request, env);
@@ -52,5 +53,24 @@ export async function onRequestPost({ request, env }) {
   if (!r.ok) return rpcError(r);
   const row = Array.isArray(r.data) ? r.data[0] : r.data;
   if (!row || !row.slug || !row.handle) return json({ error: 'Publish returned no location' }, 502);
-  return json({ ok: true, slug: row.slug, handle: row.handle, url: `/@${row.handle}/${row.slug}`, status: row.status });
+
+  // Optionally announce to confirmed subscribers (opt-in; best-effort — a mail failure
+  // never fails the publish). The post is already live. Guard by the post UUID (a DB slug
+  // is unique only per author); the email links to the canonical /@handle/slug.
+  let email = null;
+  if (p.email === true) {
+    try {
+      const site = (env.SITE_URL || 'https://areyoustillreading.dev').replace(/\/+$/, '');
+      const br = await broadcastPost(env, {
+        postUrl: `${site}/@${row.handle}/${row.slug}`,
+        guardKey: `broadcast:${post_id}`,
+        title: typeof p.title === 'string' && p.title.trim() ? p.title : row.slug,
+        description: typeof p.description === 'string' ? p.description : '',
+      });
+      email = br.body;
+    } catch (e) {
+      email = { error: String((e && e.message) || e) };
+    }
+  }
+  return json({ ok: true, slug: row.slug, handle: row.handle, url: `/@${row.handle}/${row.slug}`, status: row.status, email });
 }

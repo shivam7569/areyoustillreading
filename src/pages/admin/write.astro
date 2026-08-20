@@ -1756,7 +1756,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // updates rather than colliding on the unique per-author slug). Series/field attach is a
     // later slice — DB posts publish standalone for now.
     let dbPostId = null;
-    async function publishToDb({ title, description, slug, body, tags, draft, token, penName }, status) {
+    async function publishToDb({ title, description, slug, body, tags, draft, token, penName, email }, status) {
       status.textContent = 'Saving…';
       let saveJson;
       try {
@@ -1787,11 +1787,16 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         const pubRes = await fetch('/api/author/publish', {
           method: 'POST',
           headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ post_id: dbPostId, body_html: bodyHtml, body_text: bodyText, reading_min: readingMin }),
+          body: JSON.stringify({ post_id: dbPostId, body_html: bodyHtml, body_text: bodyText, reading_min: readingMin, email: !!email, title, description }),
         });
         const pj = await pubRes.json().catch(() => ({}));
         if (!pubRes.ok || !pj.url) { status.textContent = (pj && pj.error) || 'Could not publish.'; return; }
-        status.textContent = 'Published — opening your page…';
+        // Reflect the (best-effort) subscriber email in the status before the live-jump.
+        if (email && pj.email && typeof pj.email.sent === 'number' && pj.email.sent > 0) {
+          status.textContent = 'Published — emailed ' + pj.email.sent + ' subscriber' + (pj.email.sent === 1 ? '' : 's') + '. Opening your page…';
+        } else {
+          status.textContent = 'Published — opening your page…';
+        }
         window.location.href = pj.url;
       } catch (e) { status.textContent = 'Could not publish: ' + ((e && e.message) || e); }
     }
@@ -1837,7 +1842,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       // slug/tags/body + the browser render; the server inert-guards + commits it.
       if ($('pm-dest') && $('pm-dest').value === 'db') {
         $('pm-publish').disabled = true;
-        try { await publishToDb({ title, description, slug, body, tags: pubTags, draft, token, penName }, status); }
+        try { await publishToDb({ title, description, slug, body, tags: pubTags, draft, token, penName, email: emailSubs }, status); }
         finally { $('pm-publish').disabled = false; }
         return;
       }
