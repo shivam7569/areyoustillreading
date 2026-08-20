@@ -239,15 +239,6 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         <footer class="shfoot">
           <span class="shnote" id="ps-note"></span>
           <span class="shacts pm-actions">
-            {/* Destination: the legacy file/GitHub path (Blog) or the multi-author DB path
-                (Your page → /@handle/slug). Default 'file' keeps the existing flow byte-identical;
-                choosing 'db' routes Publish through the additive publishToDb() (content.posts). */}
-            <label class="pm-dest" title="Where this post is published"><span>Publish to</span>
-              <select id="pm-dest" class="sel" aria-label="Publish destination">
-                <option value="file">Blog</option>
-                <option value="db">Your page</option>
-              </select>
-            </label>
             <button class="btn btn-ghost btn-sm" id="pm-cancel" type="button">Cancel</button>
             <button class="btn btn-sm" id="pm-save-draft" type="button" title="Save as a hidden draft — only you can see it, not emailed">Save as draft</button>
             <button class="btn btn-primary btn-sm" id="pm-publish" type="button">Publish now</button>
@@ -364,9 +355,6 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .pm-slug { color: var(--accent); border-radius: 4px; padding: 0 0.15rem; outline: none; }
   .pm-toggle { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 1.35rem; font-size: 0.9rem; color: var(--muted); cursor: pointer; }
   .pm-actions { display: flex; align-items: center; gap: 0.85rem; }
-  /* Publish destination (Blog file vs the DB /@handle page). Sits left, pushing the actions right. */
-  .pm-dest { display: inline-flex; align-items: center; gap: 0.4rem; margin-right: auto; font-size: 12px; color: var(--ink-faint); }
-  .pm-dest .sel { width: auto; min-width: 96px; }
   .pm-btn { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: var(--admin-radius-sm); background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
   .pm-btn:disabled { opacity: 0.6; cursor: default; }
   .pm-btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
@@ -1814,8 +1802,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       const status = $('pm-form-status');
       const title = $('pm-post-title').value.trim();
       const description = $('pm-post-desc').value.trim();
-      // When updating, the slug is FIXED to the existing post's — never re-derived from
-      // the (locked) permalink field — so an update can't fork into a new file.
+      // When updating, the slug is FIXED to the existing post's; a new post derives it from the field.
       const slug = editing ? editing.slug : slugify($('pm-slug').textContent || title);
       const draft = $('pm-draft').checked;
       // Opt-in per publish; forced off for drafts (you never announce a draft).
@@ -1823,8 +1810,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       if (!title) return void (status.textContent = 'Add a title.');
       if (!description) return void (status.textContent = 'Add a description.');
       if (!slug) return void (status.textContent = 'Need a permalink.');
-      // Scheduling: a valid FUTURE time is required (the post is saved as a hidden
-      // draft with this publishAt; the cron flips it live then).
+      // Scheduling: a valid FUTURE time (author_schedule_post stores it; a pg_cron job flips it live).
       const scheduleAt = scheduledIso();
       if (whenChoice === 'later') {
         if (!scheduleAt) return void (status.textContent = 'Pick a date and time to schedule.');
@@ -1833,219 +1819,25 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       const { data } = await supabase.auth.getSession();
       const token = data.session && data.session.access_token;
       if (!token) { status.textContent = 'Please sign in again.'; refreshAuthView(); return; }
-
-      // Byline: the pen name set on the signed-in account (Account → edit name →
-      // user_metadata.name). Publishing requires a signed-in account, so there is
-      // always a publisher; if they haven't set a pen name yet, fall back to the
-      // site author. Baked into frontmatter + the instant HTML so both agree.
-      const penName = (data.session.user && data.session.user.user_metadata && data.session.user.user_metadata.name || '').trim();
-      const authorName = penName || 'Shivam Chaudhary';
-
-      // Title lives in frontmatter (rendered as the page <h1>), so drop a leading
-      // "# Title" from the body to avoid a duplicate heading.
+      // Drop a leading "# Title" from the body so the page <h1> isn't duplicated.
       const body = injectCellOutputs(crepe.getMarkdown().replace(/^#\s+.+\n+/, ''));
-
-      // DESTINATION: the multi-author DB path (/@handle/slug) bypasses the entire
-      // file/GitHub/KV machinery below. Reuses the same collected title/description/
-      // slug/tags/body + the browser render; the server inert-guards + commits it.
-      if ($('pm-dest') && $('pm-dest').value === 'db') {
-        // Read the series fields (the same inputs the file path uses) into a compact object.
-        const sName = $('pm-series').value.trim();
-        const sOrderN = parseInt($('pm-series-order').value, 10);
-        const sTotalN = parseInt($('pm-series-total').value, 10);
-        const series = sName ? {
-          slug: seriesSlugify(sName), title: sName,
-          order: Number.isFinite(sOrderN) && sOrderN > 0 ? sOrderN : null,
-          total: Number.isFinite(sTotalN) && sTotalN > 0 ? sTotalN : null,
-          status: $('pm-series-status').value.trim(),
-          planned: $('pm-series-planned').value.split('\n').map((x) => x.trim()).filter(Boolean),
-        } : null;
-        $('pm-publish').disabled = true;
-        try { await publishToDb({ title, description, slug, body, tags: pubTags, draft, token, penName, email: emailSubs, series, scheduleAt: whenChoice === 'later' ? scheduleAt : null }, status); }
-        finally { $('pm-publish').disabled = false; }
-        return;
-      }
-
-      // Preserve the original publish date when updating an existing post; a brand-new
-      // post is dated today.
-      const pubDate = (editing && editing.pubDate) || new Date().toISOString().slice(0, 10);
-      // Series (optional): the author types a display name; we store a slug for
-      // grouping (`series`), the raw name for display (`seriesTitle`), and the part
-      // number (`seriesOrder`). Omitted entirely when the field is blank.
-      const seriesTitleRaw = $('pm-series').value.trim();
-      // Uncapped slugify for the series GROUPING key (must byte-match the def store +
-      // post.js). The 80-char cap on `slugify` is only for the post's own permalink.
-      const seriesSlug = seriesTitleRaw ? seriesSlugify(seriesTitleRaw) : '';
-      const seriesOrderNum = parseInt($('pm-series-order').value, 10);
-      const seriesOrder = Number.isFinite(seriesOrderNum) && seriesOrderNum > 0 ? seriesOrderNum : null;
-      // Richer series metadata for the /series plate (all optional).
-      const seriesTotalNum = parseInt($('pm-series-total').value, 10);
-      const seriesTotal = Number.isFinite(seriesTotalNum) && seriesTotalNum > 0 ? seriesTotalNum : null;
-      const seriesStatus = $('pm-series-status').value.trim();
-      const seriesPlanned = $('pm-series-planned').value.split('\n').map((s) => s.trim()).filter(Boolean);
-      const fmLines = [
-        '---',
-        `title: ${yaml(title)}`,
-        `description: ${yaml(description)}`,
-        `author: ${yaml(authorName)}`,
-        `pubDate: ${yaml(pubDate)}`,
-        `tags: [${pubTags.map(yaml).join(', ')}]`,
-      ];
-      if (seriesSlug) {
-        fmLines.push(`series: ${yaml(seriesSlug)}`);
-        fmLines.push(`seriesTitle: ${yaml(seriesTitleRaw)}`);
-        if (seriesOrder != null) fmLines.push(`seriesOrder: ${seriesOrder}`);
-        if (seriesTotal != null) fmLines.push(`seriesTotal: ${seriesTotal}`);
-        if (seriesStatus) fmLines.push(`seriesStatus: ${yaml(seriesStatus)}`);
-        if (seriesPlanned.length) fmLines.push(`seriesPlanned: [${seriesPlanned.map(yaml).join(', ')}]`);
-      }
-      // Access: "Paid" marks the post gateable (build-time body split). The runtime
-      // price/on-state (post_paywall) is applied best-effort after publish, below.
-      if (accessChoice === 'paid') fmLines.push('gateable: true');
-      // Scheduled: keep it a hidden draft (draft is already true here) + record when the
-      // cron should publish it. Cleared automatically by the cron when it goes live.
-      if (scheduleAt) fmLines.push(`publishAt: ${yaml(scheduleAt)}`);
-      fmLines.push(`draft: ${draft}`, '---', '');
-      const content = fmLines.join('\n') + body;
-
+      // Series (optional) → { slug, title, order, total, status, planned }; attached to the author's own series.
+      const sName = $('pm-series').value.trim();
+      const sOrderN = parseInt($('pm-series-order').value, 10);
+      const sTotalN = parseInt($('pm-series-total').value, 10);
+      const series = sName ? {
+        slug: seriesSlugify(sName), title: sName,
+        order: Number.isFinite(sOrderN) && sOrderN > 0 ? sOrderN : null,
+        total: Number.isFinite(sTotalN) && sTotalN > 0 ? sTotalN : null,
+        status: $('pm-series-status').value.trim(),
+        planned: $('pm-series-planned').value.split('\n').map((x) => x.trim()).filter(Boolean),
+      } : null;
+      // THE ONE PUBLISH PATH: into content.posts → live at /@handle/slug (no file, no GitHub, no rebuild).
       $('pm-publish').disabled = true;
-      // Assemble the full page HTML for the instant KV overlay: render the body with
-      // the exact build pipeline, fetch the CURRENT shell donor (so asset URLs match
-      // this deployment), and inject. If any of this fails we still publish — the git
-      // commit makes the post live after the rebuild; we just lose the "instant" part.
-      status.textContent = 'Rendering…';
-      let assembledHtml = null;
       try {
-        // Heavy render pipeline (markdown-remark + Shiki + browser-D2) + shell assembler
-        // are loaded on demand here, so they never weigh down the editor's initial load.
-        // BOUNDED by a timeout: the render is the one unbounded await in the publish
-        // path, so a stalled render (a heavy edited post, a wedged WASM backend) must not
-        // be able to hang the whole publish — if assembly overruns, we skip the instant
-        // copy and let the git commit + rebuild make the post live instead.
-        assembledHtml = await Promise.race([
-          (async () => {
-            const [{ renderPostBodyBrowser }, { assemblePostHtml }] = await Promise.all([
-              import('../../lib/render-post-browser.mjs'),
-              import('../../lib/assemble-post.mjs'),
-            ]);
-            const bodyHtml = await renderPostBodyBrowser(body);
-            const shellHtml = await (await fetch('/post-shell', { cache: 'no-store' })).text();
-            return assemblePostHtml(shellHtml, {
-              slug, title, description, author: authorName, pubDate, tags: pubTags, bodyMarkdown: body, bodyHtml,
-            });
-          })(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('instant-assembly timed out')), 12000)),
-        ]);
-      } catch (e) {
-        console.error('[publish] instant-assembly failed/timed out; committing rebuild-only', e);
-        assembledHtml = null;
-      }
-
-      status.textContent = 'Publishing…';
-      // Set once publish succeeds and we begin waiting for the post to go live, so the
-      // `finally` below doesn't re-enable the button while we're about to navigate away.
-      let navigating = false;
-      try {
-        const res = await fetch('/api/publish', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ slug, content, html: assembledHtml, title, description, pubDate, tags: pubTags, draft }),
-        });
-        const j = await res.json().catch(() => ({}));
-        if (res.ok && j.ok) {
-          navigating = true;
-          // Access: apply the chosen paywall to post_paywall (best-effort, non-blocking) —
-          // exactly as the Posts page does. The post is already committed; a failure here
-          // never fails the publish. Turning an existing paid post to Free switches it off.
-          try {
-            if (accessChoice === 'paid') {
-              const dollars = parseFloat(($('pm-price') as HTMLInputElement).value) || 5;
-              supabase.from('post_paywall').upsert({ post_id: slug, is_paid: true, price_cents: Math.max(0, Math.round(dollars * 100)), currency: 'usd', updated_at: new Date().toISOString() }, { onConflict: 'post_id' }).then(() => {}, () => {});
-            } else if (editing && editing.gateable) {
-              supabase.from('post_paywall').upsert({ post_id: slug, is_paid: false, updated_at: new Date().toISOString() }, { onConflict: 'post_id' }).then(() => {}, () => {});
-            }
-          } catch {}
-          // Published — remove THIS draft's row (it became a post) so it can't resurrect
-          // next time the editor opens. Only for a genuinely new post, not an edit; the
-          // author's OTHER drafts are untouched (each is its own row).
-          if (!editing) {
-            try { if (currentDraftId) localStorage.removeItem(draftKeyFor(currentDraftId)); localStorage.removeItem(DRAFT_KEY); } catch {}
-            try { if (draftUid && currentDraftId) supabase.from('drafts').delete().eq('id', currentDraftId).then(() => {}, () => {}); } catch {}
-          }
-          // Optionally announce the post to confirmed subscribers — only for a real
-          // publish (never a draft) and only if the author opted in. AWAITED (not
-          // fire-and-forget) so the "emailed N" count is shown before the live-jump
-          // below navigates the modal away. The server re-checks the real list and
-          // guards against double-sends, so this is safe to call on every publish.
-          if (emailSubs) {
-            status.textContent = 'Published — emailing subscribers…';
-            try {
-              const br = await fetch('/api/admin/broadcast', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
-                body: JSON.stringify({ slug, title, description }),
-              });
-              const bj = await br.json().catch(() => ({}));
-              if (br.ok && bj.ok) {
-                if (bj.skipped === 'already-sent') status.textContent = 'Published — subscribers were already emailed for this post.';
-                else if (bj.skipped === 'in-progress') status.textContent = 'Published — an email send for this post is already in progress.';
-                else if (bj.sent > 0 && bj.failed > 0) status.textContent = 'Published — emailed ' + bj.sent + ", but " + bj.failed + " couldn't be delivered.";
-                else if (bj.sent > 0) status.textContent = 'Published — emailed ' + bj.sent + ' subscriber' + (bj.sent === 1 ? '' : 's') + '.';
-                else status.textContent = 'Published — no confirmed subscribers to email yet.';
-              } else {
-                // A total send failure now comes back as a 4xx with a clear reason
-                // (never silently as "no subscribers"), so this branch is honest.
-                status.textContent = "Published — but the email didn't send: " + (bj.error || ('HTTP ' + br.status));
-              }
-            } catch (e) {
-              status.textContent = 'Published — email failed: ' + (e && e.message ? e.message : String(e));
-            }
-            // Let the author read the result before the live-jump navigates away.
-            await new Promise((r) => setTimeout(r, 1600));
-          }
-          // A DRAFT is never public — its /blog/<slug> URL 404s forever (drafts are
-          // excluded from the build and not served by the KV overlay), so the live-poll
-          // below would hang on a permanent 404. Confirm the save and stop here.
-          if (draft) {
-            if (scheduleAt) {
-              const tz = schedTz.value || undefined;
-              const nice = new Date(scheduleAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: tz });
-              status.textContent = `Scheduled for ${nice}${tz ? ' (' + tz.replace(/_/g, ' ') + ')' : ''}. It stays hidden until then, when it publishes on its own.`;
-            } else {
-              status.textContent = (j.updated ? 'Draft updated.' : 'Draft saved.') + ' It stays hidden until you publish.';
-            }
-            navigating = false; // nothing to navigate to; let the button re-enable
-            return;
-          }
-          // Publishing is a git commit that triggers a fresh site build (~1-2 min); the
-          // post's page does not exist until that build finishes. Rather than leave the
-          // author on a "rebuilding" note (and a link that 404s until then), poll the
-          // post URL and navigate to it the instant it goes live — so submitting the
-          // form lands them on their real, published post.
-          const postUrl = '/blog/' + slug + '/';
-          status.textContent = (j.updated ? 'Updated' : 'Published') + ' — going live…';
-          const deadline = Date.now() + 5 * 60 * 1000;
-          const goWhenLive = async () => {
-            if (modal.hidden) return; // author closed the modal → they opted out of the auto-jump
-            try {
-              // Cache-bust + no-store so we see the fresh deployment, not an edge-cached 404.
-              const r = await fetch(postUrl + '?_=' + Date.now(), { cache: 'no-store' });
-              if (r.ok) { status.textContent = "It's live — taking you there…"; location.href = postUrl; return; }
-            } catch { /* transient during rollout — keep polling */ }
-            if (Date.now() < deadline) { setTimeout(goWhenLive, 1500); return; }
-            // Build ran unusually long — hand back a manual link instead of hanging.
-            navigating = false;
-            $('pm-publish').disabled = false;
-            status.innerHTML = 'Published — still building. <a href="' + postUrl + '">Open it →</a>';
-          };
-          setTimeout(goWhenLive, 800);
-        } else {
-          status.textContent = "Couldn't publish: " + (j.error || ('HTTP ' + res.status));
-        }
-      } catch (e) {
-        status.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
+        await publishToDb({ title, description, slug, body, tags: pubTags, draft, token, email: emailSubs, series, scheduleAt: whenChoice === 'later' ? scheduleAt : null }, status);
       } finally {
-        if (!navigating) $('pm-publish').disabled = false;
+        $('pm-publish').disabled = false;
       }
     });
   }

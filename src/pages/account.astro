@@ -93,6 +93,7 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
               <button class="nm-cancel" id="ac-nm-cancel" type="button" data-cms="account.signedIn.cancel">{si.cancel || 'Cancel'}</button>
             </form>
             <div class="em" id="ac-email"></div>
+            <a class="ac-handle" id="ac-handle" style="display:none"></a>
           </div>
         </div>
         <nav>
@@ -347,6 +348,19 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
         document.getElementById('ac-studio-nav').hidden = false;
       }
     } catch { /* not admin / RPC unavailable — leave hidden */ }
+
+    // If this reader is also an author, show their public page link (@handle). A plain
+    // reader has no author profile → my_profile returns nothing → the link stays hidden.
+    try {
+      const { data: prof } = await supabase.rpc('my_profile');
+      const row = Array.isArray(prof) ? prof[0] : prof;
+      const hEl = document.getElementById('ac-handle');
+      if (my === seq && hEl && row && row.handle) {
+        hEl.textContent = '@' + row.handle;
+        hEl.href = '/@' + row.handle;
+        hEl.style.display = '';
+      }
+    } catch { /* not an author — leave hidden */ }
   }
 
   // Auth actions. Redirect to HOME after sign-in — the callback is consumed on any
@@ -423,6 +437,15 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
     document.getElementById('ac-initial').textContent = val.charAt(0);
     closeNameEdit();
     try { await supabase.auth.updateUser({ data: { name: val } }); } catch {}
+    // The pen name IS the author identity: also update content.profiles.pen_name AND regenerate the
+    // @handle from it, so the byline + your /@handle page everywhere follow the pen name. No-op for
+    // a plain reader (no author profile). Changing it moves your page to the new /@handle.
+    try {
+      const { data: rows } = await supabase.rpc('set_my_pen_name', { p_pen_name: val });
+      const h = Array.isArray(rows) ? (rows[0] && rows[0].handle) : (rows && rows.handle);
+      const hEl = document.getElementById('ac-handle');
+      if (h && hEl) hEl.textContent = '@' + h;
+    } catch {}
   });
 
   // Re-render only on REAL auth changes (skip the repeated same-user SIGNED_IN noise).

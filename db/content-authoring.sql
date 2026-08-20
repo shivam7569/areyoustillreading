@@ -43,7 +43,16 @@ begin
   end if;
   if coalesce(nullif(btrim(p_slug), ''), '') = '' then raise exception 'slug required'; end if;
 
-  if p_post_id is null then
+  -- Resolve the target post: an explicit id, else the caller's OWN existing post with this slug
+  -- (edit-by-slug — the single publish path has no post_id when re-opening/editing an existing
+  -- post, so this makes save idempotent instead of colliding on the per-author unique slug), else new.
+  if p_post_id is not null then
+    v_id := p_post_id;
+  else
+    select id into v_id from content.posts where author_id = p_caller and slug = p_slug and deleted_at is null;
+  end if;
+
+  if v_id is null then
     -- NEW post: author_id = caller; the seed_primary_author trigger records the creator
     -- as position-0 accepted author. slug is unique per author (posts_author_slug_uq).
     insert into content.posts (author_id, slug, title, description, tags, body_md, body_doc,
@@ -54,10 +63,10 @@ begin
         coalesce(p_preview, ''), coalesce(p_author_byline, ''))
       returning id into v_id;
   else
-    if not exists (select 1 from content.posts where id = p_post_id and deleted_at is null) then
+    if not exists (select 1 from content.posts where id = v_id and deleted_at is null) then
       raise exception 'post not found';
     end if;
-    if not (content.is_post_author(p_post_id, p_caller) or content.is_owner(p_caller)) then
+    if not (content.is_post_author(v_id, p_caller) or content.is_owner(p_caller)) then
       raise exception 'not authorized to edit this post';
     end if;
     update content.posts set
@@ -69,8 +78,7 @@ begin
       preview = coalesce(p_preview, preview),
       author_byline = coalesce(p_author_byline, author_byline),
       updated_at = now()
-    where id = p_post_id
-    returning id into v_id;
+    where id = v_id;
   end if;
   return v_id;
 end $$;
@@ -163,6 +171,33 @@ begin
   where id = v_uid;
 end $$;
 
+-- ── pen name IS the identity: set pen_name AND derive the @handle from it ─────
+-- The one pen-name store. Changing your pen name updates content.profiles.pen_name (the byline
+-- shown everywhere) AND regenerates your @handle from it (slugified, deduped, non-reserved) — the
+-- handle only churns when the slug actually changes, so an unrelated edit keeps your links stable.
+-- No-op-safe for readers (no profile) — the caller ignores the 'no author profile' error.
+create or replace function public.set_my_pen_name(p_pen_name text)
+returns table (handle citext, pen_name text)
+language plpgsql security definer set search_path = public, content, extensions as $$
+declare v_uid uuid := auth.uid(); v_name text; v_slug text; v_handle citext;
+begin
+  if v_uid is null then raise exception 'not signed in'; end if;
+  v_name := btrim(coalesce(p_pen_name, ''));
+  if v_name = '' then raise exception 'pen name required'; end if;
+  if not exists (select 1 from content.profiles where id = v_uid and deleted_at is null) then
+    raise exception 'no author profile';
+  end if;
+  v_slug := content.slugify(v_name);
+  select p.handle into v_handle from content.profiles p where p.id = v_uid;
+  -- keep the current handle when it already matches the new pen-name slug (avoids a self-collision
+  -- in unique_handle and needless churn); otherwise mint a fresh unique handle from the pen name.
+  if v_handle is null or lower(v_handle::text) <> v_slug then
+    v_handle := content.unique_handle(v_name);
+  end if;
+  update content.profiles set pen_name = v_name, handle = v_handle, updated_at = now() where id = v_uid;
+  return query select v_handle, v_name;
+end $$;
+
 -- ── grants (least privilege) ─────────────────────────────────────────────────
 -- Supabase auto-grants EXECUTE to public on creation, so REVOKE first. The author_*
 -- write RPCs are the server-bridge → service_role ONLY (only the gated Function, which
@@ -179,10 +214,12 @@ revoke all on function public.my_profile()                     from public, anon
 revoke all on function public.my_posts()                       from public, anon;
 revoke all on function public.claim_my_handle(text)            from public, anon;
 revoke all on function public.update_my_profile(text,text,text) from public, anon;
+revoke all on function public.set_my_pen_name(text)            from public, anon;
 grant execute on function public.my_profile()                     to authenticated;
 grant execute on function public.my_posts()                       to authenticated;
 grant execute on function public.claim_my_handle(text)            to authenticated;
 grant execute on function public.update_my_profile(text,text,text) to authenticated;
+grant execute on function public.set_my_pen_name(text)            to authenticated;
 
 -- Make the new/changed functions callable via PostgREST immediately (otherwise the
 -- REST schema cache lags a DDL change and the first calls 404 with PGRST202).
