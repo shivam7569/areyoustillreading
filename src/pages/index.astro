@@ -3,217 +3,736 @@
  * =============================================================================
  * FILE: src/pages/index.astro  ·  ROUTE: "/"  (homepage)
  * =============================================================================
- * The editorial landing page (Phase 5), rebuilt from the Claude Design "home"
- * template onto the shared editorial system. Static SSG: everything in this
- * fence runs ONCE at build time (no per-visitor server code).
+ * The platform's pulse — rebuilt from the Claude Design "home" template onto the
+ * shared editorial system. Unlike the old static hero, this page reads LIVE from
+ * the DB (like /blog): a masthead, the last-fortnight feed across every author, a
+ * "coming next" shelf, the interactive "are you still reading?" mark band, the
+ * reading-pace measurement, and the letter.
  *
- * Structure (matches the template): a two-column hero (identity + pull-quote and
- * stats), a featured "latest essay" card, a "recent writing" list, and the
- * newsletter block. The hero copy + pull-quote are author-editable defaults; the
- * featured/recent entries and the three stats are derived from REAL published
- * posts, so nothing is fabricated.
+ * STATIC vs LIVE
+ *   - The masthead identity/ethos and the measurement prose are static copy.
+ *   - Everything time-sensitive (the feed, its stats, the mark band's tape, the
+ *     resume strip, the coming-next shelf) is fetched client-side via the anon
+ *     Supabase client and the public read RPCs — so a publish shows here instantly,
+ *     no rebuild, exactly as the /@handle/slug permalinks do.
  *
- * GUARDS / GOTCHAS
- *   - `!data.draft` is the ONLY publication guard (static site → no runtime gate).
- *   - <SubscribeForm> owns all bot-defense + the Supabase/Resend write; it is a
- *     black box here. Exactly ONE instance per page (its ids are hard-coded).
- *   - Uses <BaseLayout wide> so sections manage their own .wrap width.
- *   - JSX comments only ({/* *\/}) — HTML comments would ship to the browser.
+ * THE FORTNIGHT + THE GHOST PERIOD
+ *   The feed is time-boxed to the last 14 days. During a ghost period (nothing
+ *   published in a fortnight) it would be empty, so when fewer than MIN_FORTNIGHT
+ *   pieces have landed the page tops up from the whole archive sorted by MOST-READ
+ *   popularity (public.home_popular_posts) under its own honest header.
+ *
+ * READING PACE (src/lib/reading-pace.ts)
+ *   Every reading time is an estimate at 200 wpm. The "A measurement" section times
+ *   the reader on one real paragraph; if they consent, their measured pace is adopted
+ *   (kept only on their device) and every reading time on the page re-prices live to
+ *   their own minutes. Until they opt in, everyone sees the honest 200-wpm default.
+ *
+ * Feed-row rendering (monogram, curve, crumb) is shared with /blog via
+ * src/lib/feed-render.ts so the two never drift.
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
-import site from '../data/site.json';
-import { getCollection } from 'astro:content';
-
-// Page copy, editable from Studio → Content Management. Fall back to the
-// original text so nothing renders blank if a field is missing.
-const c = (site as any).home || {};
-const hHero = c.hero || {};
-const hFeat = c.featured || {};
-const hNews = c.newsletter || {};
-
-// Published posts, newest first. The draft filter is a publication guard.
-const posts = (await getCollection('blog', ({ data }) => !data.draft))
-  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
-
-const featured = posts[0];
-const recent = posts.slice(1, 6);
-
-// Real, derived hero stats — never fabricated.
-const topics = new Set<string>();
-posts.forEach((p) => (p.data.tags ?? []).forEach((t) => topics.add(t)));
-const years = posts.map((p) => p.data.pubDate.getUTCFullYear());
-const sinceYear = years.length ? Math.min(...years) : new Date().getUTCFullYear();
-
-// Build-time helpers.
-const fmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).filter(Boolean).length ?? 0) / 200));
-
-// Featured post's series badge (only when it belongs to a multi-part series).
-const fSeries = featured?.data.series;
-const fBadge = fSeries ? `${featured.data.seriesTitle ?? fSeries} · Part ${featured.data.seriesOrder ?? 1}` : null;
 ---
 
-<BaseLayout title={c.seo?.title || 'areyoustillreading — LLM engineering notes'} wide>
-  {/* ---------- HERO ---------- */}
-  <section class="hero">
-    <div class="wrap hero-grid">
-      <div>
-        <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="home.hero.eyebrow">{hHero.eyebrow || 'Deep dives & field notes'}</span></div>
-        <h1><span data-cms="home.hero.title">{hHero.title || 'In-depth writing on LLM engineering — and the'}</span> <em data-cms="home.hero.titleEm">{hHero.titleEm || 'systems behind it.'}</em></h1>
-        <p class="lede" data-cms="home.hero.lede">{hHero.lede || 'Long-form notes on building, shipping, and speeding up language-model systems. Measured, first-person, and free of hype.'}</p>
-        <div class="cta-row">
-          <a class="btn btn-primary" href="#subscribe" data-hide-admin><span data-cms="home.hero.ctaPrimary">{hHero.ctaPrimary || 'Subscribe to the letter'}</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>
+<BaseLayout title="areyoustillreading — long-form essays on machine learning & the systems underneath" wide>
+  <div class="wrap">
+
+    {/* ---------- MASTHEAD ---------- */}
+    <header class="mast">
+      <div class="kicker"><span class="line"></span><span class="eyebrow">A review, by invitation</span></div>
+      <h1>Essays on machine learning, <em>written to be finished.</em></h1>
+      <div class="mrow">
+        <p class="ethos">Long-form engineering writing on retrieval, inference and the systems underneath — measured, first-person, and published only when it holds together.</p>
+        <div class="acts">
+          <a class="btn btn-primary" href="#subscribe">Subscribe
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>
           </a>
-          <a class="btn btn-ghost" href="/blog"><span data-cms="home.hero.ctaSecondary">{hHero.ctaSecondary || 'Read the blog'}</span> <span class="arrow">&rarr;</span></a>
+          <a class="btn btn-ghost" href="/blog">Browse all posts <span class="arrow">→</span></a>
         </div>
       </div>
-      <aside class="hero-aside">
-        <p class="q">&ldquo;<span data-cms="home.hero.quote">{hHero.quote || 'Most latency lives in the places nobody profiles. The essay is where I go looking.'}</span>&rdquo;</p>
-        <div class="attr" data-cms="home.hero.attr">{hHero.attr || 'From the field notes'}</div>
-        <div class="hero-stats">
-          <div><div class="n">{posts.length}</div><div class="l" data-cms="home.hero.statPieces">{hHero.statPieces || 'Pieces'}</div></div>
-          <div><div class="n">{topics.size}</div><div class="l" data-cms="home.hero.statTopics">{hHero.statTopics || 'Topics'}</div></div>
-          <div><div class="n">{sinceYear}</div><div class="l" data-cms="home.hero.statSince">{hHero.statSince || 'Writing since'}</div></div>
-        </div>
-      </aside>
-    </div>
-  </section>
+      <div class="stats" id="mastStats" hidden>
+        <span><b id="stAuthors">—</b> <span id="stAuthorsL">authors</span></span><span class="dot">·</span>
+        <span><b id="stPieces">—</b> pieces this fortnight</span><span class="dot">·</span>
+        <span><b id="stMins">—</b> minutes of reading</span><span class="dot">·</span>
+        <span>Writing since 2026</span>
+      </div>
+    </header>
 
-  {featured && (
-    <Fragment>
-      <div class="wrap"><div class="rule-full"></div></div>
+    {/* ---------- WHERE YOU LEFT OFF (returning reader only) ---------- */}
+    <section class="rez" id="rez" hidden>
+      <div class="slab"><span class="eyebrow">Where you left off</span><span class="line"></span><button class="drop" type="button" id="rezClear">Clear</button></div>
+      <div class="rzgrid" id="rezGrid"></div>
+    </section>
 
-      {/* ---------- FEATURED (latest essay) ---------- */}
-      <section class="featured">
-        <div class="wrap">
-          <div class="sec-head">
-            <h2 data-cms={fSeries ? 'home.featured.titleSeries' : 'home.featured.titleLatest'}>{fSeries ? (hFeat.titleSeries || 'The current series') : (hFeat.titleLatest || 'Latest essay')}</h2>
-            <a class="more" href="/blog" data-cms="home.browse">{c.browse || 'Browse the archive →'}</a>
-          </div>
-          <article class="feat-card">
-            <div class="feat-art">
-              {fBadge && <span class="series-badge">{fBadge}</span>}
-              <svg viewBox="0 0 480 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-                <defs>
-                  <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0" stop-color="var(--accent)" stop-opacity="0.28"/>
-                    <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
-                  </linearGradient>
-                </defs>
-                <rect width="480" height="360" fill="url(#g1)"/>
-                <g stroke="var(--accent)" stroke-width="1.1" fill="none" opacity="0.5">
-                  <path d="M0 300 C90 300 90 210 180 210 S270 130 360 130 450 70 480 70"/>
-                  <path d="M0 320 C90 320 90 250 180 250 S270 180 360 180 450 130 480 130" opacity="0.6"/>
-                  <path d="M0 335 C90 335 90 300 180 300 S270 245 360 245 450 205 480 205" opacity="0.35"/>
-                </g>
-                <g fill="var(--accent)">
-                  <circle cx="180" cy="210" r="3.5"/><circle cx="360" cy="130" r="3.5"/><circle cx="270" cy="168" r="3"/>
-                </g>
-                <g stroke="var(--rule)" stroke-width="1" opacity="0.6">
-                  <line x1="0" y1="90" x2="480" y2="90"/><line x1="0" y1="180" x2="480" y2="180"/><line x1="0" y1="270" x2="480" y2="270"/>
-                </g>
-              </svg>
-            </div>
-            <div class="feat-body">
-              <div class="meta-caps">{fmt(featured.data.pubDate)} &nbsp;·&nbsp; {readMins(featured.body)} min read</div>
-              <h3><a href={`/blog/${featured.id}`}>{featured.data.title}</a></h3>
-              <p>{featured.data.description}</p>
-              <a class="go" href={`/blog/${featured.id}`}><span data-cms={fSeries ? 'home.featured.ctaSeries' : 'home.featured.cta'}>{fSeries ? (hFeat.ctaSeries || 'Continue the series') : (hFeat.cta || 'Read the essay')}</span> <span class="arrow">&rarr;</span></a>
-            </div>
-          </article>
-        </div>
-      </section>
-    </Fragment>
-  )}
+    {/* ---------- THIS FORTNIGHT — the centrepiece ---------- */}
+    <section class="feed">
+      <div class="slab"><span class="eyebrow">This fortnight</span><span class="line"></span><a class="more-link" href="/blog">Everyone →</a></div>
+      <p class="feedlede" id="feedLede">Everything published in the last fourteen days, newest first.</p>
 
-  {recent.length > 0 && (
-    <section class="recent">
-      <div class="wrap">
-        <div class="sec-head">
-          <h2 data-cms="home.recent.heading">{c.recent?.heading || 'Recent writing'}</h2>
-          <a class="more" href="/blog">{c.browse || 'Browse the archive →'}</a>
-        </div>
-        <div class="post-list">
-          {recent.map((post, i) => (
-            <article class="post">
-              <div class="idx">{String(i + 1).padStart(2, '0')}</div>
-              <div>
-                <h3><a href={`/blog/${post.id}`}>{post.data.title}</a></h3>
-                <p>{post.data.description}</p>
-                {post.data.tags && post.data.tags.length > 0 && (
-                  <div class="tags">{post.data.tags.slice(0, 3).map((t) => (<span class="tag">{t}</span>))}</div>
-                )}
-              </div>
-              <div class="aside">
-                <span class="date">{fmt(post.data.pubDate)}</span>
-                <span class="rt">{readMins(post.body)} min</span>
-              </div>
-            </article>
-          ))}
-        </div>
+      <div id="feedBands"><p class="feedlede" id="feedLoading" style="padding:24px 0">Loading the fortnight…</p></div>
+
+      <div class="legend" id="feedLegend" hidden>
+        <svg viewBox="0 0 50 16" aria-hidden="true"><path d="M0 2 C 11 3 21 8 31 9 S 44 11 50 12" fill="none" stroke="var(--accent)" stroke-width="1.4"/><circle cx="25" cy="7.5" r="2.2" fill="var(--paper)" stroke="var(--accent)" stroke-width="1.2"/></svg>
+        <span>Every piece carries the shape of its own reading — how many readers were still there, start to finish. The notch is where it loses most of them. No scores, no ranking.</span>
+      </div>
+
+      <div class="feedfoot">
+        <a class="btn btn-ghost" href="/blog">See everything <span class="arrow">→</span></a>
+        <span class="meta-caps">Or start with a <a class="link" href="/fields" style="color:var(--accent)">field</a></span>
       </div>
     </section>
-  )}
 
-  {/* ---------- NEWSLETTER ---------- */}
-  <section class="sub-section" id="subscribe" data-hide-admin>
+    {/* ---------- COMING NEXT (series still running) ---------- */}
+    <section class="coming" id="coming" hidden>
+      <div class="slab"><span class="eyebrow">Coming next</span><span class="line"></span><a class="more-link" href="/series">All series →</a></div>
+      <p class="feedlede">Series still running, and the part each one is waiting on. Nothing here has a date — it goes out when it holds.</p>
+      <div class="cmgrid" id="comingGrid"></div>
+    </section>
+
+  </div>
+
+  {/* ---------- THE MARK — "are you still reading?" ---------- */}
+  <section class="markband" id="markband" hidden>
     <div class="wrap">
-      <div class="sub-inner">
-        <SubscribeForm
-          heading={hNews.heading || 'Get the next essay by email.'}
-          blurb={hNews.blurb || 'New posts on LLM engineering and the systems underneath — straight to your inbox. No spam, unsubscribe in one click.'}
-          headingKey="home.newsletter.heading"
-          blurbKey="home.newsletter.blurb"
-        />
+      <div class="mkhead">
+        <div class="kicker"><span class="line"></span><span class="eyebrow">The question</span></div>
+        <h2>So <em>are you still reading?</em></h2>
+        <p class="say">Then the only thing worth asking is how long you've got. Below is what's here right now, laid end to end — every piece as wide as it is long. Move the dial and it will tell you exactly what your time buys, and hand you the reading order.</p>
+      </div>
+
+      <div class="dial">
+        <div class="amt" id="mkAmt">20<small>minutes</small></div>
+        <div class="slot">
+          <input type="range" id="mkRange" min="5" max="90" step="1" value="20" aria-label="Minutes you have to read">
+          <div class="ends"><span>5 min</span><span id="mkEndAll">the whole set</span></div>
+          <div class="presets" id="mkPresets">
+            <button type="button" data-min="10">A coffee</button>
+            <button type="button" data-min="20" class="on">A commute</button>
+            <button type="button" data-min="45">A lunch hour</button>
+            <button type="button" data-min="0" data-all="1">Everything</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tape" id="mkTape"></div>
+      <p class="tapefoot"><span>Shortest first, so a small budget still buys you something whole.</span><span>Tap a segment to make room for it.</span></p>
+
+      <div class="mkread">
+        <div><span class="k">Fits in your time</span><span class="v" id="mkFits">—</span><span class="sub" id="mkFitsSub">—</span></div>
+        <div><span class="k">Time you'd spend</span><span class="v" id="mkLeft">—</span><span class="sub" id="mkLeftSub">—</span></div>
+        <div><span class="k">Just out of reach</span><span class="v name" id="mkNext">—</span><span class="sub" id="mkNextSub">—</span></div>
+      </div>
+
+      <ul class="plan" id="mkPlan"></ul>
+
+      <div class="mkgo">
+        <a class="btn btn-primary" id="mkStart" href="/blog">Start reading <span class="arrow">→</span></a>
+        <span class="you">And you, on this page: <b id="mkYou">0%</b></span>
       </div>
     </div>
   </section>
+
+  <div class="wrap">
+
+    {/* ---------- A MEASUREMENT — the reader's own reading pace ---------- */}
+    <section class="pace" id="pace">
+      <div class="slab"><span class="eyebrow">A measurement</span><span class="line"></span><span class="more-link">One paragraph · nothing recorded but the number</span></div>
+      <p class="feedlede">Every reading time here assumes two hundred words a minute. Yours almost certainly is not that.</p>
+      <div class="pacecard">
+        <div class="pacetop"><span class="mono">DL</span><span>From “The retrieval step is lying to you”</span><span class="clock" id="pcClock">Ready</span></div>
+        <div class="pacebody" id="pcBody">
+          <p>We measure retrieval as if the model reads the way a librarian does — pull the right shelf, and the rest takes care of itself. But a language model does not read your top-<span class="inl">k</span> chunks. It <em>skims</em> them, weighted by position, phrasing, and a dozen biases we never put in the metric. The distance between “the right passage is in the context” and “the model used the right passage” is where most RAG systems quietly go to die.</p>
+          <p>Consider two retrievers with identical recall. The first places the answer at rank 1 with two clean neighbours. The second buries it at rank 9 behind eight near-duplicates that all <em>look</em> relevant. Same recall, wildly different outcomes once the model starts spending attention. Our headline number can't tell them apart — but our readers can.</p>
+        </div>
+        <div class="paceact">
+          <button class="btn btn-primary" type="button" id="pcGo">Start the clock <span class="arrow">→</span></button>
+          <span class="why" id="pcWhy">Read it the way you would read anything here. Press the button again when you reach the end.</span>
+          <button class="again" type="button" id="pcAgain">Measure again</button>
+        </div>
+        {/* Consent — shown only after a sane measurement. The pace is adopted (and re-prices every
+            reading time on the page) only if the reader says so; the default stays 200 wpm otherwise. */}
+        <div class="paceconsent" id="pcConsent" hidden>
+          <span class="q">Show reading times in your own minutes from now on?</span>
+          <button class="btn btn-sm btn-primary" type="button" id="pcAdopt">Use my pace</button>
+          <button class="pc-keep" type="button" id="pcKeep">Keep the 200 default</button>
+        </div>
+        <div class="paceout">
+          <div><span class="k">Your pace</span><span class="v" id="pcWpm">—</span><span class="sub" id="pcWpmSub">—</span></div>
+          <div><span class="k">This fortnight</span><span class="v" id="pcFort">—</span><span class="sub" id="pcFortSub">—</span></div>
+          <div><span class="k">The longest piece</span><span class="v" id="pcLong">—</span><span class="sub" id="pcLongSub">—</span></div>
+          <div><span class="k">A typical piece here</span><span class="v" id="pcTyp">—</span><span class="sub" id="pcTypSub">—</span></div>
+        </div>
+        <p class="paceflag" id="pcFlag"></p>
+        <p class="pacenote" id="pcNote">Measured only here, kept only on this device, and used only if you turn it on — it changes your reading times, nobody else's. <button type="button" class="pc-off" id="pcOff" hidden>Use the 200 default again</button></p>
+      </div>
+    </section>
+
+    {/* ---------- THE LETTER ---------- */}
+    <section class="letter" id="subscribe">
+      <SubscribeForm
+        heading="One note when something lands"
+        blurb="A short email whenever a piece is published, with the first paragraph and nothing else. No digests, no roundups, no recommendations."
+      />
+    </section>
+
+  </div>
 </BaseLayout>
 
-<style>
-  /* Home-specific layout ported from the Claude Design "home" template. Shared
-     bits (.btn/.sec-head/.eyebrow/.meta-caps/.post/.tag/.wrap) come from global.css. */
-  .hero { padding: clamp(56px, 9vw, 116px) 0 clamp(40px, 6vw, 64px); position: relative; }
-  .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: clamp(32px, 6vw, 80px); align-items: end; }
-  @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; gap: 40px; } }
-  .hero .kicker { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
-  .hero .kicker .line { height: 1px; width: 52px; background: var(--accent); opacity: 0.6; }
-  .hero h1 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(40px, 7vw, 78px); line-height: 1.02; letter-spacing: -0.02em; margin: 0 0 0.5em; max-width: 16ch; }
-  .hero h1 em { font-style: italic; color: var(--accent); }
-  .hero .lede { font-size: clamp(19px, 2.3vw, 23px); line-height: 1.6; color: var(--ink-soft); max-width: 52ch; margin: 0 0 34px; }
-  .cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+<style is:global>
+  /* Ported from the Claude Design "home" template. Shared chrome (.btn/.eyebrow/.wrap/
+     .meta-caps/.subscribe) + tokens come from global.css. GLOBAL (not scoped) because the
+     feed / resume / coming / tape rows are injected via innerHTML at runtime — Astro's scoped
+     styles only match elements present at build, so runtime DOM needs unscoped rules. This CSS
+     ships only on "/" (page-local), and its class names don't collide with global.css. */
 
-  .hero-aside { border-left: 2px solid var(--accent); padding: 6px 0 6px 22px; }
-  .hero-aside .q { font-family: var(--serif-display); font-style: italic; font-size: 20px; line-height: 1.5; color: var(--ink); margin: 0; }
-  .hero-aside .attr { margin-top: 14px; font-family: var(--sans); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
-  .hero-stats { display: flex; gap: 28px; margin-top: 26px; }
-  .hero-stats .n { font-family: var(--serif-display); font-size: 30px; color: var(--accent); line-height: 1; }
-  .hero-stats .l { font-family: var(--sans); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); margin-top: 6px; }
+  /* ——— masthead ——— */
+  .mast{padding:clamp(38px,5.4vw,64px) 0 clamp(24px,3vw,34px)}
+  .mast .kicker{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+  .mast .kicker .line{height:1px;width:48px;background:var(--accent);opacity:.6}
+  .mast h1{font-family:var(--serif-display);font-weight:600;font-size:clamp(34px,5.4vw,60px);line-height:1.04;letter-spacing:-.022em;margin:0;max-width:21ch;text-wrap:balance}
+  .mast h1 em{font-style:italic;color:var(--accent)}
+  .mrow{display:flex;align-items:flex-end;gap:clamp(20px,4vw,52px);flex-wrap:wrap;margin-top:clamp(22px,2.8vw,30px)}
+  .mast .ethos{font-size:clamp(17px,2.1vw,20px);line-height:1.6;color:var(--ink-soft);max-width:50ch;margin:0;text-wrap:pretty}
+  .mast .acts{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-left:auto}
+  .stats{display:flex;align-items:baseline;gap:clamp(14px,2.4vw,26px);flex-wrap:wrap;margin-top:clamp(22px,2.8vw,30px);padding-top:15px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
+  .stats b{font-family:var(--serif-display);font-size:17px;font-weight:600;letter-spacing:-.01em;text-transform:none;color:var(--accent);margin-right:2px}
+  .stats .dot{color:var(--rule)}
 
-  .rule-full { height: 1px; background: var(--rule); margin: 0; }
+  /* ——— the author's mark (initials over a hairline) ——— */
+  .mono{position:relative;flex:none;font-family:var(--serif-display);font-weight:600;font-size:12px;line-height:1;letter-spacing:.1em;color:var(--ink-soft);padding:0 1px 6px;transition:color .2s}
+  .mono::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--rule);transition:background .2s}
 
-  .featured { padding: clamp(48px, 7vw, 80px) 0; }
-  .feat-card { display: grid; grid-template-columns: 1.15fr 1fr; gap: 0; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; box-shadow: var(--shadow); }
-  @media (max-width: 820px) { .feat-card { grid-template-columns: 1fr; } }
-  .feat-art { position: relative; min-height: 340px; background: radial-gradient(120% 120% at 15% 10%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 55%), var(--paper-2); border-right: 1px solid var(--rule); overflow: hidden; }
-  @media (max-width: 820px) { .feat-art { border-right: none; border-bottom: 1px solid var(--rule); min-height: 220px; } }
-  .feat-art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .series-badge { position: absolute; top: 22px; left: 22px; z-index: 2; font-family: var(--sans); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; background: var(--accent); color: var(--on-accent); padding: 7px 12px; border-radius: 2px; }
-  .feat-body { padding: clamp(28px, 3.4vw, 44px); display: flex; flex-direction: column; justify-content: center; }
-  .feat-body .meta-caps { margin-bottom: 16px; }
-  .feat-body h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(26px, 3.2vw, 36px); line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 16px; }
-  .feat-body h3 a { color: var(--ink); background-image: linear-gradient(var(--accent), var(--accent)); background-size: 0 1.5px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size 0.3s; }
-  .feat-body h3 a:hover { background-size: 100% 1.5px; }
-  .feat-body p { color: var(--ink-soft); margin: 0 0 22px; max-width: 46ch; }
-  .feat-body .go { font-family: var(--sans); font-size: 14px; color: var(--accent); display: inline-flex; align-items: center; gap: 8px; }
-  .feat-body .go .arrow { transition: transform 0.2s; }
-  .feat-card:hover .feat-body .go .arrow { transform: translateX(5px); }
+  /* ——— the feed ——— */
+  .feed{padding:0 0 clamp(30px,4vw,44px)}
+  .slab{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+  .slab .line{height:1px;flex:1;background:var(--rule)}
+  .slab .more-link{font-family:var(--sans);font-size:12px;color:var(--ink-faint);white-space:nowrap}
+  .slab a.more-link:hover{color:var(--accent)}
+  .feedlede{font-family:var(--sans);font-size:12.5px;color:var(--ink-faint);margin:0 0 4px}
+  .band{display:flex;align-items:baseline;gap:14px;padding:clamp(24px,3vw,34px) 0 12px}
+  .band h2{font-family:var(--serif-display);font-weight:600;font-size:21px;letter-spacing:-.01em;margin:0}
+  .band .when{font-family:var(--sans);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
+  .band .rule{flex:1;height:1px;background:var(--rule)}
+  .post-list{border-top:1px solid var(--rule)}
+  .post{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:clamp(18px,3vw,40px);padding:26px 2px;border-bottom:1px solid var(--rule-soft);transition:background .25s}
+  .post:hover{background:var(--paper-2)}
+  @media(max-width:820px){.post{grid-template-columns:1fr;gap:13px;padding:24px 2px}}
+  .byline{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin:0 0 9px;font-family:var(--sans);font-size:12px;color:var(--ink-faint)}
+  .byline .mono{align-self:center}
+  .byline .with{font-size:12px;color:var(--ink-faint)}
+  .byline a{color:var(--ink-soft)}
+  .byline a:hover{color:var(--accent)}
+  .post:hover .mono{color:var(--accent)}
+  .post:hover .mono::after{background:var(--accent)}
+  .post h3{font-family:var(--serif-display);font-weight:600;font-size:clamp(21px,2.5vw,26px);line-height:1.18;letter-spacing:-.012em;margin:0 0 9px;text-wrap:pretty}
+  .post h3 a{background-image:linear-gradient(var(--accent),var(--accent));background-size:0 1.5px;background-repeat:no-repeat;background-position:0 100%;transition:background-size .3s}
+  .post:hover h3 a{background-size:100% 1.5px}
+  .post p{color:var(--ink-soft);margin:0 0 13px;font-size:16.5px;line-height:1.55;max-width:60ch}
+  .tags{display:flex;flex-wrap:wrap;gap:7px}
+  .tag{font-family:var(--sans);font-size:12px;letter-spacing:.03em;color:var(--ink-faint);border:1px solid var(--rule);border-radius:999px;padding:4px 11px;transition:border-color .2s,color .2s}
+  a.tag:hover{border-color:var(--accent);color:var(--accent)}
+  .pcrumb{display:block;margin-top:16px;padding-top:13px;font-family:var(--sans);font-size:11.5px;color:var(--ink-faint)}
+  .pcrumb .fd{display:block;margin-bottom:8px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
+  .pcrumb .cr{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap}
+  .pcrumb .cr .snm{font-family:var(--serif-display);font-size:15px;letter-spacing:-.005em;color:var(--ink-soft)}
+  .pcrumb .pt{display:inline-flex;align-items:center;gap:8px}
+  .pcrumb .pt .n{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);white-space:nowrap}
+  .pcrumb .ticks{display:flex;align-items:center;gap:2px}
+  .pcrumb .ticks i{width:11px;height:3px;border-radius:1px;background:color-mix(in srgb,var(--accent) 60%,transparent)}
+  .pcrumb .ticks i.todo{background:color-mix(in srgb,var(--ink) 16%,transparent)}
+  .pcrumb .ticks i.here{background:var(--accent);height:6px}
+  .aside{display:flex;flex-direction:column;align-items:flex-end;text-align:right;gap:5px;padding-top:2px}
+  @media(max-width:820px){.aside{align-items:baseline;text-align:left;order:-1;flex-direction:row;gap:12px;flex-wrap:wrap}}
+  .aside .date{font-family:var(--serif-display);font-style:italic;font-size:16.5px;color:var(--ink)}
+  .aside .rt{font-family:var(--sans);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
 
-  .recent { padding: clamp(20px, 4vw, 40px) 0 clamp(56px, 8vw, 96px); }
-  .recent .post-list { border-top: 1px solid var(--rule); }
+  /* ——— the reading shape ——— */
+  .curve{display:block;overflow:visible;width:86px;height:28px;margin-top:9px}
+  @media(max-width:820px){.curve{margin:0}}
+  .curve path.fill{fill:color-mix(in srgb,var(--accent) 12%,transparent)}
+  .curve path.line{fill:none;stroke:var(--accent);stroke-width:1.5;stroke-linecap:round}
+  .curve line.base{stroke:var(--rule);stroke-width:1}
+  .curve circle.cliff{fill:var(--paper);stroke:var(--accent);stroke-width:1.3}
+  .legend{display:flex;align-items:center;gap:11px;padding:18px 2px 0;font-family:var(--sans);font-size:11.5px;line-height:1.5;color:var(--ink-faint)}
+  .legend svg{width:50px;height:16px;overflow:visible;flex:none}
+  .feedfoot{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:22px 0 0}
 
-  .sub-section { padding: 0 0 clamp(56px, 8vw, 96px); }
-  .sub-inner { max-width: 720px; }
+  /* ——— the letter ——— */
+  .letter{padding:clamp(34px,4.6vw,56px) 0 clamp(52px,7vw,88px)}
+  .letter .subscribe{max-width:720px}
+
+  /* ——— where you left off ——— */
+  .rez{padding:0 0 clamp(22px,2.8vw,32px)}
+  .rez .slab{margin-bottom:12px}
+  .rez .drop{background:none;border:0;padding:0;cursor:pointer;font-family:var(--sans);font-size:12px;color:var(--ink-faint)}
+  .rez .drop:hover{color:var(--accent)}
+  .rzgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+  .rzc{display:block;border:1px solid var(--rule);border-radius:5px;background:var(--card);padding:15px 17px 13px;transition:border-color .2s,transform .2s}
+  .rzc:hover{border-color:color-mix(in srgb,var(--accent) 52%,var(--rule));transform:translateY(-1px)}
+  .rzc .top{display:flex;align-items:flex-start;gap:11px;min-width:0}
+  .rzc h3{font-family:var(--serif-display);font-weight:600;font-size:16px;line-height:1.28;letter-spacing:-.01em;margin:1px 0 0;color:var(--ink);min-width:0;text-wrap:pretty}
+  .rzc:hover h3{color:var(--accent)}
+  .rzc .pos{display:flex;align-items:center;gap:11px;margin-top:12px;padding-top:11px;border-top:1px solid var(--rule-soft);font-family:var(--sans);font-size:11.5px;color:var(--ink-faint)}
+  .rzc .bar{flex:1;height:3px;border-radius:2px;background:color-mix(in srgb,var(--ink) 13%,transparent);overflow:hidden}
+  .rzc .bar i{display:block;height:100%;border-radius:2px;background:color-mix(in srgb,var(--accent) 72%,transparent)}
+  .rzc .go{color:var(--accent);white-space:nowrap}
+
+  /* ——— coming next ——— */
+  .coming{padding:clamp(32px,4.2vw,50px) 0 0}
+  .cmgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(292px,1fr));gap:13px;margin-top:14px}
+  .cc{display:flex;flex-direction:column;gap:10px;border:1px solid var(--rule);border-radius:5px;background:var(--card);padding:17px 18px 15px;transition:border-color .2s}
+  .cc:hover{border-color:color-mix(in srgb,var(--accent) 52%,var(--rule))}
+  .cc .fld{font-family:var(--sans);font-size:9.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)}
+  .cc h3{font-family:var(--serif-display);font-weight:600;font-size:19px;line-height:1.2;letter-spacing:-.01em;margin:0;color:var(--ink)}
+  .cc:hover h3{color:var(--accent)}
+  .cc .sp{display:flex;gap:3px}
+  .cc .sp i{flex:1;height:5px;border-radius:1px;background:color-mix(in srgb,var(--accent) 70%,transparent)}
+  .cc .sp i.todo{background:transparent;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 24%,transparent)}
+  .cc .sp i.next{background:transparent;box-shadow:inset 0 0 0 1px var(--accent)}
+  .cc .nx{margin:0;padding-top:11px;border-top:1px solid var(--rule-soft);font-family:var(--serif-body);font-size:14.5px;line-height:1.5;color:var(--ink-soft)}
+  .cc .nx b{display:block;font-family:var(--sans);font-size:9.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  .cc .st{margin-top:auto;padding-top:11px;font-family:var(--sans);font-size:11.5px;color:var(--ink-faint)}
+
+  /* ——— the mark ——— */
+  .markband{margin:clamp(38px,5vw,64px) 0 0;padding:clamp(34px,4.6vw,60px) 0 clamp(30px,3.8vw,46px);background:var(--paper-2);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);position:relative;overflow:hidden}
+  .markband::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(80% 120% at 10% 0%,color-mix(in srgb,var(--accent) 8%,transparent),transparent 60%)}
+  .mkhead{position:relative;max-width:62ch}
+  .mkhead h2{font-family:var(--serif-display);font-weight:600;font-size:clamp(30px,4.4vw,50px);line-height:1.05;letter-spacing:-.024em;margin:14px 0 0;text-wrap:balance}
+  .mkhead h2 em{font-style:italic;color:var(--accent)}
+  .mkhead .say{font-size:clamp(16px,2vw,18px);line-height:1.6;color:var(--ink-soft);margin:16px 0 0;max-width:56ch;text-wrap:pretty}
+  .dial{display:flex;align-items:flex-end;gap:clamp(18px,3vw,38px);flex-wrap:wrap;margin-top:clamp(26px,3.4vw,38px)}
+  .dial .amt{font-family:var(--serif-display);font-weight:600;font-size:clamp(46px,7vw,86px);line-height:.86;letter-spacing:-.03em;color:var(--accent);font-variant-numeric:tabular-nums}
+  .dial .amt small{display:block;margin-top:10px;font-family:var(--sans);font-size:10.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint)}
+  .dial .slot{flex:1;min-width:240px}
+  .dial input[type=range]{appearance:none;width:100%;height:26px;background:none;cursor:grab;display:block}
+  .dial input[type=range]:active{cursor:grabbing}
+  .dial input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--rule)}
+  .dial input[type=range]::-moz-range-track{height:2px;background:var(--rule)}
+  .dial input[type=range]::-webkit-slider-thumb{appearance:none;width:16px;height:16px;margin-top:-7px;border-radius:999px;background:var(--accent);border:3px solid var(--paper-2);box-shadow:0 0 0 1px var(--accent)}
+  .dial input[type=range]::-moz-range-thumb{width:16px;height:16px;border:3px solid var(--paper-2);border-radius:999px;background:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .dial input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:3px}
+  .dial .ends{display:flex;justify-content:space-between;font-family:var(--sans);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-top:2px}
+  .dial .presets{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}
+  .dial .presets button{font-family:var(--sans);font-size:12px;color:var(--ink-faint);background:transparent;border:1px solid var(--rule);border-radius:999px;padding:5px 12px;cursor:pointer;transition:border-color .2s,color .2s}
+  .dial .presets button:hover{border-color:var(--accent);color:var(--accent)}
+  .dial .presets button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .tape{position:relative;display:flex;gap:2px;margin-top:clamp(24px,3.2vw,34px);height:96px}
+  @media(max-width:700px){.tape{height:78px}}
+  .seg{position:relative;display:flex;flex-direction:column;justify-content:flex-end;padding:9px 9px 10px;border:1px solid var(--rule);border-radius:3px;background:transparent;text-align:left;cursor:pointer;overflow:hidden;transition:border-color .22s,background .22s}
+  .seg::before{content:"";position:absolute;inset:0;background:color-mix(in srgb,var(--accent) 14%,transparent);opacity:0;transition:opacity .22s}
+  .seg .mn{position:relative;font-family:var(--serif-display);font-weight:600;font-size:17px;line-height:1;letter-spacing:-.01em;color:var(--ink-faint);font-variant-numeric:tabular-nums;transition:color .22s}
+  .seg .who{position:relative;margin-top:6px;font-family:var(--sans);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .22s}
+  .seg.fits{border-color:color-mix(in srgb,var(--accent) 58%,var(--rule))}
+  .seg.fits::before{opacity:1}
+  .seg.fits .mn{color:var(--accent)}
+  .seg.fits .who{color:var(--ink-soft)}
+  .seg:hover{border-color:var(--accent)}
+  .seg.next{border-style:dashed;border-color:color-mix(in srgb,var(--accent) 45%,var(--rule))}
+  .cut{position:absolute;left:0;top:-12px;bottom:-12px;width:1px;background:var(--accent);pointer-events:none;transition:left .22s}
+  .cut i{position:absolute;top:-9px;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:999px;background:var(--accent)}
+  .tapefoot{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-top:13px;font-family:var(--sans);font-size:11.5px;color:var(--ink-faint)}
+  .mkread{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin-top:clamp(20px,2.6vw,28px);background:var(--rule);border:1px solid var(--rule);border-radius:5px;overflow:hidden}
+  @media(max-width:760px){.mkread{grid-template-columns:1fr}}
+  .mkread div{background:var(--paper-2);padding:15px 17px 14px;min-width:0}
+  .mkread .k{display:block;font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)}
+  .mkread .v{display:block;margin-top:9px;font-family:var(--serif-display);font-weight:600;font-size:clamp(23px,2.8vw,31px);line-height:1.05;letter-spacing:-.02em;color:var(--accent);font-variant-numeric:tabular-nums}
+  .mkread .v.name{font-size:clamp(17px,2vw,20px);letter-spacing:-.01em;line-height:1.25;color:var(--ink);text-wrap:pretty}
+  .mkread .sub{display:block;margin-top:7px;font-family:var(--sans);font-size:11.5px;line-height:1.45;color:var(--ink-faint)}
+  .plan{margin:clamp(20px,2.6vw,28px) 0 0;padding:0;list-style:none;border-top:1px solid var(--rule)}
+  .plan li{display:flex;align-items:baseline;gap:13px;padding:12px 2px;border-bottom:1px solid var(--rule-soft)}
+  .plan .n{font-family:var(--sans);font-size:10.5px;letter-spacing:.12em;color:var(--ink-faint);width:18px;flex:none;font-variant-numeric:tabular-nums}
+  .plan .t{font-family:var(--serif-display);font-weight:600;font-size:17px;letter-spacing:-.01em;color:var(--ink);min-width:0}
+  .plan .t:hover{color:var(--accent)}
+  .plan .by{font-family:var(--sans);font-size:11.5px;color:var(--ink-faint)}
+  .plan .mn{margin-left:auto;font-family:var(--sans);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);white-space:nowrap}
+  .mkgo{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:clamp(18px,2.4vw,24px)}
+  .mkgo .you{font-family:var(--sans);font-size:11.5px;color:var(--ink-soft)}
+  .mkgo .you b{color:var(--accent);font-weight:600;font-variant-numeric:tabular-nums}
+
+  /* ——— the measurement ——— */
+  .pace{padding:clamp(36px,4.8vw,58px) 0 0}
+  .pacecard{margin-top:clamp(20px,2.6vw,28px);border:1px solid var(--rule);border-radius:6px;background:var(--card);box-shadow:var(--shadow);overflow:hidden}
+  .pacetop{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px clamp(20px,2.8vw,32px);border-bottom:1px solid var(--rule-soft);font-family:var(--sans);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
+  .pacetop .clock{margin-left:auto;font-family:var(--serif-display);font-size:19px;letter-spacing:-.01em;text-transform:none;color:var(--ink-faint);font-variant-numeric:tabular-nums;transition:color .2s}
+  .pace.live .pacetop .clock{color:var(--accent)}
+  .pacebody{padding:clamp(22px,3vw,34px) clamp(20px,2.8vw,32px);max-width:66ch;color:var(--ink-faint);transition:color .35s}
+  .pace.live .pacebody,.pace.done .pacebody{color:var(--ink)}
+  .pacebody p{margin:0 0 1em;font-size:clamp(17px,2vw,19px);line-height:1.68}
+  .pacebody p:last-child{margin-bottom:0}
+  .pacebody em{font-style:italic}
+  .pacebody .inl{font-family:var(--mono);font-size:.88em;background:color-mix(in srgb,var(--ink) 6%,transparent);padding:.1em .35em;border-radius:2px}
+  .paceact{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:16px clamp(20px,2.8vw,32px);border-top:1px solid var(--rule-soft);background:var(--paper-2)}
+  .paceact .why{font-family:var(--sans);font-size:11.5px;line-height:1.5;color:var(--ink-faint);max-width:46ch}
+  .paceact .again{background:none;border:0;padding:0;font-family:var(--sans);font-size:12px;color:var(--ink-faint);cursor:pointer;text-decoration:underline;text-underline-offset:2px;display:none}
+  .pace.done .paceact .again{display:inline}
+  .paceact .again:hover{color:var(--accent)}
+  /* consent row — shown after a sane measurement (JS toggles [hidden]) */
+  .paceconsent{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px clamp(20px,2.8vw,32px);border-top:1px solid var(--rule-soft);background:color-mix(in srgb,var(--accent) 7%,var(--paper-2))}
+  .paceconsent .q{font-family:var(--sans);font-size:12.5px;color:var(--ink-soft);margin-right:auto}
+  .paceconsent .pc-keep{background:none;border:0;padding:0;font-family:var(--sans);font-size:12px;color:var(--ink-faint);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+  .paceconsent .pc-keep:hover{color:var(--accent)}
+  .paceout{display:none;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule);border-top:1px solid var(--rule)}
+  .pace.done .paceout{display:grid}
+  @media(max-width:820px){.paceout{grid-template-columns:1fr 1fr}}
+  @media(max-width:480px){.paceout{grid-template-columns:1fr}}
+  .paceout div{background:var(--card);padding:16px clamp(18px,2.2vw,22px) 15px;min-width:0}
+  .paceout .k{display:block;font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)}
+  .paceout .v{display:block;margin-top:9px;font-family:var(--serif-display);font-weight:600;font-size:clamp(24px,3vw,32px);line-height:1;letter-spacing:-.02em;color:var(--accent);font-variant-numeric:tabular-nums}
+  .paceout .sub{display:block;margin-top:7px;font-family:var(--sans);font-size:11.5px;line-height:1.45;color:var(--ink-faint)}
+  .paceout .sub b{color:var(--ink-soft);font-weight:600}
+  .paceflag{display:none;padding:15px clamp(20px,2.8vw,32px);border-top:1px solid var(--rule);background:var(--paper-2);font-family:var(--sans);font-size:12px;line-height:1.55;color:var(--ink-faint)}
+  .pace.odd .paceflag{display:block}
+  .pace.odd .paceout{display:none}
+  .pacenote{margin:0;padding:13px clamp(20px,2.8vw,32px);border-top:1px solid var(--rule-soft);font-family:var(--sans);font-size:11px;line-height:1.55;color:var(--ink-faint)}
+  .pacenote .pc-off{background:none;border:0;padding:0;margin-left:4px;font:inherit;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+  .pace.on .pacenote{color:var(--ink-soft)}
+
+  /* quiet-fortnight top-up header */
+  .topup{display:flex;align-items:baseline;gap:13px;padding:20px 0 11px;font-family:var(--sans);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
+  .topup .rule{flex:1;height:1px;background:var(--rule-soft)}
+  .topup em{font-style:normal;color:var(--accent)}
 </style>
+
+<script>
+  import { supabase } from '../lib/supabase';
+  import { esc, initials, fmtShort, hashSeed, curveSvg, crumb } from '../lib/feed-render';
+  import { BASE, displayMin, getPace, setMeasured, adopt, unadopt, onPaceChange, isSanePace } from '../lib/reading-pace';
+
+  const $ = (id: string) => document.getElementById(id);
+  const DAY = 864e5, FORT_DAYS = 14, WEEK_DAYS = 7, MIN_FORTNIGHT = 6;
+  const retention = new Map<string, number[]>();
+
+  const state: { fortnight: any[]; popular: any[]; quiet: boolean; tape: any[] } =
+    { fortnight: [], popular: [], quiet: false, tape: [] };
+
+  // ——— feed rows (shared curve/crumb vocabulary; byline is home-specific) ———
+  function homeByline(p: any) {
+    const mono = `<span class="mono">${esc(initials(p.primary_name))}</span>`;
+    let s = `${mono}By <a href="/@${esc(p.primary_handle)}">${esc(p.primary_name)}</a>`;
+    if (p.author_count > 1 && Array.isArray(p.author_names)) {
+      const co = p.author_names.filter(Boolean).filter((n: string) => n !== p.primary_name);
+      if (co.length) {
+        s += `<span class="with">with</span><span class="mono">${esc(initials(co[0]))}</span><span>${esc(co[0])}</span>`;
+        if (co.length > 1) s += `<span class="with">&amp; ${co.length - 1} more</span>`;
+      }
+    }
+    return s;
+  }
+
+  function rowEl(p: any) {
+    const tags = (p.tags || []).slice(0, 4).map((t: string) => `<a class="tag" href="/blog?subject=${encodeURIComponent(t)}">${esc(t)}</a>`).join('');
+    return `<article class="post">
+      <div>
+        <p class="byline">${homeByline(p)}</p>
+        <h3><a href="/@${esc(p.primary_handle)}/${esc(p.slug)}">${esc(p.title)}</a></h3>
+        ${p.description ? `<p>${esc(p.description)}</p>` : ''}
+        ${tags ? `<div class="tags">${tags}</div>` : ''}
+        ${crumb(p)}
+      </div>
+      <div class="aside">
+        <span class="date">${esc(fmtShort(p.pub_date))}</span><span class="rt">${displayMin(p.reading_min)} min</span>
+        ${curveSvg(retention.get(p.slug), hashSeed(p.slug))}
+      </div>
+    </article>`;
+  }
+
+  const postList = (posts: any[]) => `<div class="post-list">${posts.map(rowEl).join('')}</div>`;
+
+  // A band's date span, e.g. "12 – 18 August" (single day → "18 August").
+  function span(posts: any[]) {
+    const ds = posts.map((p) => new Date(p.pub_date)).filter((d) => !isNaN(+d)).sort((a, b) => +a - +b);
+    if (!ds.length) return '';
+    const f = (d: Date) => d.toLocaleDateString('en-US', { day: 'numeric', month: 'long' });
+    const a = ds[0], b = ds[ds.length - 1];
+    if (a.toDateString() === b.toDateString()) return f(b);
+    const short = (d: Date) => d.toLocaleDateString('en-US', { day: 'numeric' });
+    return a.getMonth() === b.getMonth() ? `${short(a)} – ${f(b)}` : `${f(a)} – ${f(b)}`;
+  }
+  const band = (h: string, posts: any[]) =>
+    !posts.length ? '' : `<div class="band"><h2>${esc(h)}</h2><span class="when">${esc(span(posts))}</span><span class="rule"></span></div>${postList(posts)}`;
+
+  function renderFeed() {
+    const bands = $('feedBands')!, lede = $('feedLede')!;
+    const now = Date.now();
+    if (!state.quiet) {
+      const wk = state.fortnight.filter((p) => Date.parse(p.pub_date) >= now - WEEK_DAYS * DAY);
+      const earlier = state.fortnight.filter((p) => Date.parse(p.pub_date) < now - WEEK_DAYS * DAY);
+      lede.textContent = 'Everything published in the last fourteen days, newest first.';
+      bands.innerHTML = band('This week', wk) + band('Earlier this fortnight', earlier);
+    } else {
+      const n = state.fortnight.length;
+      lede.textContent = n ? `${n} ${n === 1 ? 'piece' : 'pieces'} in the last fourteen days. A quiet one.` : 'Nothing new in the last fourteen days — a quiet fortnight.';
+      let html = '';
+      if (n) html += band('This fortnight', state.fortnight);
+      if (state.popular.length) {
+        html += `<div class="topup"><span>Worth going back for</span><em>Most read</em><span class="rule"></span></div>${postList(state.popular)}`;
+      }
+      bands.innerHTML = html || '<p class="feedlede" style="padding:24px 0">The archive is just getting started.</p>';
+    }
+    ($('feedLegend') as HTMLElement).hidden = !(state.fortnight.length || state.popular.length);
+  }
+
+  function renderStats() {
+    const el = $('mastStats') as HTMLElement;
+    const f = state.fortnight;
+    if (f.length) {
+      const authors = new Set(f.map((p) => p.primary_handle)).size;
+      const mins = f.reduce((a, p) => a + displayMin(p.reading_min), 0);
+      $('stAuthors')!.textContent = String(authors);
+      $('stAuthorsL')!.textContent = authors === 1 ? 'author' : 'authors';
+      $('stPieces')!.textContent = String(f.length);
+      $('stMins')!.textContent = String(mins);
+    } else {
+      // Ghost period — state what's true rather than a zero.
+      el.innerHTML = '<span>A quiet fortnight</span><span class="dot">·</span><span>the most-read pieces are below</span><span class="dot">·</span><span>Writing since 2026</span>';
+    }
+    el.hidden = false;
+  }
+
+  // ——— where you left off ———
+  async function loadRez() {
+    let rows: any[] = [];
+    try { const { data } = await supabase.rpc('my_reading_continues', { p_limit: 3 }); rows = data || []; } catch { return; }
+    if (!rows.length) return;
+    const grid = $('rezGrid')!;
+    grid.innerHTML = rows.map((r) => {
+      const pct = Math.max(1, Math.min(99, Math.round(r.pct || 0)));
+      const left = Math.max(1, Math.round((r.reading_min || 1) * (1 - pct / 100)));
+      // A card only links when we know the author's handle (canonical /@handle/slug).
+      const href = r.handle ? `/@${esc(r.handle)}/${esc(r.slug)}` : `/blog/${esc(r.slug)}`;
+      return `<a class="rzc" href="${href}">
+        <span class="top"><span class="mono">${esc(initials(r.author_name))}</span><h3>${esc(r.title)}</h3></span>
+        <span class="pos"><span>${pct}% in · ${left} min left</span><span class="bar"><i style="width:${pct}%"></i></span><span class="go">Resume →</span></span>
+      </a>`;
+    }).join('');
+    ($('rez') as HTMLElement).hidden = false;
+    $('rezClear')!.addEventListener('click', () => { ($('rez') as HTMLElement).hidden = true; });
+  }
+
+  // ——— coming next ———
+  async function loadComing() {
+    let rows: any[] = [];
+    try { const { data } = await supabase.rpc('home_series_in_progress', { p_limit: 6 }); rows = data || []; } catch { return; }
+    if (!rows.length) return;
+    const grid = $('comingGrid')!;
+    grid.innerHTML = rows.slice(0, 6).map((s) => {
+      const total = Math.max(s.total || 0, s.published || 0, s.next_part || 1);
+      let sp = '';
+      for (let k = 1; k <= Math.min(total, 8); k++) sp += `<i class="${k <= s.published ? '' : k === s.next_part ? 'next' : 'todo'}"></i>`;
+      const word = (n: number) => ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] || String(n);
+      const stat = s.status === 'paused' ? `Paused · ${word(s.published)} of ${word(total)} published`
+        : `In progress · ${word(s.published)} of ${word(total)} published`;
+      return `<article class="cc">
+        ${s.field_title ? `<div class="fld">${esc(s.field_title)}</div>` : ''}
+        <h3><a href="/@${esc(s.owner_handle)}/s/${esc(s.series_slug)}">${esc(s.series_title)}</a></h3>
+        <div class="sp">${sp}</div>
+        <p class="nx"><b>Part ${esc(s.next_part)}</b>${esc(s.next_title || 'In the works')}</p>
+        <div class="st">${esc(stat)}</div>
+      </article>`;
+    }).join('');
+    ($('coming') as HTMLElement).hidden = false;
+  }
+
+  // ——— the mark (tape / dial) ———
+  function initMark() {
+    const tape = $('mkTape'); if (!tape) return;
+    const P = state.tape.map((p) => ({ t: p.title, by: p.primary_name, m: initials(p.primary_name), base: Math.max(1, p.reading_min || 1), handle: p.primary_handle, slug: p.slug }));
+    if (!P.length) return;
+    ($('markband') as HTMLElement).hidden = false;
+    const rt = (p: any) => displayMin(p.base);
+
+    const range = $('mkRange') as HTMLInputElement, amt = $('mkAmt')!,
+      fits = $('mkFits')!, fitsSub = $('mkFitsSub')!, left = $('mkLeft')!, leftSub = $('mkLeftSub')!,
+      nxt = $('mkNext')!, nxtSub = $('mkNextSub')!, plan = $('mkPlan')!, start = $('mkStart') as HTMLAnchorElement;
+
+    // (re)build the tape — one segment per piece, grown by its minutes
+    tape.innerHTML = '';
+    P.forEach((p, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'seg'; b.style.flex = p.base + ' 1 0'; b.dataset.i = String(i);
+      b.title = p.t + ' — ' + rt(p) + ' min';
+      b.innerHTML = `<span class="mn">${rt(p)}</span><span class="who">${esc(p.m)}</span>`;
+      tape.appendChild(b);
+    });
+    const cut = document.createElement('span'); cut.className = 'cut'; cut.innerHTML = '<i></i>'; tape.appendChild(cut);
+    const segs = [].slice.call(tape.querySelectorAll('.seg')) as HTMLElement[];
+
+    const words = (n: number) => n <= 10 ? 'One short piece, read properly' : n <= 20 ? 'A commute, both ways' : n <= 45 ? 'A lunch hour with something left over' : 'The whole set, more or less';
+
+    function paint() {
+      const TOTAL = P.reduce((a, p) => a + rt(p), 0);
+      range.max = String(Math.max(5, TOTAL));
+      $('mkEndAll')!.textContent = `the whole set · ${TOTAL} min`;
+      let budget = +range.value; if (budget > TOTAL) { budget = TOTAL; range.value = String(TOTAL); }
+      let spent = 0; const taken: number[] = [];
+      P.forEach((p, i) => { if (spent + rt(p) <= budget) { spent += rt(p); taken.push(i); } });
+      amt.innerHTML = budget + '<small>minutes</small>';
+      segs.forEach((s, i) => {
+        s.classList.toggle('fits', taken.indexOf(i) > -1);
+        s.classList.toggle('next', i === taken.length && taken.length < P.length);
+        // Keep the segment's minute label re-priced when the reader adopts their own pace.
+        const mn = s.querySelector('.mn'); if (mn) mn.textContent = String(rt(P[i]));
+        s.title = P[i].t + ' — ' + rt(P[i]) + ' min';
+      });
+
+      const base = tape!.getBoundingClientRect().left, over = budget - spent; let at: number;
+      if (!taken.length) at = 0;
+      else {
+        const lastR = segs[taken[taken.length - 1]].getBoundingClientRect(); at = lastR.right - base;
+        if (over > 0 && taken.length < P.length) {
+          const nr = segs[taken.length].getBoundingClientRect();
+          at += (nr.left - lastR.right) + Math.min(1, over / rt(P[taken.length])) * nr.width;
+        }
+      }
+      cut.style.left = at.toFixed(1) + 'px';
+
+      fits.textContent = taken.length + (taken.length === 1 ? ' piece' : ' pieces');
+      fitsSub.textContent = words(budget);
+      left.textContent = spent + ' min';
+      leftSub.textContent = over > 0 ? over + ' minute' + (over === 1 ? '' : 's') + ' spare · ' + (TOTAL - spent) + ' min still unread' : 'Every minute spent, nothing wasted';
+
+      const n = taken.length;
+      if (n < P.length) {
+        nxt.textContent = P[n].t;
+        const gap = rt(P[n]) - (budget - spent);
+        nxtSub.textContent = gap + ' more minute' + (gap === 1 ? '' : 's') + ' would reach it · ' + P[n].by;
+      } else { nxt.textContent = 'Nothing left'; nxtSub.textContent = 'You have the whole set in hand'; }
+
+      plan.innerHTML = taken.map((i, k) => { const p = P[i];
+        return `<li><span class="n">${k + 1}</span><a class="t" href="/@${esc(p.handle)}/${esc(p.slug)}">${esc(p.t)}</a><span class="by">${esc(p.by)}</span><span class="mn">${rt(p)} min</span></li>`; }).join('')
+        || `<li><span class="n">—</span><span class="by">${budget} minutes is under the shortest piece here — nudge it up to ${rt(P[0])}.</span></li>`;
+      const first = taken.length ? P[taken[0]] : null;
+      start.innerHTML = first ? `Start with “${esc(first.t)}” <span class="arrow">→</span>` : 'Browse the archive <span class="arrow">→</span>';
+      start.setAttribute('href', first ? `/@${esc(first.handle)}/${esc(first.slug)}` : '/blog');
+
+      [].forEach.call(document.querySelectorAll('#mkPresets button'), (b: HTMLButtonElement) => {
+        b.classList.toggle('on', b.dataset.all ? budget === TOTAL : +b.dataset.min! === budget);
+      });
+    }
+    // wire once
+    if (!tape.dataset.wired) {
+      tape.dataset.wired = '1';
+      range.addEventListener('input', paint);
+      addEventListener('resize', paint, { passive: true });
+      $('mkPresets')!.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest('button') as HTMLButtonElement; if (!b) return;
+        const TOTAL = P.reduce((a, p) => a + rt(p), 0);
+        range.value = b.dataset.all ? String(TOTAL) : String(Math.min(+range.max, +b.dataset.min!)); paint();
+      });
+      tape.addEventListener('click', (e) => {
+        const s = (e.target as HTMLElement).closest('.seg') as HTMLElement; if (!s) return;
+        const i = +s.dataset.i!; let need = 0; for (let k = 0; k <= i; k++) need += rt(P[k]);
+        range.value = String(Math.min(+range.max, need)); paint();
+      });
+      const you = $('mkYou')!;
+      const depth = () => { const hh = document.documentElement.scrollHeight - innerHeight; you.textContent = Math.round((hh > 0 ? Math.min(1, Math.max(0, scrollY / hh)) : 1) * 100) + '%'; };
+      addEventListener('scroll', depth, { passive: true }); depth();
+    }
+    (initMark as any)._paint = paint;
+    paint();
+  }
+  const repaintMark = () => { const p = (initMark as any)._paint; if (p) p(); };
+
+  // ——— the measurement + consent ———
+  function initPace() {
+    const sec = $('pace'); if (!sec) return;
+    const body = $('pcBody')!, go = $('pcGo')!, clock = $('pcClock')!, why = $('pcWhy')!,
+      again = $('pcAgain')!, flag = $('pcFlag')!, consent = $('pcConsent') as HTMLElement,
+      note = $('pcNote')!, off = $('pcOff') as HTMLElement, adoptBtn = $('pcAdopt')!, keepBtn = $('pcKeep')!;
+    const WORDS = body.textContent!.trim().split(/\s+/).filter(Boolean).length;
+    let t0 = 0, tick: any = null, running = false, lastWpm = 0;
+
+    // real re-price figures drawn from the pieces actually on the page (base minutes @ 200 wpm)
+    const shown = state.tape.length ? state.tape : state.popular;
+    const mins = shown.map((p) => Math.max(1, p.reading_min || 1)).sort((a, b) => a - b);
+    const FORT = mins.reduce((a, m) => a + m, 0);
+    const LONGEST = mins.length ? mins[mins.length - 1] : 0;
+    const TYPICAL = mins.length ? mins[Math.floor(mins.length / 2)] : 0;
+    const longTitle = (shown.find((p) => (p.reading_min || 0) === LONGEST) || {}).title || 'the longest piece';
+
+    const fmt = (m: number) => { if (m < 1) return Math.max(1, Math.round(m * 60)) + ' sec'; const w = Math.floor(m), s = Math.round((m - w) * 60); return s >= 30 ? (w + 1) + ' min' : w + ' min'; };
+    const stopClock = () => { if (tick) { clearInterval(tick); tick = null; } };
+
+    function reflectState() {
+      const { adopted, wpm } = getPace();
+      sec.classList.toggle('on', adopted);
+      off.hidden = !adopted;
+      if (adopted && wpm) note.firstChild!.textContent = `Reading times on this page are shown at your pace — about ${wpm} words a minute, kept on this device. `;
+      else note.firstChild!.textContent = 'Measured only here, kept only on this device, and used only if you turn it on — it changes your reading times, nobody else’s. ';
+    }
+
+    function start() {
+      sec.classList.remove('done', 'odd'); consent.hidden = true; running = true; t0 = Date.now();
+      go.innerHTML = 'I have finished <span class="arrow">→</span>';
+      why.textContent = 'Reading ' + WORDS + ' words. No rush — the number is only useful if it is honest.';
+      stopClock();
+      tick = setInterval(() => { const s = Math.round((Date.now() - t0) / 1000); clock.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }, 250);
+      clock.textContent = '0:00'; sec.classList.add('live');
+    }
+    function cell(id: string, subId: string, mine: number, pub: number, lead: string) {
+      $(id)!.textContent = fmt(mine);
+      const same = Math.round(mine) === Math.round(pub);
+      $(subId)!.innerHTML = same ? lead + 'the same as published' : lead + 'published as <b>' + Math.round(pub) + ' min</b>';
+    }
+    function finish() {
+      running = false; stopClock(); sec.classList.remove('live');
+      const m = (Date.now() - t0) / 60000, wpm = Math.round(WORDS / m);
+      go.innerHTML = 'Start the clock <span class="arrow">→</span>'; clock.textContent = fmt(m); sec.classList.add('done');
+      if (!isSanePace(wpm)) {
+        sec.classList.add('odd'); consent.hidden = true;
+        flag.textContent = wpm > 900
+          ? 'That works out at ' + wpm + ' words a minute, which is skimming rather than reading — worth another go if you want a figure you can use.'
+          : 'That works out at ' + wpm + ' words a minute. If you were interrupted, the number will not mean much — try again when you have a clear minute.';
+        why.textContent = 'Nothing was kept — that figure is not worth using.';
+        return;
+      }
+      lastWpm = wpm; setMeasured(wpm);
+      const k = BASE / wpm;
+      $('pcWpm')!.textContent = String(wpm);
+      $('pcWpmSub')!.innerHTML = wpm > BASE + 25 ? 'Quicker than the <b>200</b> these estimates assume'
+        : wpm < BASE - 25 ? 'Slower than the <b>200</b> these estimates assume — the good kind'
+        : 'Close to the <b>200</b> these estimates assume';
+      cell('pcFort', 'pcFortSub', FORT * k, FORT, (shown.length || 'the') + ' piece' + (shown.length === 1 ? '' : 's') + ' · ');
+      cell('pcLong', 'pcLongSub', LONGEST * k, LONGEST, esc(String(longTitle)).slice(0, 28) + ' · ');
+      cell('pcTyp', 'pcTypSub', TYPICAL * k, TYPICAL, '');
+      why.textContent = 'Every reading time here is an estimate at 200. Now you know what to multiply it by.';
+      // Ask before adopting — the pace personalises the whole page only with consent.
+      consent.hidden = getPace().adopted;   // already on → no need to ask again
+      reflectState();
+    }
+
+    go.addEventListener('click', () => { running ? finish() : start(); });
+    again.addEventListener('click', start);
+    adoptBtn.addEventListener('click', () => { if (adopt()) { consent.hidden = true; reflectState(); } });
+    keepBtn.addEventListener('click', () => { unadopt(); consent.hidden = true; reflectState(); });
+    off.addEventListener('click', () => { unadopt(); reflectState(); });
+    reflectState();
+  }
+
+  // ——— boot ———
+  async function boot() {
+    let feed: any[] = [];
+    try { const { data } = await supabase.rpc('list_feed_posts', { p_limit: 50, p_before: null }); feed = data || []; } catch { /* offline / RLS — show the empty state */ }
+    const cutoff = Date.now() - FORT_DAYS * DAY;
+    state.fortnight = feed.filter((p) => Date.parse(p.pub_date) >= cutoff);
+    state.quiet = state.fortnight.length < MIN_FORTNIGHT;
+    if (state.quiet) {
+      try { const { data } = await supabase.rpc('home_popular_posts', { p_limit: 24 }); state.popular = data || []; } catch { /* leave empty */ }
+    }
+    // the tape reflects what's live now: the fortnight, or (ghost period) the most-read pieces
+    state.tape = (state.fortnight.length ? state.fortnight.slice() : state.popular.slice(0, 8))
+      .sort((a, b) => (a.reading_min || 99) - (b.reading_min || 99));
+
+    // one retention fetch for every slug we'll draw
+    const slugs = Array.from(new Set([...state.fortnight, ...state.popular].map((p) => p.slug)));
+    if (slugs.length) { try { const { data } = await supabase.rpc('feed_retention', { p_slugs: slugs }); (data || []).forEach((r: any) => retention.set(r.slug, r.samples)); } catch { /* curves optional */ } }
+
+    renderStats(); renderFeed(); initMark(); initPace();
+    loadRez(); loadComing();
+
+    // adopting/dropping a pace re-prices every reading time on the page, live
+    onPaceChange(() => { renderStats(); renderFeed(); repaintMark(); });
+  }
+  boot();
+</script>

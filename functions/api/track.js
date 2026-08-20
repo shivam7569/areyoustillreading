@@ -84,9 +84,17 @@ async function handle({ request, env }) {
   const service = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!sb || !service) return NOOP();
 
-  // Derive the blog slug when this is a post page.
-  const m = /^\/blog\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\/?$/.exec(path);
-  const slug = m ? m[1] : null;
+  // Derive the post slug so the dashboard + homepage popularity can rank posts.
+  // Two live post URL shapes: /blog/<slug> (legacy file post) and /@handle/<slug>
+  // (the DB permalink — the one publish path today). The author (/@handle), series
+  // (/@handle/s/<slug>) and field (/@handle/f/<slug>) routes are NOT posts.
+  let slug = null;
+  let m = /^\/blog\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\/?$/.exec(path);
+  if (m) slug = m[1];
+  else {
+    m = /^\/@[^/]+\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\/?$/.exec(path);
+    if (m && m[1] !== 's' && m[1] !== 'f') slug = m[1];
+  }
 
   const country = request.headers.get('cf-ipcountry') || null;
   const refHost = typeof body.r === 'string' && body.r ? body.r.slice(0, 128) : null;

@@ -7,16 +7,19 @@
 -- most-recently-touched. authenticated only (anon has no progress).
 -- Idempotent. Depends on db/reader-progress.sql + db/content.sql.
 -- =============================================================================
+-- Added the handle OUT column → drop before recreate (OUT signature can't be replaced in place).
+drop function if exists public.my_reading_continues(int);
 create or replace function public.my_reading_continues(p_limit int default 3)
 returns table (
   slug        text,
   title       text,
   author_name text,
+  handle      citext,           -- the post author's @handle → canonical /@handle/slug resume link
   pct         int,
   reading_min int
 )
 language sql stable security definer set search_path = public, content, extensions as $$
-  select p.slug, p.title, pr.pen_name, rp.pct::int, p.reading_min
+  select p.slug, p.title, pr.pen_name, pr.handle, rp.pct::int, p.reading_min
   from public.reader_progress rp
   join content.posts p on p.slug = rp.post_slug
     and p.status = 'published' and p.visibility = 'public' and p.deleted_at is null
@@ -29,6 +32,8 @@ language sql stable security definer set search_path = public, content, extensio
 $$;
 
 grant execute on function public.my_reading_continues(int) to authenticated;
+
+notify pgrst, 'reload schema';
 
 -- VERIFY (optional, impersonating a reader):
 --   set local role authenticated; select set_config('request.jwt.claim.sub', '<uuid>', true);
