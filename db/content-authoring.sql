@@ -64,7 +64,7 @@ begin
       slug = p_slug, title = coalesce(p_title, ''), description = coalesce(p_description, ''),
       tags = coalesce(p_tags, '{}'), body_md = coalesce(p_body_md, ''),
       body_doc = coalesce(p_body_doc, body_doc),
-      pub_date = p_pub_date, publish_at = p_publish_at,
+      pub_date = coalesce(p_pub_date, pub_date), publish_at = coalesce(p_publish_at, publish_at),
       gateable = coalesce(p_gateable, gateable),
       preview = coalesce(p_preview, preview),
       author_byline = coalesce(p_author_byline, author_byline),

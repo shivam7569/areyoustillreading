@@ -239,6 +239,15 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         <footer class="shfoot">
           <span class="shnote" id="ps-note"></span>
           <span class="shacts pm-actions">
+            {/* Destination: the legacy file/GitHub path (Blog) or the multi-author DB path
+                (Your page → /@handle/slug). Default 'file' keeps the existing flow byte-identical;
+                choosing 'db' routes Publish through the additive publishToDb() (content.posts). */}
+            <label class="pm-dest" title="Where this post is published"><span>Publish to</span>
+              <select id="pm-dest" class="sel" aria-label="Publish destination">
+                <option value="file">Blog</option>
+                <option value="db">Your page</option>
+              </select>
+            </label>
             <button class="btn btn-ghost btn-sm" id="pm-cancel" type="button">Cancel</button>
             <button class="btn btn-sm" id="pm-save-draft" type="button" title="Save as a hidden draft — only you can see it, not emailed">Save as draft</button>
             <button class="btn btn-primary btn-sm" id="pm-publish" type="button">Publish now</button>
@@ -355,6 +364,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .pm-slug { color: var(--accent); border-radius: 4px; padding: 0 0.15rem; outline: none; }
   .pm-toggle { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 1.35rem; font-size: 0.9rem; color: var(--muted); cursor: pointer; }
   .pm-actions { display: flex; align-items: center; gap: 0.85rem; }
+  /* Publish destination (Blog file vs the DB /@handle page). Sits left, pushing the actions right. */
+  .pm-dest { display: inline-flex; align-items: center; gap: 0.4rem; margin-right: auto; font-size: 12px; color: var(--ink-faint); }
+  .pm-dest .sel { width: auto; min-width: 96px; }
   .pm-btn { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: var(--admin-radius-sm); background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
   .pm-btn:disabled { opacity: 0.6; cursor: default; }
   .pm-btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
@@ -1735,6 +1747,55 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       }
     });
 
+    // The DB authoring path: save the post into content.posts and publish it via the
+    // /api/author/* endpoints (server-bridge → publish_post). The body is rendered with
+    // the SAME browser pipeline the file path uses, so the stored body_html is identical;
+    // the server adds an inert-guard backstop. A DB publish is synchronous — on success the
+    // post is already live at /@handle/slug (no rebuild), so we navigate straight there.
+    // `dbPostId` persists the created row's id across saves within a session (so a re-save
+    // updates rather than colliding on the unique per-author slug). Series/field attach is a
+    // later slice — DB posts publish standalone for now.
+    let dbPostId = null;
+    async function publishToDb({ title, description, slug, body, tags, draft, token, penName }, status) {
+      status.textContent = 'Saving…';
+      let saveJson;
+      try {
+        const saveRes = await fetch('/api/author/post', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
+          // Date the post today on first create; on a re-save (dbPostId set) omit it so
+          // author_save_post preserves the original pub_date (coalesce).
+          body: JSON.stringify({ post_id: dbPostId, slug, title, description, tags, body_md: body, author_byline: penName, pub_date: dbPostId ? undefined : new Date().toISOString() }),
+        });
+        saveJson = await saveRes.json().catch(() => ({}));
+        if (!saveRes.ok || !saveJson.post_id) { status.textContent = (saveJson && saveJson.error) || 'Could not save.'; return; }
+      } catch (e) { status.textContent = 'Could not save: ' + ((e && e.message) || e); return; }
+      dbPostId = saveJson.post_id;
+      if (draft) { status.textContent = 'Draft saved.'; return; }
+
+      status.textContent = 'Rendering…';
+      let bodyHtml, bodyText, readingMin;
+      try {
+        const { renderPostBodyBrowser } = await import('../../lib/render-post-browser.mjs');
+        bodyHtml = await renderPostBodyBrowser(body);
+        bodyText = bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        readingMin = Math.max(1, Math.round(bodyText.split(/\s+/).filter(Boolean).length / 200));
+      } catch (e) { status.textContent = 'Could not render: ' + ((e && e.message) || e); return; }
+
+      status.textContent = 'Publishing…';
+      try {
+        const pubRes = await fetch('/api/author/publish', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ post_id: dbPostId, body_html: bodyHtml, body_text: bodyText, reading_min: readingMin }),
+        });
+        const pj = await pubRes.json().catch(() => ({}));
+        if (!pubRes.ok || !pj.url) { status.textContent = (pj && pj.error) || 'Could not publish.'; return; }
+        status.textContent = 'Published — opening your page…';
+        window.location.href = pj.url;
+      } catch (e) { status.textContent = 'Could not publish: ' + ((e && e.message) || e); }
+    }
+
     // Publish.
     $('pm-publish').addEventListener('click', async () => {
       const status = $('pm-form-status');
@@ -1770,6 +1831,17 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       // Title lives in frontmatter (rendered as the page <h1>), so drop a leading
       // "# Title" from the body to avoid a duplicate heading.
       const body = injectCellOutputs(crepe.getMarkdown().replace(/^#\s+.+\n+/, ''));
+
+      // DESTINATION: the multi-author DB path (/@handle/slug) bypasses the entire
+      // file/GitHub/KV machinery below. Reuses the same collected title/description/
+      // slug/tags/body + the browser render; the server inert-guards + commits it.
+      if ($('pm-dest') && $('pm-dest').value === 'db') {
+        $('pm-publish').disabled = true;
+        try { await publishToDb({ title, description, slug, body, tags: pubTags, draft, token, penName }, status); }
+        finally { $('pm-publish').disabled = false; }
+        return;
+      }
+
       // Preserve the original publish date when updating an existing post; a brand-new
       // post is dated today.
       const pubDate = (editing && editing.pubDate) || new Date().toISOString().slice(0, 10);
