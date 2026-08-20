@@ -80,6 +80,7 @@ import '../styles/global.css';
 import BaseHead from '../components/BaseHead.astro';
 // First-party, cookieless analytics beacon (public pages only; see the component).
 import Analytics from '../components/Analytics.astro';
+import ReadingPaceRepricer from '../components/ReadingPaceRepricer.astro';
 // Site-wide chrome copy (brand, nav labels, footer, default SEO description),
 // editable from Studio → Content Management. Every use below falls back to the
 // original string so the shell never renders blank if a field is missing.
@@ -353,5 +354,7 @@ const isGroupActive = (item: { href: string; children?: { href: string }[] }) =>
     </footer>
     {/* Cookieless first-party analytics beacon — public pages only. */}
     <Analytics />
+    {/* Personalises every [data-read-min] reading time to the reader's adopted pace. */}
+    <ReadingPaceRepricer />
   </body>
 </html>

@@ -75,6 +75,20 @@ export function unadopt() {
   emit();
 }
 
+// Re-price every reading-time element under `root` to the reader's pace. Any page bakes its
+// reading times as `<span data-read-min="12" data-read-unit="min read">12 min read</span>` (the
+// base 200-wpm value + its label); this rewrites the text to displayMin(base). A no-op visually
+// until the reader adopts a pace, so it is always safe to run. Elements re-injected at runtime
+// (feed rows) just call this again on their container after each render.
+export function repriceReadMins(root: ParentNode = document) {
+  root.querySelectorAll<HTMLElement>('[data-read-min]').forEach((el) => {
+    const base = Number(el.getAttribute('data-read-min'));
+    if (!Number.isFinite(base)) return;
+    const unit = el.getAttribute('data-read-unit') || 'min';
+    el.textContent = `${displayMin(base)} ${unit}`;
+  });
+}
+
 // Subscribe to adopt/unadopt. Returns an unsubscribe fn.
 export function onPaceChange(cb: (p: Pace) => void): () => void {
   const h = () => cb(getPace());

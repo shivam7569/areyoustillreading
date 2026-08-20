@@ -263,6 +263,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   // Shared feed-row vocabulary (curve/crumb/byline/…) — the same module the homepage feed uses,
   // so the two streams render identical rows and never drift.
   import { esc, initials, monthKey, monthLabel, fmtDate, hashSeed, byline, curveSvg, crumb } from '../../lib/feed-render';
+  import { repriceReadMins } from '../../lib/reading-pace';
 
   const stream = document.getElementById('stream')!;
   const q = document.getElementById('q') as HTMLInputElement;
@@ -297,7 +298,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         (tags ? `<div class="tags">${tags}</div>` : '') +
         crumb(p) +
       `</div>` +
-      `<div class="aside"><span class="dt">${esc(fmtDate(p.pub_date))}</span><span class="rt">${esc(p.reading_min || 1)} min</span>${curveSvg(retention.get(p.slug), hashSeed(p.slug))}</div>`;
+      `<div class="aside"><span class="dt">${esc(fmtDate(p.pub_date))}</span><span class="rt" data-read-min="${esc(p.reading_min || 1)}" data-read-unit="min">${esc(p.reading_min || 1)} min</span>${curveSvg(retention.get(p.slug), hashSeed(p.slug))}</div>`;
     return el;
   }
 
@@ -323,6 +324,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       for (const p of arr) wrap.appendChild(rowEl(p));
       stream.appendChild(wrap);
     }
+    repriceReadMins(stream);   // personalise the just-rendered rows to the reader's pace (default: no change)
     apply();
   }
 

@@ -1,0 +1,15 @@
+---
+/*
+ * ReadingPaceRepricer.astro — site-wide reading-time personalisation.
+ * Included once in BaseLayout, so it runs on every reader page (including the edge-rendered
+ * /@handle/slug permalinks, whose donor shell is this same BaseLayout). It re-prices every
+ * `[data-read-min]` element to the reader's adopted pace, and again whenever they change it.
+ * A no-op for readers on the 200-wpm default — the estimates are already at 200.
+ */
+---
+<script>
+  import { repriceReadMins, onPaceChange } from '../lib/reading-pace';
+  const run = () => repriceReadMins(document);
+  run();
+  onPaceChange(run);
+</script>
