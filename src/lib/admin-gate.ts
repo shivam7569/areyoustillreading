@@ -25,10 +25,21 @@
 import { supabase } from './supabase';
 
 export type AdminState = 'admin' | 'not-admin' | 'signed-out';
+/** owner = the site owner (in public.admins); author = an invited author/editor; reader = neither. */
+export type StudioRole = 'owner' | 'author' | 'reader';
 export interface AdminCheck {
+  /** 'admin' = cleared to load the Studio shell (owner OR an active author). */
   state: AdminState;
   /** The signed-in user's email, when there is a session (for the topbar). */
   email?: string;
+  /** Fine-grained role, used to scope the Studio nav + page access. */
+  role?: StudioRole;
+  /** True only for the site owner (everything); an author sees only authoring sections. */
+  owner?: boolean;
+  /** An author has claimed their permanent @handle (owners are always considered onboarded). */
+  onboarded?: boolean;
+  /** The @handle, once claimed (null until an author onboards). */
+  handle?: string | null;
 }
 
 const CACHE_KEY = 'aysr:admin-ok';
@@ -71,11 +82,26 @@ export function checkAdmin(force = false): Promise<AdminCheck> {
     }
     const email = session.user.email ?? undefined;
     try {
-      const { data: ok, error } = await supabase.rpc('is_admin');
-      if (error) throw error;
-      const isAdmin = ok === true;
-      setCache(isAdmin);
-      return { state: (isAdmin ? 'admin' : 'not-admin') as AdminState, email };
+      // Owner (public.admins) AND author profile in one round-trip. Either clears the Studio;
+      // the owner sees everything, an author sees only authoring sections + must onboard first.
+      const [adminRes, profRes] = await Promise.all([
+        supabase.rpc('is_admin'),
+        supabase.rpc('my_profile'),
+      ]);
+      if (adminRes.error) throw adminRes.error;
+      const owner = adminRes.data === true;
+      const prof = Array.isArray(profRes.data) ? profRes.data[0] : profRes.data;
+      const isAuthor = !!prof && (prof.role === 'author' || prof.role === 'editor');
+      const allowed = owner || isAuthor;
+      const role: StudioRole = owner ? 'owner' : isAuthor ? 'author' : 'reader';
+      setCache(allowed);
+      return {
+        state: (allowed ? 'admin' : 'not-admin') as AdminState,
+        email, role, owner,
+        // owners never onboard; authors are onboarded once they've claimed a @handle
+        onboarded: owner ? true : !!(prof && prof.handle),
+        handle: (prof && prof.handle) || null,
+      };
     } catch {
       // Ambiguous (offline / RPC error): report not-admin but leave any cache intact.
       return { state: 'not-admin' as AdminState, email };

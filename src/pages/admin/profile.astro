@@ -1,0 +1,127 @@
+---
+/**
+ * /admin/profile — the author's identity: first-run ONBOARDING (claim a permanent @handle) and,
+ * once onboarded, the profile editor (pen name / bio). The @handle is claimed ONCE here and is
+ * then fixed — the pen name is only the display byline and can change freely. Interim functional
+ * layout on the current admin vocabulary; the editorial design swaps in later.
+ * All writes go straight to the authenticated public RPCs (claim_my_handle / update_my_profile /
+ * set_my_pen_name) — no server bridge needed, they act on auth.uid().
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Profile — Studio" heading="Your profile" active="profile">
+  <section class="stack" style="max-width:760px">
+    {/* ---------- ONBOARDING (no @handle yet) ---------- */}
+    <div class="panel" id="onboard" hidden>
+      <header><h2>Set up your page</h2></header>
+      <div class="pb flush">
+        <p class="muted" style="margin:0 0 0.4rem">Welcome. Two quick things and your page is live.</p>
+        <div class="setrow">
+          <div class="k">Your @handle<small>Your permanent web address — <b>this can't be changed later</b>, so pick well.</small></div>
+          <div class="f" style="flex-direction:column;align-items:flex-start;gap:0.35rem">
+            <div style="display:flex;align-items:center;gap:0.35rem"><span class="at">@</span><input id="ob-handle" class="inp" type="text" placeholder="yourhandle" autocomplete="off" spellcheck="false" style="width:220px" /></div>
+            <span class="muted" style="font-size:0.85rem">areyoustillreading.dev/@<span id="ob-preview">yourhandle</span> <span id="ob-handle-status"></span></span>
+          </div>
+        </div>
+        <div class="setrow">
+          <div class="k">Pen name<small>Your display name / byline. You can change this anytime.</small></div>
+          <div class="f"><input id="ob-pen" class="inp" type="text" placeholder="Your name" style="width:260px" /></div>
+        </div>
+        <div class="setrow">
+          <div class="k">Bio<small>A line or two about you (optional).</small></div>
+          <div class="f" style="flex:1"><textarea id="ob-bio" class="inp" rows="3" style="width:100%;resize:vertical"></textarea></div>
+        </div>
+        <div class="setrow">
+          <div class="k"></div>
+          <div class="f" style="gap:0.6rem"><button id="ob-save" class="btn btn-primary" type="button">Create my page</button><span class="muted" id="ob-status" style="font-size:0.85rem"></span></div>
+        </div>
+      </div>
+    </div>
+
+    {/* ---------- EDIT (onboarded author / owner) ---------- */}
+    <div class="panel" id="edit" hidden>
+      <header><h2>Your profile</h2></header>
+      <div class="pb flush">
+        <div class="setrow">
+          <div class="k">Your page<small>Your permanent web address.</small></div>
+          <div class="f"><a id="ed-handle" class="link" href="#" target="_blank" rel="noopener"></a></div>
+        </div>
+        <div class="setrow">
+          <div class="k">Pen name<small>Your display name — the byline on your posts. The @handle above never changes.</small></div>
+          <div class="f" style="gap:0.5rem;flex-wrap:wrap"><input id="ed-pen" class="inp" type="text" style="width:260px" /><button id="ed-pen-save" class="btn btn-sm" type="button">Save</button><span class="muted" id="ed-pen-status" style="font-size:0.85rem"></span></div>
+        </div>
+        <div class="setrow">
+          <div class="k">Bio</div>
+          <div class="f" style="flex-direction:column;align-items:flex-start;gap:0.4rem;flex:1"><textarea id="ed-bio" class="inp" rows="3" style="width:100%;resize:vertical"></textarea><div style="display:flex;gap:0.5rem;align-items:center"><button id="ed-bio-save" class="btn btn-sm" type="button">Save</button><span class="muted" id="ed-bio-status" style="font-size:0.85rem"></span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <style>
+    .at { font-weight: 600; color: var(--admin-faint, #888); font-size: 1.05rem; }
+    #ob-handle-status.ok { color: var(--admin-accent, #5e3560); }
+    #ob-handle-status.bad { color: #c0392b; }
+  </style>
+
+  <script>
+    import { supabase } from '../../lib/supabase';
+    import { onAdminReady } from '../../lib/admin-gate';
+
+    const $ = (id: string) => document.getElementById(id) as HTMLElement;
+    // A conservative handle slug, matching the server rule (a–z, 0–9, hyphen; 1–30 chars).
+    const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
+
+    onAdminReady(async () => {
+      const { data } = await supabase.rpc('my_profile');
+      const p = Array.isArray(data) ? data[0] : data;
+      if (p && p.handle) showEdit(p); else showOnboard(p);
+    });
+
+    function showOnboard(p: any) {
+      $('onboard').hidden = false;
+      const h = $('ob-handle') as HTMLInputElement, prev = $('ob-preview'), hs = $('ob-handle-status'), st = $('ob-status');
+      if (p && p.pen_name) ($('ob-pen') as HTMLInputElement).value = p.pen_name;
+      const sync = () => { const s = slugify(h.value); prev.textContent = s || 'yourhandle'; hs.textContent = ''; hs.className = ''; };
+      h.addEventListener('input', sync);
+      $('ob-save').addEventListener('click', async () => {
+        const handle = slugify(h.value);
+        const pen = ($('ob-pen') as HTMLInputElement).value.trim();
+        const bio = ($('ob-bio') as HTMLTextAreaElement).value.trim();
+        if (!handle) { hs.textContent = '— pick a handle'; hs.className = 'bad'; return; }
+        if (!pen) { st.textContent = 'Add a display name.'; return; }
+        (($('ob-save')) as HTMLButtonElement).disabled = true; st.textContent = 'Creating your page…';
+        try {
+          const { error: e1 } = await supabase.rpc('claim_my_handle', { p_handle: handle });
+          if (e1) throw e1;
+          await supabase.rpc('update_my_profile', { p_pen_name: pen, p_bio: bio, p_avatar_url: null });
+          location.href = '/admin';
+        } catch (e: any) {
+          st.textContent = (e && e.message) || 'Could not create your page.';
+          (($('ob-save')) as HTMLButtonElement).disabled = false;
+        }
+      });
+    }
+
+    function showEdit(p: any) {
+      $('edit').hidden = false;
+      const a = $('ed-handle') as HTMLAnchorElement;
+      a.textContent = 'areyoustillreading.dev/@' + p.handle; a.href = '/@' + p.handle;
+      ($('ed-pen') as HTMLInputElement).value = p.pen_name || '';
+      ($('ed-bio') as HTMLTextAreaElement).value = p.bio || '';
+      $('ed-pen-save').addEventListener('click', async () => {
+        const pen = ($('ed-pen') as HTMLInputElement).value.trim();
+        if (!pen) { $('ed-pen-status').textContent = 'Enter a name.'; return; }
+        $('ed-pen-status').textContent = 'Saving…';
+        const { error } = await supabase.rpc('set_my_pen_name', { p_pen_name: pen });
+        $('ed-pen-status').textContent = error ? error.message : 'Saved — live now.';
+      });
+      $('ed-bio-save').addEventListener('click', async () => {
+        $('ed-bio-status').textContent = 'Saving…';
+        const { error } = await supabase.rpc('update_my_profile', { p_pen_name: null, p_bio: ($('ed-bio') as HTMLTextAreaElement).value.trim(), p_avatar_url: null });
+        $('ed-bio-status').textContent = error ? error.message : 'Saved.';
+      });
+    }
+  </script>
+</AdminLayout>

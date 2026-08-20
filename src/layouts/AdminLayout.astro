@@ -63,12 +63,18 @@ const icon = {
   settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/></svg>',
   viewsite: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M9 7h8v8"/></svg>',
   logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5H6v14h9"/><path d="M13 12h8"/><path d="m18 9 3 3-3 3"/></svg>',
+  fields: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></svg>',
+  authors: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M17 5.5a3 3 0 0 1 0 5.8M19.5 20a5 5 0 0 0-3.5-4.8"/></svg>',
+  profile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>',
 };
 // Grouped nav, matching the Claude Design studio pane: Home on its own, then
 // WRITING (Posts, Drafts), PAGES (Projects, Resume), READERS (Audience, Engagement),
 // INSIGHT (Analytics, Revenue). Write is the primary button above the nav; Settings
 // + View the site sit at the bottom. `count` names the data key filled into the .ct
 // badge; `countAccent` renders that count in the accent colour (Drafts).
+// `owner: true` marks an owner-only group/item. The client gate hides every [data-owner]
+// element when the signed-in user is an author (not the owner), so authors see only the
+// authoring sections. Astro renders all of it once; role-scoping happens in the browser.
 const navGroups = [
   { label: null, items: [
     { key: 'home', href: '/admin', label: 'Home', icon: icon.home },
@@ -77,18 +83,22 @@ const navGroups = [
     { key: 'posts', href: '/admin/posts', label: 'Posts', icon: icon.posts, count: 'posts' },
     { key: 'drafts', href: '/admin/drafts', label: 'Drafts', icon: icon.drafts, count: 'drafts', countAccent: true },
     { key: 'series', href: '/admin/series', label: 'Series', icon: icon.series },
+    { key: 'fields', href: '/admin/fields', label: 'Fields', icon: icon.fields },
   ] },
-  { label: 'Pages', items: [
-    { key: 'projects', href: '/admin/projects', label: 'Projects', icon: icon.projects, count: 'projects' },
-    { key: 'resume', href: '/admin/resume', label: 'Resume', icon: icon.resume },
+  { label: 'People', owner: true, items: [
+    { key: 'authors', href: '/admin/authors', label: 'Authors', icon: icon.authors, owner: true },
   ] },
-  { label: 'Readers', items: [
-    { key: 'audience', href: '/admin/audience', label: 'Audience', icon: icon.audience },
-    { key: 'engagement', href: '/admin/engagement', label: 'Engagement', icon: icon.engagement },
+  { label: 'Pages', owner: true, items: [
+    { key: 'projects', href: '/admin/projects', label: 'Projects', icon: icon.projects, count: 'projects', owner: true },
+    { key: 'resume', href: '/admin/resume', label: 'Resume', icon: icon.resume, owner: true },
   ] },
-  { label: 'Insight', items: [
-    { key: 'analytics', href: '/admin/analytics', label: 'Analytics', icon: icon.analytics },
-    { key: 'revenue', href: '/admin/revenue', label: 'Revenue', icon: icon.revenue },
+  { label: 'Readers', owner: true, items: [
+    { key: 'audience', href: '/admin/audience', label: 'Audience', icon: icon.audience, owner: true },
+    { key: 'engagement', href: '/admin/engagement', label: 'Engagement', icon: icon.engagement, owner: true },
+  ] },
+  { label: 'Insight', owner: true, items: [
+    { key: 'analytics', href: '/admin/analytics', label: 'Analytics', icon: icon.analytics, owner: true },
+    { key: 'revenue', href: '/admin/revenue', label: 'Revenue', icon: icon.revenue, owner: true },
   ] },
 ];
 ---
@@ -181,9 +191,9 @@ const navGroups = [
         <nav class="admin-nav">
           {navGroups.map((group) => (
             <Fragment>
-              {group.label && <div class="nav-grp">{group.label}</div>}
+              {group.label && <div class="nav-grp" data-owner={(group as any).owner ? '' : undefined}>{group.label}</div>}
               {group.items.map((item) => (
-                <a href={item.href} class={active === item.key ? 'is-active' : undefined} aria-current={active === item.key ? 'page' : undefined}>
+                <a href={item.href} class={active === item.key ? 'is-active' : undefined} aria-current={active === item.key ? 'page' : undefined} data-owner={(item as any).owner ? '' : undefined}>
                   <Fragment set:html={item.icon} />
                   <span class="lbl">{item.label}</span>
                   {(item as any).count && <span class={`ct${(item as any).countAccent ? ' live' : ''}`} data-ct={(item as any).count} hidden></span>}
@@ -194,16 +204,19 @@ const navGroups = [
         </nav>
 
         <div class="admin-side-foot">
-          <a class:list={['quiet', active === 'content' && 'is-active']} href="/admin/content" aria-current={active === 'content' ? 'page' : undefined}>
+          <a class:list={['quiet', active === 'profile' && 'is-active']} href="/admin/profile" aria-current={active === 'profile' ? 'page' : undefined}>
+            <Fragment set:html={icon.profile} /><span class="lbl">Profile</span>
+          </a>
+          <a class:list={['quiet', active === 'content' && 'is-active']} href="/admin/content" aria-current={active === 'content' ? 'page' : undefined} data-owner>
             <Fragment set:html={icon.content} /><span class="lbl">Content</span>
           </a>
-          <a class:list={['quiet', active === 'settings' && 'is-active']} href="/admin/settings" aria-current={active === 'settings' ? 'page' : undefined}>
+          <a class:list={['quiet', active === 'settings' && 'is-active']} href="/admin/settings" aria-current={active === 'settings' ? 'page' : undefined} data-owner>
             <Fragment set:html={icon.settings} /><span class="lbl">Settings</span>
           </a>
-          <a class="quiet" href="/" target="_blank" rel="noopener"><Fragment set:html={icon.viewsite} /><span class="lbl">View the site</span></a>
+          <a class="quiet" id="admin-viewpage" href="/" target="_blank" rel="noopener"><Fragment set:html={icon.viewsite} /><span class="lbl">View the site</span></a>
           <div class="acct">
             <span class="av" id="admin-avatar" aria-hidden="true">·</span>
-            <span class="who"><span class="em" id="admin-who">Signed in</span><small>Author</small></span>
+            <span class="who"><span class="em" id="admin-who">Signed in</span><small id="admin-role">Studio</small></span>
             <button class="out" id="admin-signout" type="button" title="Sign out" aria-label="Sign out"><Fragment set:html={icon.logout} /></button>
           </div>
         </div>
@@ -283,10 +296,32 @@ const navGroups = [
         if (av && email) av.textContent = email.trim().charAt(0).toUpperCase();
       }
 
+      // Role scoping: an author (not the owner) sees only the authoring sections — hide every
+      // owner-only [data-owner] element. Also set the footer role label + point "View the site"
+      // at the author's own public /@handle.
+      function applyRole(r: { role?: string; owner?: boolean; handle?: string | null }) {
+        if (r.role === 'author') {
+          document.querySelectorAll<HTMLElement>('[data-owner]').forEach((el) => { el.hidden = true; });
+        }
+        const roleEl = document.getElementById('admin-role');
+        if (roleEl) roleEl.textContent = r.owner ? 'Owner' : 'Author';
+        const vp = document.getElementById('admin-viewpage');
+        if (vp && r.handle) {
+          vp.setAttribute('href', '/@' + r.handle);
+          const lbl = vp.querySelector('.lbl'); if (lbl) lbl.textContent = 'View your page';
+        }
+      }
+
       async function run() {
         const r = await checkAdmin(true);
         if (r.state === 'admin') {
           paintWho(r.email);
+          applyRole(r);
+          // An invited author who hasn't claimed their permanent @handle must onboard first.
+          if (r.role === 'author' && !r.onboarded && !location.pathname.startsWith('/admin/profile')) {
+            location.href = '/admin/profile?onboard=1';
+            return;
+          }
           markAdmin(r);
           reveal();
         } else if (r.state === 'signed-out') {

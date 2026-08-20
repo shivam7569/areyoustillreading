@@ -1,0 +1,37 @@
+---
+/**
+ * /admin/fields — the author's fields manager (create a field, group series into it, request to add
+ * a series to another author's field). Full functionality is built alongside the fields aggregation
+ * backend; this lists the author's fields for now.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Fields — Studio" heading="Fields" active="fields">
+  <section class="stack" style="max-width:820px">
+    <div class="panel">
+      <header><h2>Your fields</h2></header>
+      <div class="pb flush">
+        <p class="muted" style="margin:0 0 0.6rem">A field groups related series into a body of work. It becomes public once it has two or more published series.</p>
+        <div id="fld-list" class="muted">Loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    import { supabase } from '../../lib/supabase';
+    import { onAdminReady } from '../../lib/admin-gate';
+    const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+    onAdminReady(async () => {
+      const box = document.getElementById('fld-list')!;
+      try {
+        const { data } = await supabase.rpc('my_fields');
+        const fields = Array.isArray(data) ? data : [];
+        if (!fields.length) { box.innerHTML = '<p class="muted">No fields yet. Create one from a series once you have two related series.</p>'; return; }
+        box.innerHTML = fields.map((f: any) =>
+          `<div style="padding:0.6rem 0;border-top:1px solid var(--admin-rule,#e6dfd0)"><b>${esc(f.title)}</b> — <span class="muted">${esc(f.series_count || 0)} series · ${esc(f.published_posts || 0)} published</span></div>`
+        ).join('');
+      } catch { box.innerHTML = '<p class="muted">Fields management is coming shortly.</p>'; }
+    });
+  </script>
+</AdminLayout>

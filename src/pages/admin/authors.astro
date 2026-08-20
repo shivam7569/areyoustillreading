@@ -1,0 +1,123 @@
+---
+/**
+ * /admin/authors — owner-only author roster: invite by email (returns a sign-in link to share —
+ * no email is sent), and per-author controls (role, allow/deny publishing, suspend). Backed by
+ * /api/admin/authors (requireAdmin). Interim functional layout on the current admin vocabulary;
+ * the editorial design swaps in later.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Authors — Studio" heading="Authors" active="authors">
+  <section class="stack" style="max-width:960px">
+    {/* Invite */}
+    <div class="panel">
+      <header><h2>Invite an author</h2></header>
+      <div class="pb flush">
+        <p class="muted" style="margin:0 0 0.5rem">They get a private sign-in link (nothing is emailed automatically — copy it and send it however you like). On first sign-in they claim their own permanent @handle.</p>
+        <div class="setrow">
+          <div class="k">Email</div>
+          <div class="f" style="gap:0.5rem;flex-wrap:wrap">
+            <input id="inv-email" class="inp" type="email" placeholder="them@example.com" autocomplete="off" style="width:260px" />
+            <select id="inv-role" class="inp" style="width:auto"><option value="author">Author</option><option value="editor">Editor</option></select>
+            <button id="inv-send" class="btn btn-primary" type="button">Invite</button>
+            <span class="muted" id="inv-status" style="font-size:0.85rem"></span>
+          </div>
+        </div>
+        <div class="setrow" id="inv-linkrow" hidden>
+          <div class="k">Invite link<small>Share this with them. It signs them in and starts onboarding.</small></div>
+          <div class="f" style="gap:0.5rem;flex-wrap:wrap"><input id="inv-link" class="inp" type="text" readonly style="flex:1;min-width:280px" /><button id="inv-copy" class="btn btn-sm" type="button">Copy</button></div>
+        </div>
+      </div>
+    </div>
+
+    {/* Roster */}
+    <div class="panel">
+      <header><h2>Authors</h2></header>
+      <div class="pb flush">
+        <div id="auth-list" class="muted">Loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <style>
+    .arow { display:grid; grid-template-columns: 1.4fr 1fr auto auto auto; gap:0.75rem; align-items:center; padding:0.7rem 0; border-top:1px solid var(--admin-rule, #e6dfd0); }
+    .arow:first-child { border-top:0; }
+    .arow .who b { display:block; }
+    .arow .who small { color: var(--admin-faint, #888); }
+    .arow .hnd { font-size:0.85rem; color: var(--admin-faint, #888); }
+    .arow .pub { display:flex; align-items:center; gap:0.35rem; font-size:0.85rem; }
+    .arow.suspended { opacity:0.55; }
+    .astat { font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; }
+    @media (max-width:640px){ .arow{ grid-template-columns:1fr; } }
+  </style>
+
+  <script>
+    import { onAdminReady, adminFetch } from '../../lib/admin-gate';
+    const $ = (id: string) => document.getElementById(id) as HTMLElement;
+    const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+
+    onAdminReady(() => { load(); wireInvite(); });
+
+    async function load() {
+      const box = $('auth-list');
+      try {
+        const r = await adminFetch('/api/admin/authors');
+        if (r.status === 401 || r.status === 403) { box.innerHTML = '<p class="muted">This section is for the site owner.</p>'; return; }
+        const d = await r.json();
+        const authors = d.authors || [];
+        if (!authors.length) { box.innerHTML = '<p class="muted">No authors yet — invite someone above.</p>'; return; }
+        box.innerHTML = authors.map(rowHtml).join('');
+        box.querySelectorAll<HTMLElement>('[data-act]').forEach((el) => el.addEventListener('change', onControl));
+      } catch { box.innerHTML = '<p class="muted">Could not load authors.</p>'; }
+    }
+
+    function rowHtml(a: any) {
+      const suspended = a.status === 'suspended';
+      const page = a.onboarded ? `<a class="hnd" href="/@${esc(a.handle)}" target="_blank" rel="noopener">@${esc(a.handle)}</a>` : '<span class="hnd">not set up yet</span>';
+      return `<div class="arow${suspended ? ' suspended' : ''}" data-id="${esc(a.id)}">
+        <div class="who"><b>${esc(a.pen_name || a.email || '—')}</b><small>${esc(a.email || '')}</small></div>
+        <div>${page}<div class="astat">${esc(a.published || 0)} published</div></div>
+        <select class="inp" data-act="role" style="width:auto"><option value="author"${a.role==='author'?' selected':''}>Author</option><option value="editor"${a.role==='editor'?' selected':''}>Editor</option></select>
+        <label class="pub"><input type="checkbox" data-act="can_publish"${a.can_publish?' checked':''}/> can publish</label>
+        <label class="pub"><input type="checkbox" data-act="suspend"${suspended?' checked':''}/> suspended</label>
+      </div>`;
+    }
+
+    async function onControl(e: Event) {
+      const el = e.target as HTMLElement;
+      const row = el.closest('.arow') as HTMLElement; if (!row) return;
+      const id = row.dataset.id!;
+      const act = el.getAttribute('data-act');
+      const body: any = { user_id: id };
+      if (act === 'role') body.role = (el as HTMLSelectElement).value;
+      else if (act === 'can_publish') body.can_publish = (el as HTMLInputElement).checked;
+      else if (act === 'suspend') body.status = (el as HTMLInputElement).checked ? 'suspended' : 'active';
+      try {
+        const r = await adminFetch('/api/admin/authors', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        if (act === 'suspend') row.classList.toggle('suspended', (el as HTMLInputElement).checked);
+        if (!r.ok) throw new Error();
+      } catch { /* best-effort; reload to resync on failure */ load(); }
+    }
+
+    function wireInvite() {
+      const email = $('inv-email') as HTMLInputElement, role = $('inv-role') as HTMLSelectElement,
+        st = $('inv-status'), linkRow = $('inv-linkrow'), link = $('inv-link') as HTMLInputElement;
+      $('inv-send').addEventListener('click', async () => {
+        const e = email.value.trim();
+        if (!e) { st.textContent = 'Enter an email.'; return; }
+        (($('inv-send')) as HTMLButtonElement).disabled = true; st.textContent = 'Inviting…';
+        try {
+          const r = await adminFetch('/api/admin/authors', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: e, role: role.value }) });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || 'Failed');
+          st.textContent = 'Invited.'; email.value = '';
+          if (d.link) { link.value = d.link; linkRow.hidden = false; }
+          load();
+        } catch (err: any) { st.textContent = (err && err.message) || 'Could not invite.'; }
+        finally { (($('inv-send')) as HTMLButtonElement).disabled = false; }
+      });
+      $('inv-copy').addEventListener('click', () => { link.select(); try { navigator.clipboard.writeText(link.value); $('inv-status').textContent = 'Link copied.'; } catch {} });
+    }
+  </script>
+</AdminLayout>
