@@ -11,9 +11,10 @@
  * a score), and its field + series crumb. Tags are a real subject filter (token
  * match, not substring); there are no aggregate totals.
  *
- * DEFERRED (each its own slice): the "Ways in" band, the fields shelf, the "Where
- * you left off" strip, and clickable field/series/post permalinks (crumb is text
- * until those pages ship).
+ * Above the stream: the fields shelf (the map), "Read them together" (cross-author
+ * pairs on one shared subject, public.reading_pairs), "Ways in" (routes by reading
+ * shape), and "Where you left off" — each its own slice, each hidden until it has
+ * real data. No section is ever populated with invented content.
  * =============================================================================
  */
 import BaseLayout from '../../layouts/BaseLayout.astro';
@@ -39,6 +40,44 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <section class="fieldsec" id="fieldshelf" hidden>
       <div class="slab"><span class="eyebrow">Fields</span><span class="line"></span><a class="more-link" href="/fields">All fields →</a></div>
       <div class="shelf" id="shelf"></div>
+    </section>
+
+    <!-- Read them together: cross-author pairs that reach the SAME subject (public.reading_pairs) —
+         the thing only a feed of many authors can offer. Order is chronological (earlier essay
+         raised the subject, later one returned to it); real reading times and dates, no invented
+         "they disagree" claim or fabricated quotes. Hidden until such a pair exists. -->
+    <section class="tg" id="tg" hidden>
+      <div class="tgin">
+        <div class="tghead">
+          <div class="kicker"><span class="line"></span><span class="eyebrow">Read them together</span></div>
+          <h2>Two authors, <em>the same subject reached apart.</em></h2>
+          <p>Everyone writes here. These are pairs worth reading side by side — two essays that reach the same subject, written by two people who got there separately. Read them in the order given, and compare.</p>
+        </div>
+        <div class="tgpick" id="tgPick"></div>
+        <div class="tgpair">
+          <article class="tgside">
+            <span class="tgord">Read first</span>
+            <p class="tgwho" id="tgAWho"></p>
+            <h3><a href="#" id="tgATitle"></a></h3>
+            <p class="tgsays" id="tgASays"></p>
+            <span class="tgnums" id="tgANums"></span>
+          </article>
+          <div class="tgvs"><span class="ln"></span><small>Both take up</small><b id="tgVs"></b><span class="ln"></span></div>
+          <article class="tgside">
+            <span class="tgord">Then this</span>
+            <p class="tgwho" id="tgBWho"></p>
+            <h3><a href="#" id="tgBTitle"></a></h3>
+            <p class="tgsays" id="tgBSays"></p>
+            <span class="tgnums" id="tgBNums"></span>
+          </article>
+        </div>
+        <div class="tgwhy"><p id="tgWhy"></p></div>
+        <p class="tgfoot">
+          <span class="tgmins" id="tgMins"></span>
+          <span id="tgOrder"></span>
+          <a class="tgopen btn btn-ghost btn-sm" id="tgOpen" href="#">Start the pair <span class="arrow">→</span></a>
+        </p>
+      </div>
     </section>
 
     <!-- Ways in: three routes chosen by how pieces READ (public.ways_in), each on a
@@ -225,6 +264,46 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   #fieldshelf .ftile:hover h3 { color: var(--accent); }
   #fieldshelf .ftile .fm { display: block; margin-top: 6px; font-family: var(--sans); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
   @media (max-width: 560px) { #fieldshelf .shelf { grid-template-columns: 1fr; } }
+
+  /* ——— Read them together (ported from the Claude Design explore template). Full-bleed band; the
+     two panels are cross-author essays on one real subject, ordered by publication date. ——— */
+  .tg { margin: clamp(34px,4.6vw,58px) calc(var(--gutter) * -1) 0; padding: clamp(28px,3.6vw,44px) var(--gutter) clamp(26px,3.4vw,38px); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); background: var(--paper-2); position: relative; }
+  .tg::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(72% 120% at 86% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 62%); }
+  .tgin { position: relative; }
+  .tg .kicker { display: flex; align-items: center; gap: 14px; margin-bottom: 0; }
+  .tg .kicker .line { height: 1px; width: 48px; background: var(--accent); opacity: .6; }
+  .tghead { max-width: 62ch; }
+  .tghead h2 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(25px,3.2vw,36px); line-height: 1.06; letter-spacing: -.022em; margin: 12px 0 0; text-wrap: balance; }
+  .tghead h2 em { font-style: italic; color: var(--accent); }
+  .tghead p { margin: 13px 0 0; font-size: clamp(15.5px,1.9vw,17.5px); line-height: 1.58; color: var(--ink-soft); text-wrap: pretty; }
+  .tgpick { display: flex; gap: 8px; flex-wrap: wrap; margin: clamp(20px,2.6vw,28px) 0 clamp(16px,2.2vw,22px); }
+  .tgpick button { font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); background: transparent; border: 1px solid var(--rule); border-radius: 999px; padding: 7px 14px; cursor: pointer; transition: border-color .18s, color .18s, background .18s; }
+  .tgpick button:hover { border-color: var(--accent); color: var(--accent); }
+  .tgpick button.tgon { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .tgpair { display: grid; grid-template-columns: minmax(0,1fr) 190px minmax(0,1fr); gap: clamp(14px,2vw,22px); align-items: stretch; }
+  @media (max-width: 940px) { .tgpair { grid-template-columns: 1fr; } }
+  .tgside { display: flex; flex-direction: column; border: 1px solid var(--rule); border-radius: 5px; background: var(--card); padding: 18px 20px 16px; min-width: 0; }
+  .tgside .tgord { font-family: var(--sans); font-size: 9.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+  .tgside .tgwho { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-top: 11px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); }
+  .tgside .tgwho .mono { font-size: 10.5px; letter-spacing: .13em; padding: 0; color: var(--accent); }
+  .tgside .tgwho .mono::after { display: none; }
+  .tgside .tgwho a { color: var(--ink-soft); } .tgside .tgwho a:hover { color: var(--accent); }
+  .tgside h3 { font-family: var(--serif-display); font-weight: 600; font-size: 19.5px; line-height: 1.2; letter-spacing: -.014em; margin: 9px 0 0; text-wrap: pretty; }
+  .tgside h3 a { color: var(--ink); } .tgside h3 a:hover { color: var(--accent); }
+  .tgside .tgsays { margin: 12px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-soft); }
+  .tgside .tgnums { display: flex; align-items: center; gap: 11px; margin-top: auto; padding-top: 14px; border-top: 1px solid var(--rule-soft); font-family: var(--sans); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .tgvs { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 11px; text-align: center; padding: 4px 0; }
+  @media (max-width: 940px) { .tgvs { padding: 6px 0; } }
+  .tgvs .ln { width: 1px; flex: 1; background: var(--rule); min-height: 16px; }
+  @media (max-width: 940px) { .tgvs .ln { display: none; } }
+  .tgvs b { font-family: var(--serif-display); font-style: italic; font-weight: 600; font-size: clamp(17px,2.1vw,20px); line-height: 1.3; letter-spacing: -.01em; color: var(--accent); }
+  .tgvs small { font-family: var(--sans); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+  .tgwhy { display: flex; align-items: flex-start; gap: 13px; margin-top: clamp(16px,2.2vw,22px); padding: 15px 17px; border-left: 2px solid var(--accent); background: var(--card); }
+  .tgwhy p { margin: 0; font-family: var(--serif-body); font-size: clamp(15.5px,1.9vw,17px); line-height: 1.55; color: var(--ink); max-width: 74ch; text-wrap: pretty; }
+  .tgwhy p b { font-weight: 600; color: var(--accent); }
+  .tgfoot { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-top: clamp(15px,2vw,20px); font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); }
+  .tgfoot .tgmins { font-family: var(--serif-display); font-size: 17px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .tgfoot .tgopen { margin-left: auto; }
 
   /* ——— ways in ——— three routes by reading shape (cards + a mini curve each) */
   #waysin { padding: 0 0 clamp(34px, 4.4vw, 50px); }
@@ -492,8 +571,48 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   });
   window.addEventListener('scroll', hideTip, { passive: true });
 
+  // Read them together: cross-author pairs on one subject (public.reading_pairs). Direction is
+  // chronological — the earlier essay raised the subject, the later one returned to it.
+  const tgS: { pairs: any[]; i: number } = { pairs: [], i: 0 };
+  const monShort = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const monLong = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  function tgSide(which: 'A' | 'B', p: any) {
+    document.getElementById(`tg${which}Who`)!.innerHTML =
+      `<a href="/@${esc(p.handle)}" class="mono">${esc(initials(p.name))}</a><a href="/@${esc(p.handle)}">${esc(p.name)}</a>`;
+    const t = document.getElementById(`tg${which}Title`) as HTMLAnchorElement;
+    t.textContent = p.title; t.href = `/@${esc(p.handle)}/${esc(p.slug)}`;
+    const says = document.getElementById(`tg${which}Says`) as HTMLElement;
+    says.textContent = p.desc || ''; says.style.display = p.desc ? '' : 'none';
+    document.getElementById(`tg${which}Nums`)!.textContent = `${p.mins || 1} min · ${monShort(p.pub)}`;
+  }
+  function tgSelect(i: number) {
+    const pairs = tgS.pairs; if (!pairs.length) return;
+    tgS.i = (i + pairs.length) % pairs.length;
+    const pr = pairs[tgS.i];
+    const [first, then] = Date.parse(pr.a.pub) <= Date.parse(pr.b.pub) ? [pr.a, pr.b] : [pr.b, pr.a];
+    tgSide('A', first); tgSide('B', then);
+    document.getElementById('tgVs')!.textContent = pr.subject;
+    document.getElementById('tgWhy')!.innerHTML =
+      `Two authors reached <b>${esc(pr.subject)}</b> on their own — ${esc(first.name)} in ${esc(monLong(first.pub))}, ${esc(then.name)} in ${esc(monLong(then.pub))}. Read them side by side and compare.`;
+    document.getElementById('tgMins')!.textContent = `${(first.mins || 1) + (then.mins || 1)} min together`;
+    document.getElementById('tgOrder')!.textContent = 'In reading order, earliest first';
+    (document.getElementById('tgOpen') as HTMLAnchorElement).href = `/@${esc(first.handle)}/${esc(first.slug)}`;
+    document.getElementById('tgPick')!.querySelectorAll('button').forEach((b, k) => b.classList.toggle('tgon', k === tgS.i));
+  }
+  async function loadReadTogether() {
+    const { data, error } = await supabase.rpc('reading_pairs');
+    if (error || !data || !data.length) return;   // no cross-author pair on a shared subject yet
+    tgS.pairs = data;
+    const pick = document.getElementById('tgPick')!;
+    pick.innerHTML = data.map((p: any, i: number) => `<button type="button" class="${i === 0 ? 'tgon' : ''}" data-i="${i}">${esc(p.subject)}</button>`).join('');
+    pick.querySelectorAll('button').forEach((b, i) => b.addEventListener('click', () => tgSelect(i)));
+    tgSelect(0);
+    (document.getElementById('tg') as HTMLElement).hidden = false;
+  }
+
   load();
   loadContinue();
   loadFields();
+  loadReadTogether();
   loadWays();
 </script>
