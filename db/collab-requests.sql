@@ -114,16 +114,17 @@ begin
 end $$;
 
 -- 5 · the inbox: everything waiting on me + everything I'm waiting on ----------
+drop function if exists public.my_requests();
 create or replace function public.my_requests()
 returns table (
   bucket text, kind text, post_id uuid, series_id uuid, field_id uuid,
-  subject_title text, target_title text, counter_handle text, counter_name text,
+  subject_title text, target_title text, counter_handle text, counter_name text, counter_id uuid,
   note text, created_at timestamptz, seq int
 )
 language sql stable security definer set search_path = content, public, extensions as $$
   -- co-author invite that needs me
   select 'in', 'coauthor', pa.post_id, null::uuid, null::uuid, po.title, null::text,
-         pr.handle::text, coalesce(pr.pen_name, pr.handle)::text, pa.note, pa.created_at, pa.position
+         pr.handle::text, coalesce(pr.pen_name, pr.handle)::text, pr.id, pa.note, pa.created_at, pa.position
     from content.post_authors pa
     join content.posts po on po.id = pa.post_id
     join content.profiles pr on pr.id = pa.invited_by
@@ -131,7 +132,7 @@ language sql stable security definer set search_path = content, public, extensio
   union all
   -- co-author invite I sent, waiting on them
   select 'out', 'coauthor', pa.post_id, null::uuid, null::uuid, po.title, null::text,
-         pr.handle::text, coalesce(pr.pen_name, pr.handle)::text, pa.note, pa.created_at, pa.position
+         pr.handle::text, coalesce(pr.pen_name, pr.handle)::text, pr.id, pa.note, pa.created_at, pa.position
     from content.post_authors pa
     join content.posts po on po.id = pa.post_id
     join content.profiles pr on pr.id = pa.user_id
@@ -139,7 +140,7 @@ language sql stable security definer set search_path = content, public, extensio
   union all
   -- series attach that needs me (I'm the counterparty to whoever proposed)
   select 'in', 'series-post', sp.post_id, sp.series_id, null::uuid, po.title, se.title,
-         pr.handle::text, coalesce(pr.pen_name, pr.handle)::text, sp.note, sp.created_at, sp.position
+         pr.handle::text, coalesce(pr.pen_name, pr.handle)::text, pr.id, sp.note, sp.created_at, sp.position
     from content.series_posts sp
     join content.posts po on po.id = sp.post_id
     join content.series se on se.id = sp.series_id
@@ -150,7 +151,7 @@ language sql stable security definer set search_path = content, public, extensio
   union all
   -- series attach I proposed, waiting on the counterparty
   select 'out', 'series-post', sp.post_id, sp.series_id, null::uuid, po.title, se.title,
-         cp.handle::text, coalesce(cp.pen_name, cp.handle)::text, sp.note, sp.created_at, sp.position
+         cp.handle::text, coalesce(cp.pen_name, cp.handle)::text, cp.id, sp.note, sp.created_at, sp.position
     from content.series_posts sp
     join content.posts po on po.id = sp.post_id
     join content.series se on se.id = sp.series_id
@@ -159,7 +160,7 @@ language sql stable security definer set search_path = content, public, extensio
   union all
   -- field attach that needs me
   select 'in', 'field-series', null::uuid, fs.series_id, fs.field_id, se.title, fld.title,
-         pr.handle::text, coalesce(pr.pen_name, pr.handle)::text, fs.note, fs.created_at, fs.position
+         pr.handle::text, coalesce(pr.pen_name, pr.handle)::text, pr.id, fs.note, fs.created_at, fs.position
     from content.field_series fs
     join content.series se on se.id = fs.series_id
     join content.fields fld on fld.id = fs.field_id
@@ -170,7 +171,7 @@ language sql stable security definer set search_path = content, public, extensio
   union all
   -- field attach I proposed, waiting on the counterparty
   select 'out', 'field-series', null::uuid, fs.series_id, fs.field_id, se.title, fld.title,
-         cp.handle::text, coalesce(cp.pen_name, cp.handle)::text, fs.note, fs.created_at, fs.position
+         cp.handle::text, coalesce(cp.pen_name, cp.handle)::text, cp.id, fs.note, fs.created_at, fs.position
     from content.field_series fs
     join content.series se on se.id = fs.series_id
     join content.fields fld on fld.id = fs.field_id
