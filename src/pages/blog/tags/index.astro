@@ -1,115 +1,51 @@
 ---
-/**
- * ROUTE: /blog/tags/  (Astro file-based routing — this is the tag *index*,
- *                      i.e. the "browse all tags" landing page)
- *
- * WHAT THIS FILE IS
- * -----------------
- * A fully static, build-time-rendered page that lists every tag used across
- * the blog, each with a count of how many published posts carry it, sorted
- * most-used-first. It is the parent/hub for the per-tag archive pages that
- * live at /blog/tags/[tag] (see the sibling `[tag].astro` dynamic route).
- *
- * SINGLE RESPONSIBILITY
- * ---------------------
- * Aggregate the blog content collection into a (tag -> post count) index and
- * render it as a linked list. Nothing else — no data fetching at runtime, no
- * user input, no auth. This is a leaf presentation page.
- *
- * HOW IT FITS THE ARCHITECTURE
- * ----------------------------
- * - Astro content collections: posts are Markdown/MDX files validated by the
- *   `blog` collection schema (see src/content/config.ts). `getCollection`
- *   reads them at BUILD TIME; the rendered HTML is a flat file served by
- *   Cloudflare Pages. There is NO server component to this page.
- * - Because it is static, none of the backend stack (Supabase / PostgREST /
- *   RLS / Resend / Turnstile / Dodo Payments) is involved here. There is no
- *   database query, no secret, and no request context. Any paywall/entitlement
- *   logic elsewhere in the app is irrelevant to this route.
- *
- * DEPENDS ON (imports)
- * --------------------
- * - BaseLayout.astro — shared page shell (head, nav, footer, global styles).
- *   The `.post-list` and `.count` classes used below are expected to be styled
- *   globally (via BaseLayout / global CSS), not scoped here.
- * - astro:content `getCollection` — the build-time content API.
- * - Implicitly: the `blog` collection schema, which must define `draft:boolean`
- *   and `tags:string[]` (both are read below). If that schema changes shape,
- *   this file breaks at build time.
- *
- * DEPENDED ON BY
- * --------------
- * - /blog/tags/[tag].astro links back here ("all tags") and this page links
- *   forward to each [tag] archive. Navigation, RSS, and the main /blog index
- *   may also link to /blog/tags/.
- *
- * SECURITY / GOTCHAS
- * ------------------
- * - No security surface: no untrusted input, no auth, no secrets. Tags come
- *   from the author's own repo content, so they are trusted.
- * - Tag values are interpolated raw into the href (`/blog/tags/${tag}`). This
- *   is safe ONLY because tags are author-controlled build-time content. If tags
- *   ever became user-supplied, they would need URL-encoding here.
- * - Draft filtering (`!data.draft`) is the one correctness-critical line: it
- *   keeps unpublished posts (and any tag that exists ONLY on drafts) out of the
- *   public index. A tag used solely by drafts simply won't appear.
+/*
+ * /blog/tags — the subjects index: every topic across all published essays, by post count
+ * (Claude Design vocabulary). DB-driven from public.topic_tags(), hydrated client-side so a
+ * newly-used subject appears without a rebuild. Replaces the old file-collection tag index.
  */
-
-// Pull every blog entry, EXCLUDING drafts. The predicate runs at build time;
-// `data` is the frontmatter validated against the collection schema. Filtering
-// here (rather than after aggregating) means draft-only tags never surface and
-// draft posts never inflate any count.
 import BaseLayout from '../../../layouts/BaseLayout.astro';
-import site from '../../../data/site.json';
-import { getCollection } from 'astro:content';
-
-const c = (site as any).blogTopics || {};
-
-const posts = await getCollection('blog', ({ data }) => !data.draft);
-
-// Build a frequency index: tag -> number of published posts carrying it.
-// A Map (not a plain object) avoids prototype-key pitfalls if a tag were ever
-// named e.g. "constructor" or "__proto__".
-const counts = new Map<string, number>();
-for (const p of posts) {
-  // `?? 0` seeds the count on first sight of a tag; a post's tags array may be
-  // empty, in which case this inner loop simply contributes nothing.
-  for (const t of p.data.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
-}
-
-// Sort for a stable, useful display order: primary = count descending (most
-// popular tags first); tie-breaker = tag name ascending (localeCompare) so the
-// output is deterministic across builds regardless of Map insertion order.
-const tags = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 ---
 
-{/* BaseLayout supplies <head>/nav/footer; title+description feed the SEO/OG tags. */}
-<BaseLayout title={c.seo?.title || 'Topics — areyoustillreading'} description={c.seo?.description || 'Browse essays by topic.'} wide>
+<BaseLayout title="Subjects — areyoustillreading" description="Browse every essay by subject." wide>
   <div class="wrap">
-    <header class="page-head">
-      <a class="backlink" href="/blog"><span aria-hidden="true">&larr;</span> <span data-cms="blogTopics.backlink">{c.backlink || 'All essays'}</span></a>
-      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="blogTopics.eyebrow">{c.eyebrow || 'Topics'}</span></div>
-      <h1><span data-cms="blogTopics.title">{c.title || 'Browse by'}</span> <em data-cms="blogTopics.titleEm">{c.titleEm || 'subject.'}</em></h1>
-      <p class="lede" data-cms="blogTopics.lede">{c.lede || 'Every subject across the archive, most-written first.'}</p>
+    <header class="page-head tp-ix-head">
+      <div class="kicker"><span class="line"></span><span class="eyebrow">Subjects</span></div>
+      <h1>Every essay, <em>by subject.</em></h1>
+      <p class="lede">The tags that run through the writing here — pick one to see everything published on it, across every author.</p>
     </header>
-    <div class="topics">
-      {tags.map(([tag, count]) => (
-        <a class="topic" href={`/blog/tags/${tag}`}>
-          <span class="topic-name">{tag}</span>
-          <span class="topic-count">{count}</span>
-        </a>
-      ))}
-    </div>
+
+    <div id="tp-ix"><p class="feedlede" style="padding:26px 0">Loading subjects…</p></div>
   </div>
 </BaseLayout>
 
-<style>
-  .backlink { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); display: inline-flex; align-items: center; gap: 8px; margin-bottom: 30px; transition: color 0.2s; }
-  .backlink:hover { color: var(--accent); }
-  .page-head h1 em { font-style: italic; color: var(--accent); }
-  .topics { display: flex; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--rule); padding-top: 32px; }
-  .topic { display: inline-flex; align-items: center; gap: 10px; padding: 11px 12px 11px 18px; border: 1px solid var(--rule); border-radius: 999px; font-family: var(--sans); transition: border-color 0.2s, background 0.2s, transform 0.2s; }
-  .topic:hover { border-color: var(--accent); background: var(--paper-2); transform: translateY(-2px); }
-  .topic-name { font-size: 15px; color: var(--ink); }
-  .topic-count { font-size: 12px; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 999px; padding: 3px 10px; }
+<style is:global>
+  .tp-ix-head { padding: clamp(48px,7vw,96px) 0 0; }
+  .tp-ix-head .kicker { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+  .tp-ix-head .kicker .line { height: 1px; width: 48px; background: var(--accent); opacity: .6; }
+  .tp-ix-head h1 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(34px,5vw,58px); line-height: 1.04; letter-spacing: -.022em; margin: 0 0 .4em; }
+  .tp-ix-head h1 em { font-style: italic; color: var(--accent); }
+  .tp-ix-head .lede { font-size: clamp(17px,2.1vw,21px); line-height: 1.6; color: var(--ink-soft); max-width: 58ch; margin: 0; }
+  .tp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding: clamp(32px,4.5vw,56px) 0 clamp(52px,7vw,88px); }
+  .tp-cell { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--card); padding: 17px 19px; transition: border-color .2s, transform .2s; }
+  .tp-cell:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--rule)); transform: translateY(-2px); }
+  .tp-cell .t { font-family: var(--serif-display); font-weight: 600; font-size: 20px; letter-spacing: -.01em; color: var(--ink); }
+  .tp-cell:hover .t { color: var(--accent); }
+  .tp-cell .t .h { color: var(--accent); font-style: italic; }
+  .tp-cell .n { font-family: var(--sans); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
 </style>
+
+<script>
+  import { supabase } from '../../../lib/supabase';
+  import { esc } from '../../../lib/feed-render';
+  const host = document.getElementById('tp-ix')!;
+  (async () => {
+    let tags: any[] = [];
+    try { const { data } = await supabase.rpc('topic_tags'); tags = data || []; }
+    catch { host.innerHTML = '<p class="feedlede" style="padding:26px 0">Couldn’t load subjects.</p>'; return; }
+    if (!tags.length) { host.innerHTML = '<p class="feedlede" style="padding:26px 0">No subjects yet.</p>'; return; }
+    host.innerHTML = `<div class="tp-grid">${tags.map((t) =>
+      `<a class="tp-cell" href="/blog/tags/${encodeURIComponent(t.tag)}"><span class="t"><span class="h">#</span>${esc(t.tag)}</span><span class="n">${t.n} ${t.n === 1 ? 'essay' : 'essays'}</span></a>`
+    ).join('')}</div>`;
+  })();
+</script>

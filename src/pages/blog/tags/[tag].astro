@@ -1,165 +1,197 @@
 ---
-/**
- * ============================================================================
- * FILE: src/pages/blog/tags/[tag].astro
- * ROUTE: /blog/tags/:tag   (one static HTML page per distinct tag)
- * ----------------------------------------------------------------------------
- * WHAT THIS IS
- *   A dynamic-route Astro page that renders a "tag archive" — the list of all
- *   published blog posts that carry a given tag, newest first. The `[tag]`
- *   filename segment is Astro's dynamic-route syntax; the bracketed part is
- *   filled by the `params.tag` values produced in getStaticPaths() below.
+/*
+ * /blog/tags/[tag] — a SUBJECT page: every published essay carrying a tag, across all authors
+ * (Claude Design "topic"). DB-driven, replacing the old file-collection tag archive.
  *
- * SINGLE RESPONSIBILITY
- *   Turn "a tag" into "the page listing every post with that tag". Nothing
- *   else — no auth, no data fetching at request time, no user input handling.
- *
- * HOW IT FITS THE ARCHITECTURE
- *   This is a 100% STATIC page. Everything here runs at BUILD time (during
- *   `astro build`), never in the browser and never in a Cloudflare Pages
- *   Function. getStaticPaths() enumerates every tag up front, and Astro emits
- *   one pre-rendered .html file per tag into the deploy output. That output
- *   reaches Cloudflare Pages by either of two build triggers, both of which run
- *   the same `astro build`: a manual `npm run deploy` (Wrangler direct-upload of
- *   dist/), or the publish pipeline (functions/api/publish.js commits a new
- *   Markdown post to GitHub, and Cloudflare Pages Git-integration rebuilds).
- *   There is therefore no runtime cost, no database, and no way for a request to
- *   inject a tag that was not known at build time (an unknown /blog/tags/foo
- *   simply 404s because no file was generated for it).
- *
- * DEPENDENCIES (imports)
- *   - BaseLayout.astro  — the shared HTML shell (head, nav, footer, styling).
- *   - astro:content getCollection — the type-safe content-collection API that
- *     reads the `blog` collection (Markdown files + frontmatter validated
- *     against the collection's Zod schema in src/content.config.ts). Note: the
- *     glob loader there matches only **-slash-*.md, so posts are .md, not .mdx,
- *     and each entry is keyed by `id` (the slug) — hence `post.id` in the
- *     template below rather than the older Astro `post.slug`.
- *
- * WHAT DEPENDS ON THIS
- *   - /blog/tags (the tag index page) links here via `/blog/tags/${tag}`.
- *   - Individual post pages that render their tag pills link here.
- *   The reverse link back to "All tags" is hard-coded in the template below.
- *
- * SECURITY / TRUST NOTES
- *   - No RLS, no Supabase, no Turnstile, no Dodo/paywall logic touches this
- *     file. It never reads the `admins` table or calls is_admin(). Tag archives
- *     are fully public by design — they only ever surface already-public post
- *     metadata (title, date, description).
- *   - `tag` and all post fields are AUTHOR-CONTROLLED build inputs (they come
- *     from repo Markdown frontmatter, not from web requests), so there is no
- *     untrusted-input / injection surface here. JSX auto-escaping still applies
- *     to the interpolated `{tag}` / title values as defence in depth.
- *
- * GOTCHA — PAYWALL LEAKAGE
- *   This listing shows title + description for EVERY matching published post,
- *   including posts that are gated/paywalled elsewhere. That is intentional:
- *   the paywall (see PaywallGate / /gated) protects the post BODY, not its
- *   existence or teaser metadata. If a future requirement is "gated posts must
- *   not even be listed", that filtering must be ADDED to the getCollection
- *   predicate below — it is NOT handled today.
- * ============================================================================
+ * ROUTING: getStaticPaths enumerates the tags from public.topic_tags() at build (anon key), so one
+ * shell is emitted per subject. The POST LIST + related subjects hydrate at runtime from
+ * public.posts_by_tag(), so an instant-published essay appears without a rebuild — only a brand-new
+ * TAG waits for the next deploy. Falls back to no routes (never a build failure) if the DB is
+ * unreachable at build.
  */
 import BaseLayout from '../../../layouts/BaseLayout.astro';
-import site from '../../../data/site.json';
-import { getCollection } from 'astro:content';
+import SubscribeForm from '../../../components/SubscribeForm.astro';
 
-/**
- * getStaticPaths() — the build-time route generator.
- *
- * Astro calls this once during the build for this dynamic route. Whatever array
- * of { params, props } it returns becomes the exhaustive, closed set of pages
- * emitted for /blog/tags/:tag. A tag with zero published posts never appears
- * here, so its URL will 404 — which is the desired fail-safe (no empty archives,
- * no request-time surprises).
- */
 export async function getStaticPaths() {
-  // Load the whole `blog` collection but DROP drafts up front. `!data.draft`
-  // is the single gate that keeps unpublished/WIP posts out of every tag page.
-  // Because filtering happens here, drafts also can't contribute their tags to
-  // the tag universe below (a draft-only tag produces no page at all).
-  const posts = await getCollection('blog', ({ data }) => !data.draft);
-
-  // Build the DISTINCT set of tags across all published posts. flatMap flattens
-  // each post's tags[] array into one big list; the Set dedupes; the spread
-  // turns it back into an array we can .map() over into routes.
-  const tags = [...new Set(posts.flatMap((p) => p.data.tags))];
-
-  // One route per distinct tag. We compute the filtered+sorted post list HERE,
-  // at build time, and hand it to the page as a prop — so the template does zero
-  // data work and stays a pure render.
-  return tags.map((tag) => ({
-    params: { tag }, // fills the [tag] URL segment
-    props: {
-      tag,
-      posts: posts
-        // Keep only posts carrying THIS tag.
-        .filter((p) => p.data.tags.includes(tag))
-        // Newest-first: valueOf() compares Date instances as epoch millis, so
-        // b - a yields descending chronological order.
-        .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()),
-    },
-  }));
+  const url = import.meta.env.PUBLIC_SUPABASE_URL;
+  const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return [];
+  try {
+    const res = await fetch(`${url}/rest/v1/rpc/topic_tags`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      body: '{}',
+    });
+    const tags = res.ok ? await res.json() : [];
+    return (tags || []).filter((t: any) => t && t.tag).map((t: any) => ({ params: { tag: t.tag }, props: { count: t.n } }));
+  } catch { return []; }
 }
 
-// Pull the precomputed props for THIS specific tag page. `tag` is the current
-// tag string; `posts` is its already-filtered, already-sorted post list. No
-// further processing is needed — everything was resolved in getStaticPaths().
-const { tag, posts } = Astro.props;
-
-const fmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-const readMins = (body?: string) => Math.max(1, Math.round((body?.split(/\s+/).filter(Boolean).length ?? 0) / 200));
-
-// Editable copy from Studio → Content Management → Tag archive. The templates
-// carry {tag}/{count}/{word} placeholders filled here (author-controlled).
-const c = (site as any).blogTag || {};
-const seoTitle = (c.seoTitleTemplate || 'Posts tagged “{tag}” — areyoustillreading').replace('{tag}', tag);
-const seoDesc = (c.seoDescTemplate || 'Posts tagged {tag}.').replace('{tag}', tag);
-const ledeText = (c.ledeTemplate || '{count} {word} on {tag}.')
-  .replace('{count}', String(posts.length))
-  .replace('{word}', posts.length === 1 ? (c.essaySingular || 'essay') : (c.essayPlural || 'essays'))
-  .replace('{tag}', tag);
+const { tag } = Astro.params;
+const { count } = Astro.props as { count?: number };
 ---
 
-{/*
-  Render the archive inside the shared BaseLayout shell. The title/description
-  props feed <head> (browser tab, SEO, and OG/meta consumers). `tag` is
-  interpolated into both; JSX auto-escaping neutralises any special characters,
-  though tags are author-controlled build inputs anyway.
-*/}
-<BaseLayout title={seoTitle} description={seoDesc} wide>
+<BaseLayout title={`#${tag} — areyoustillreading`} description={`Every essay on ${tag}.`} wide>
   <div class="wrap">
-    <header class="page-head">
-      <a class="backlink" href="/blog/tags"><span aria-hidden="true">&larr;</span> <span data-cms="blogTag.backlink">{c.backlink || 'All topics'}</span></a>
-      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="blogTag.eyebrow">{c.eyebrow || 'Topic'}</span></div>
-      <h1><span data-cms="blogTag.headingPrefix">{c.headingPrefix || 'Tagged'}</span> <em>{tag}</em></h1>
-      <p class="lede">{ledeText}</p>
+    <header class="topic-head">
+      <div class="crumb"><a href="/">Home</a><span class="sep">/</span><a href="/blog">Archive</a><span class="sep">/</span><b>{tag}</b></div>
+      <h1><span class="hash">#</span>{tag}<span class="ct" id="tp-count" data-count={count ?? ''}>{count ? `${count} ${count === 1 ? 'essay' : 'essays'}` : ''}</span></h1>
+      <p id="tp-sub">Everything published here on <em>{tag}</em>, across every author — newest first.</p>
     </header>
-    {/* Editorial post rows (getStaticPaths guarantees a non-empty list). */}
-    <div class="post-list">
-      {posts.map((post, i) => (
-        <article class="post">
-          <div class="idx">{String(i + 1).padStart(2, '0')}</div>
-          <div>
-            <h3><a href={`/blog/${post.id}`}>{post.data.title}</a></h3>
-            <p>{post.data.description}</p>
-            {post.data.tags && post.data.tags.length > 0 && (
-              <div class="tags">{post.data.tags.slice(0, 3).map((t) => (<span class="tag">{t}</span>))}</div>
-            )}
-          </div>
-          <div class="aside">
-            <time class="date" datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
-            <span class="rt">{readMins(post.body)} min</span>
-          </div>
-        </article>
-      ))}
+
+    <div class="related" id="tp-related" hidden>
+      <span class="lbl">Related</span>
+      <span class="tag on">{tag}</span>
+      <span id="tp-related-tags"></span>
+    </div>
+
+    <div class="split">
+      <div>
+        <div id="tp-list"><p class="feedlede" style="padding:24px 0">Loading…</p></div>
+      </div>
+      <aside class="rail">
+        <div class="card rail-card" id="tp-subjects" hidden>
+          <span class="eyebrow">More subjects</span>
+          <h3>Browse by subject</h3>
+          <ul class="rail-list" id="tp-subjects-list"></ul>
+        </div>
+        <div class="card rail-card">
+          <span class="eyebrow">The archive</span>
+          <h3>Everything, in order</h3>
+          <p>Every essay from every author, newest first — filter it by subject as you go.</p>
+          <a class="btn btn-ghost btn-sm" href="/blog">Open the archive <span class="arrow">→</span></a>
+        </div>
+      </aside>
+    </div>
+
+    <div class="topic-foot">
+      <section class="letter" id="subscribe">
+        <SubscribeForm heading="Follow the writing" blurb="A short email whenever a piece is published. No noise — unsubscribe from any email in one click." />
+      </section>
     </div>
   </div>
 </BaseLayout>
 
-<style>
-  .backlink { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); display: inline-flex; align-items: center; gap: 8px; margin-bottom: 30px; transition: color 0.2s; }
-  .backlink:hover { color: var(--accent); }
-  .page-head h1 em { font-style: italic; color: var(--accent); }
-  .post-list { border-top: 1px solid var(--rule); }
+<style is:global>
+  /* Ported from the Claude Design "topic" template. GLOBAL because the post rows are injected at
+     runtime; ships only on /blog/tags/[tag]. Tokens from global.css. */
+  .topic-head { padding: clamp(44px,6vw,80px) 0 clamp(26px,3vw,38px); }
+  .topic-head .crumb { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); display: flex; align-items: center; gap: 9px; margin-bottom: 30px; }
+  .topic-head .crumb a { color: var(--ink-faint); transition: color .2s; }
+  .topic-head .crumb a:hover { color: var(--accent); }
+  .topic-head .crumb .sep { color: var(--rule); }
+  .topic-head .crumb b { color: var(--ink); font-weight: 400; }
+  .topic-head h1 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(38px,6vw,64px); line-height: 1.02; letter-spacing: -.02em; margin: 0 0 6px; display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+  .topic-head h1 .hash { color: var(--accent); font-style: italic; }
+  .topic-head h1 .ct { font-family: var(--sans); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 400; }
+  .topic-head p { font-size: clamp(18px,2.2vw,21px); line-height: 1.6; color: var(--ink-soft); max-width: 56ch; margin: 22px 0 0; }
+  .topic-head p em { font-style: italic; color: var(--ink); }
+
+  .related { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 22px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin-bottom: clamp(28px,4vw,44px); }
+  .related .lbl { font-family: var(--sans); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); }
+  .related .tag { font-family: var(--sans); font-size: 12.5px; letter-spacing: .02em; color: var(--ink-faint); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 13px; transition: border-color .2s, color .2s; }
+  .related a.tag:hover { border-color: var(--accent); color: var(--accent); }
+  .related .tag.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+  .split { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: clamp(28px,5vw,64px); align-items: start; }
+  @media(max-width:960px){ .split { grid-template-columns: 1fr; gap: 36px; } }
+  .split .rail { position: sticky; top: 96px; display: flex; flex-direction: column; gap: 24px; }
+  @media(max-width:960px){ .split .rail { position: static; } }
+  .rail-card { border: 1px solid var(--rule); border-radius: 8px; background: var(--card); padding: 24px; }
+  .rail-card .eyebrow { display: block; margin-bottom: 10px; }
+  .rail-card h3 { font-family: var(--serif-display); font-weight: 600; font-size: 20px; margin: 0 0 12px; letter-spacing: -.01em; }
+  .rail-card p { margin: 0 0 18px; color: var(--ink-soft); font-size: 16px; line-height: 1.55; }
+  .rail-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .rail-list li { border-top: 1px solid var(--rule); }
+  .rail-list li:first-child { border-top: 0; }
+  .rail-list a { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 0; font-family: var(--serif-display); font-size: 17px; line-height: 1.3; color: var(--ink); transition: color .2s, padding-left .2s; }
+  .rail-list a:hover { color: var(--accent); padding-left: 6px; }
+  .rail-list .m { font-family: var(--sans); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); flex: none; }
+
+  /* the archive rows (numbered) */
+  #tp-list { border-top: 1px solid var(--rule); }
+  .split .tprow { display: grid; grid-template-columns: 42px minmax(0,1fr) 92px; gap: clamp(14px,2vw,24px); align-items: start; padding: clamp(20px,2.6vw,28px) 2px; border-bottom: 1px solid var(--rule); }
+  /* Single column on mobile — the number is dropped and the date/mins become a footer row. A
+     2-col grid with the aside pinned to column 2 mis-packs (the aside grabs the wide column). */
+  @media(max-width:680px){ .split .tprow { grid-template-columns: 1fr; gap: 6px; } .split .tprow .tpidx { display: none; } .split .tprow .tpaside { flex-direction: row; gap: 12px; margin-top: 8px; align-items: baseline; } }
+  .split .tprow .tpidx { font-family: var(--sans); font-size: 12px; letter-spacing: .08em; color: var(--ink-faint); font-variant-numeric: tabular-nums; padding-top: 5px; }
+  .split .tprow h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(20px,2.5vw,25px); line-height: 1.16; letter-spacing: -.015em; margin: 0; }
+  .split .tprow h3 a { color: var(--ink); } .split .tprow h3 a:hover { color: var(--accent); }
+  .split .tprow .by { display: block; margin: 8px 0 0; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
+  .split .tprow .by a { color: var(--ink-soft); } .split .tprow .by a:hover { color: var(--accent); }
+  .split .tprow p { margin: 9px 0 0; font-size: clamp(15px,1.8vw,16.5px); line-height: 1.56; color: var(--ink-soft); max-width: 62ch; text-wrap: pretty; }
+  .split .tprow .tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 13px; }
+  .split .tprow .tags .tag { font-family: var(--sans); font-size: 11px; letter-spacing: .02em; color: var(--ink-faint); border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; }
+  .split .tprow .tags a.tag:hover { border-color: var(--accent); color: var(--accent); }
+  .split .tprow .tpaside { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  @media(max-width:680px){ .split .tprow .tpaside { align-items: flex-start; } }
+  .topic-foot { padding: clamp(40px,5vw,64px) 0 clamp(52px,7vw,88px); } .topic-foot .subscribe { max-width: 720px; }
 </style>
+
+<script>
+  import { supabase } from '../../../lib/supabase';
+  import { esc, fmtDate } from '../../../lib/feed-render';
+
+  const $ = (id: string) => document.getElementById(id)!;
+  const tag = decodeURIComponent(location.pathname.replace(/\/+$/, '').split('/').pop() || '');
+  const initials = (n: string) => { const w = String(n || '').trim().split(/\s+/).filter(Boolean); return ((w.length >= 2 ? w[0][0] + w[1][0] : (w[0] || '?').slice(0, 2)) || '?').toUpperCase(); };
+
+  function byline(p: any) {
+    const nm = esc(p.primary_name || p.primary_handle);
+    const extra = (p.author_count || 1) > 1 ? ` & ${p.author_count - 1} other${p.author_count - 1 === 1 ? '' : 's'}` : '';
+    return `by <a href="/@${esc(p.primary_handle)}">${nm}</a>${extra}`;
+  }
+
+  async function boot() {
+    let posts: any[] = [];
+    try { const { data } = await supabase.rpc('posts_by_tag', { p_tag: tag }); posts = data || []; }
+    catch { $('tp-list').innerHTML = '<p class="feedlede" style="padding:24px 0">Couldn’t load this subject.</p>'; return; }
+
+    // header count + subline (real)
+    const authors = new Set(posts.map((p) => String(p.primary_handle)));
+    $('tp-count').textContent = `${posts.length} ${posts.length === 1 ? 'essay' : 'essays'}`;
+    $('tp-sub').innerHTML = posts.length
+      ? `Everything published here on <em>${esc(tag)}</em> — ${posts.length} ${posts.length === 1 ? 'essay' : 'essays'}${authors.size > 1 ? ` from ${authors.size} authors` : ''}, newest first.`
+      : `No essays on <em>${esc(tag)}</em> yet.`;
+
+    if (!posts.length) { $('tp-list').innerHTML = '<p class="feedlede" style="padding:24px 0">Nothing here yet — this subject has no published essays.</p>'; return; }
+
+    // the numbered post list
+    $('tp-list').innerHTML = posts.map((p, i) => {
+      const tags = (p.tags || []).slice(0, 4).map((t: string) => `<a class="tag" href="/blog/tags/${encodeURIComponent(String(t).toLowerCase())}">${esc(t)}</a>`).join('');
+      return `<article class="tprow">
+        <div class="tpidx">${String(i + 1).padStart(2, '0')}</div>
+        <div>
+          <h3><a href="/@${esc(p.primary_handle)}/${esc(p.slug)}">${esc(p.title)}</a></h3>
+          <span class="by">${byline(p)}</span>
+          ${p.description ? `<p>${esc(p.description)}</p>` : ''}
+          ${tags ? `<div class="tags">${tags}</div>` : ''}
+        </div>
+        <div class="tpaside"><span class="date">${esc(fmtDate(p.pub_date))}</span><span class="rt">${p.reading_min || 1} min</span></div>
+      </article>`;
+    }).join('');
+
+    // related subjects: the tags that co-occur most with this one (derived from these posts)
+    const freq = new Map<string, number>();
+    for (const p of posts) for (const t of (p.tags || [])) {
+      const k = String(t).toLowerCase(); if (k === tag.toLowerCase()) continue;
+      freq.set(k, (freq.get(k) || 0) + 1);
+    }
+    const related = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+    if (related.length) {
+      $('tp-related-tags').innerHTML = related.map(([t]) => `<a class="tag" href="/blog/tags/${encodeURIComponent(t)}">${esc(t)}</a>`).join('');
+      $('tp-related').hidden = false;
+    }
+
+    // rail: other subjects to browse (site-wide, by post count)
+    try {
+      const { data: allTags } = await supabase.rpc('topic_tags');
+      const others = (allTags || []).filter((t: any) => t.tag !== tag.toLowerCase()).slice(0, 6);
+      if (others.length) {
+        $('tp-subjects-list').innerHTML = others.map((t: any) => `<li><a href="/blog/tags/${encodeURIComponent(t.tag)}">#${esc(t.tag)}<span class="m">${t.n} ${t.n === 1 ? 'essay' : 'essays'}</span></a></li>`).join('');
+        $('tp-subjects').hidden = false;
+      }
+    } catch { /* rail is optional */ }
+  }
+  boot();
+</script>
