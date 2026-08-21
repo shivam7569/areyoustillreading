@@ -237,6 +237,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   }
 
   function accessChip(p: any) {
+    if (p._db) return '<span class="acc" style="cursor:default;opacity:.65">Free</span>';   // DB posts: no paywall
     if (p.paid) {
       const price = ((p.priceCents ?? 500) / 100).toFixed(2);
       return `<button class="acc paid" data-access="${esc(p.slug)}">Paid · $${price} ${chev}</button>`;
@@ -245,11 +246,33 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   }
 
   function subline(p: any) {
+    if (p._db && !p._own) return 'by ' + esc(p._authorName);   // another author's DB post
     if (p.series || p.seriesTitle) {
       const nm = esc(p.seriesTitle || p.series);
       return p.seriesOrder ? `${nm} · part ${p.seriesOrder}` : nm;
     }
+    if (p._db) return (p.tags && p.tags.length) ? p.tags.slice(0, 3).map((t: string) => '#' + esc(t)).join(' ') : 'Standalone';
     return 'No series';
+  }
+
+  // Map an owner_all_posts row to the catalog shape render() expects, marked `_db`.
+  function mapDbPost(r: any) {
+    return {
+      slug: r.slug, title: r.title, draft: r.status !== 'published',
+      pubDate: r.pub_date, publishAt: r.publish_at, paid: false,
+      series: null, seriesTitle: null, seriesOrder: null, tags: r.tags || [],
+      _db: true, _id: r.id, _own: r.is_owner_post, _authorName: r.author_name, _authorHandle: r.author_handle, _status: r.status,
+    };
+  }
+
+  // The action cell for a DB post (the owner can View any, Edit their own, and Unpublish/Delete any).
+  function dbActionCell(p: any) {
+    const view = p._status === 'published' ? `<a class="btn btn-sm btn-ghost" href="/@${esc(p._authorHandle)}/${encodeURIComponent(p.slug)}/" target="_blank" rel="noopener">View</a>` : '';
+    const edit = p._own ? `<a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a>` : '';
+    const end = p._status === 'published'
+      ? `<button class="btn btn-sm btn-ghost" data-dbun="${esc(p._id)}">Unpublish</button>`
+      : `<button class="btn btn-sm btn-ghost" data-dbdel="${esc(p._id)}">Delete</button>`;
+    return `<span style="display:inline-flex;gap:6px;justify-content:flex-end">${view}${edit}${end}</span>`;
   }
 
   function metricCells(p: any) {
@@ -276,25 +299,42 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         : isSched(p)
           ? `<td class="num">${esc(fmtDate(p.publishAt))}</td>`
           : '<td class="num pub-empty">—</td>';
+      // A file post, or the owner's OWN DB post, opens the editor from its title; another author's
+      // DB post (not editable by the owner) links to its live page instead.
+      const titleHref = (p._db && !p._own) ? `/@${esc(p._authorHandle)}/${encodeURIComponent(p.slug)}/` : `/admin/write?slug=${encodeURIComponent(p.slug)}`;
+      const lastCell = p._db
+        ? `<td class="num">${dbActionCell(p)}</td>`
+        : `<td class="num"><button class="rowmenu" data-menu="${esc(p.slug)}" aria-label="Actions for ${esc(p.title)}" aria-haspopup="menu">⋯</button></td>`;
       return `<tr data-slug="${esc(p.slug)}">
-          <td><a class="ti" href="/admin/write?slug=${encodeURIComponent(p.slug)}">${esc(p.title)}</a><span class="sub">${subline(p)}</span></td>
+          <td><a class="ti" href="${titleHref}">${esc(p.title)}</a><span class="sub">${subline(p)}</span></td>
           <td>${statusPill(p)}</td>
           <td>${accessChip(p)}</td>
           ${pub}
           ${metricCells(p)}
-          <td class="num"><button class="rowmenu" data-menu="${esc(p.slug)}" aria-label="Actions for ${esc(p.title)}" aria-haspopup="menu">⋯</button></td>
+          ${lastCell}
         </tr>`;
     }).join('');
   }
 
-  function load() {
-    // Stale-while-revalidate: paints the last-seen catalog instantly, then refreshes.
-    return swrFetch('/api/admin/posts', (d: any) => {
-      if (d && d.__error) { host.innerHTML = `<tr><td colspan="9" class="empty-cell" style="color:var(--danger)">Couldn't load posts: ${esc(d.error || ('HTTP ' + d.status))}</td></tr>`; return; }
-      all = d.posts || [];
-      view();          // paint from catalog immediately (metric columns show "—")
-      loadMetrics();   // then enrich Reads/Completion/Upgrades/Revenue
-    });
+  // The OWNER's catalog = the legacy file posts MERGED with every DB post (all authors), since
+  // publishing now goes to content.posts for everyone. Deduped by slug, DB winning a clash.
+  async function load() {
+    const [fileRes, dbRes] = await Promise.all([
+      adminFetch('/api/admin/posts').then((r) => r.json()).catch(() => ({ __error: true })),
+      supabase.rpc('owner_all_posts').then(({ data }: any) => data || []).catch(() => []),
+    ]);
+    const dbPosts = (dbRes || []).map(mapDbPost);
+    if (fileRes && fileRes.__error) {
+      if (!dbPosts.length) { host.innerHTML = `<tr><td colspan="9" class="empty-cell" style="color:var(--danger)">Couldn't load posts: ${esc(fileRes.error || 'HTTP error')}</td></tr>`; return; }
+      all = dbPosts;
+    } else {
+      const bySlug = new Map<string, any>();
+      for (const p of (fileRes.posts || [])) bySlug.set(p.slug, p);
+      for (const p of dbPosts) bySlug.set(p.slug, p);   // DB wins on a slug clash (it's the live source)
+      all = [...bySlug.values()];
+    }
+    view();          // paint the merged catalog (metric columns show "—")
+    loadMetrics();   // then enrich Reads/Completion/Upgrades/Revenue
   }
 
   // Merge analytics (Reads/Completion, top-12 by views) + sales (Upgrades/Revenue).
@@ -487,7 +527,24 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   }
 
   // Row-level click delegation: Access chip + ⋯ menu are the only inline controls.
-  host.addEventListener('click', (e) => {
+  host.addEventListener('click', async (e) => {
+    // DB-post actions (owner over any content.posts row): unpublish / delete via the author endpoints.
+    const dbun = (e.target as HTMLElement).closest('[data-dbun]') as HTMLElement | null;
+    const dbdel = (e.target as HTMLElement).closest('[data-dbdel]') as HTMLElement | null;
+    if (dbun) {
+      e.stopPropagation();
+      if (!confirm('Unpublish this post? It will no longer be public until it is published again.')) return;
+      const r = await adminFetch('/api/author/publish', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ post_id: dbun.dataset.dbun, unpublish: 'unpublish' }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Unpublish failed'); return; }
+      await load(); return;
+    }
+    if (dbdel) {
+      e.stopPropagation();
+      if (!confirm('Delete this post? This cannot be undone.')) return;
+      const r = await adminFetch(`/api/author/post?id=${encodeURIComponent(dbdel.dataset.dbdel!)}`, { method: 'DELETE' });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Delete failed'); return; }
+      await load(); return;
+    }
     const acc = (e.target as HTMLElement).closest('[data-access]') as HTMLElement | null;
     if (acc) { e.stopPropagation(); openAccess(acc, acc.dataset.access!); return; }
     const menu = (e.target as HTMLElement).closest('[data-menu]') as HTMLElement | null;
