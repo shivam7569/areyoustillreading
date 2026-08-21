@@ -64,16 +64,39 @@ import { getCollection } from 'astro:content';
 // keeps unpublished posts from getting a public OG image URL (see gotcha above).
 const posts = await getCollection('blog', ({ data }) => !data.draft);
 
-// Reshape the collection into the map OGImageRoute expects: { [id]: pageData }.
-// The key (post.id) is what becomes the `/og/<id>.png` path segment; the value
-// (post.data) is the validated frontmatter we read title/description from.
-//
-// Plus a single BRANDED DEFAULT card at `/og/aysr.png`. DB-served posts (/@handle/slug)
-// are dynamic and unknown at build time, so they can't get a per-post PNG here; they point
-// their og:image at this default so the share card is a valid branded image, never a 404.
-// (Per-post OG for DB posts is a follow-on: a runtime satori/resvg-wasm Function.)
+// DB posts (served at /@handle/slug) don't exist as build routes, so their per-post cards are
+// generated HERE too, keyed by `<handle>/<slug>` → /og/<handle>/<slug>.png. Fetched at build with
+// the anon key (a card per published post, most-recent first, capped to bound build time). A post
+// newer than the last build — or beyond the cap — has no static card; functions/ogp/[handle]/[slug].js
+// serves the branded default for those, so a share card is never a 404. Fail-open: if the DB is
+// unreachable at build, we just ship the file-collection + default cards.
+const OG_POST_CAP = 300;
+let dbPages: Record<string, { title: string; description: string }> = {};
+try {
+  const url = import.meta.env.PUBLIC_SUPABASE_URL;
+  const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+  if (url && key) {
+    const res = await fetch(`${url}/rest/v1/rpc/list_feed_posts`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ p_limit: OG_POST_CAP }),
+    });
+    const rows = res.ok ? await res.json() : [];
+    for (const p of rows || []) {
+      if (!p || !p.primary_handle || !p.slug) continue;
+      dbPages[`${p.primary_handle}/${p.slug}`] = {
+        title: p.title || p.slug,
+        description: p.description || `by ${p.primary_name || p.primary_handle}`,
+      };
+    }
+  }
+} catch { /* fail-open — default card still covers every DB post via the edge fallback */ }
+
+// Reshape into the map OGImageRoute expects: { [id]: pageData }. The key becomes the
+// `/og/<id>.png` path segment; the value is the {title, description} we render.
 const pages = {
   ...Object.fromEntries(posts.map((post) => [post.id, post.data])),
+  ...dbPages,
   aysr: { title: 'areyoustillreading', description: 'Considered essays on LLM engineering and the systems underneath.' },
 };
 
@@ -97,9 +120,10 @@ export const { getStaticPaths, GET } = await OGImageRoute({
       [15, 17, 21],
       [23, 26, 33],
     ],
-    // Brand-blue accent stripe down the leading edge (inline-start = left in
-    // LTR). Purely decorative branding, mirrors the site's accent color #2F5BFF.
-    border: { color: [47, 91, 255], width: 12, side: 'inline-start' },
+    // Accent stripe down the leading edge (inline-start = left in LTR). The site's on-dark
+    // accent is bronze (#d6a75f) — the OG card is always dark, so it pops there better than the
+    // light-theme plum. Matches the editorial rebrand (was the old #2F5BFF blue).
+    border: { color: [214, 167, 95], width: 12, side: 'inline-start' },
     // Breathing room around the text so titles don't crowd the card edges.
     padding: 72,
   }),
