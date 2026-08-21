@@ -1,0 +1,117 @@
+---
+/*
+ * /letter — the newsletter landing page ("The letter"), Claude Design "letter".
+ * The design's fabricated numbers (2,847 subscribers / 68% open rate), invented testimonials, and
+ * paywall FAQ are dropped — this site publishes no vanity metrics and has no paywall. Kept: the
+ * pitch ("one essay, no digest"), the real SubscribeForm, "what you get", a DB-driven "recent
+ * essays" list (the letter goes out on publish, so recent essays ARE the recent issues), and an
+ * honest short FAQ. Recent essays hydrate from public.list_feed_posts.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SubscribeForm from '../components/SubscribeForm.astro';
+---
+
+<BaseLayout title="The letter — areyoustillreading" description="One essay by email, every few weeks. No digest, no roundup." wide>
+  <div class="wrap">
+    <section class="lt-hero">
+      <div class="kicker"><span class="line"></span><span class="eyebrow">The letter</span></div>
+      <h1>One essay. <em>No digest, no roundup.</em></h1>
+      <p class="lede">Every few weeks the whole piece arrives by email — not a teaser, not five links, not a summary of somebody else's week. If there's nothing worth your time, nothing arrives.</p>
+      <div class="lt-sub">
+        <SubscribeForm heading="Get the next essay" blurb="Free. One click to leave, and no email about leaving." />
+      </div>
+    </section>
+
+    <section class="lt-what">
+      <div class="three">
+        <div><h3><span class="i">01</span>The full essay</h3><p>The same text as the site, formatted for mail with the figures — not a worse experience than clicking through.</p></div>
+        <div><h3><span class="i">02</span>A day early</h3><p>It lands in your inbox before it goes public, so you read it first.</p></div>
+        <div><h3><span class="i">03</span>The occasional correction</h3><p>When something's wrong, the fix goes to the same list. No quiet edits.</p></div>
+      </div>
+    </section>
+
+    <section class="lt-issues">
+      <div class="sec-head"><h2>Recent essays</h2><a class="more-link" href="/blog">The full archive →</a></div>
+      <div class="issue-list" id="lt-recent"><p class="feedlede" style="padding:22px 0">Loading…</p></div>
+    </section>
+
+    <section class="lt-faq">
+      <div class="sec-head"><h2>Before you sign up</h2></div>
+      <div class="faq-item"><h3>How often, honestly?</h3><p>Every few weeks — whenever a piece is finished. It goes quiet when the work is loud; there's no filler sent to keep a schedule.</p></div>
+      <div class="faq-item"><h3>Is any of it paid?</h3><p>No. Every essay is free, in full — there's no paywall anywhere in the archive.</p></div>
+      <div class="faq-item"><h3>What happens to my address?</h3><p>It sits in the mailing tool and nowhere else — no tracking pixels, no list sales, no "partners". Unsubscribing deletes it.</p></div>
+    </section>
+
+    <section class="lt-closer">
+      <h3>Still here?</h3>
+      <p>That's usually a good sign. Put your address in and I'll do the rest.</p>
+      <div class="lt-sub"><SubscribeForm heading="" blurb="" /></div>
+    </section>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  /* Ported from the Claude Design "letter" template. GLOBAL because the recent-essays rows are
+     injected at runtime; ships only on /letter. Tokens from global.css. */
+  .lt-hero { padding: clamp(48px,7vw,96px) 0 clamp(36px,5vw,56px); max-width: 62ch; }
+  .lt-hero .kicker { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+  .lt-hero .kicker .line { height: 1px; width: 48px; background: var(--accent); opacity: .6; }
+  .lt-hero h1 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(36px,6vw,64px); line-height: 1.04; letter-spacing: -.02em; margin: 0 0 22px; max-width: 16ch; }
+  .lt-hero h1 em { font-style: italic; color: var(--accent); }
+  .lt-hero .lede { font-size: clamp(18px,2.2vw,21px); line-height: 1.6; color: var(--ink-soft); max-width: 52ch; margin: 0 0 30px; }
+  .lt-sub .subscribe { max-width: 560px; margin: 0; }
+
+  .lt-what { padding: clamp(40px,5vw,64px) 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .lt-what .three { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: clamp(24px,4vw,48px); }
+  @media (max-width: 860px) { .lt-what .three { grid-template-columns: 1fr; gap: 30px; } }
+  .lt-what h3 { font-family: var(--serif-display); font-weight: 600; font-size: 21px; margin: 0 0 10px; letter-spacing: -.01em; }
+  .lt-what h3 .i { display: block; font-family: var(--sans); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; font-weight: 600; }
+  .lt-what p { margin: 0; color: var(--ink-soft); font-size: 17px; line-height: 1.56; }
+
+  .lt-issues { padding: clamp(40px,5vw,64px) 0 0; }
+  .lt-issues .sec-head, .lt-faq .sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
+  .lt-issues .sec-head h2, .lt-faq .sec-head h2 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(22px,2.8vw,28px); letter-spacing: -.02em; margin: 0; }
+  .lt-issues .more-link { font-family: var(--sans); font-size: 13px; color: var(--accent); white-space: nowrap; }
+  .issue-list { border-top: 1px solid var(--rule); margin-top: 18px; }
+  .issue { display: grid; grid-template-columns: minmax(0,1fr) 150px; gap: clamp(16px,3vw,36px); padding: 24px 8px; border-bottom: 1px solid var(--rule); transition: background .25s; }
+  .issue:hover { background: var(--paper-2); }
+  @media (max-width: 760px) { .issue { grid-template-columns: 1fr; gap: 8px; padding: 22px 4px; } .issue .when { order: -1; } }
+  .issue h3 { font-family: var(--serif-display); font-weight: 600; font-size: 21px; line-height: 1.25; margin: 0 0 8px; letter-spacing: -.01em; color: var(--ink); }
+  .issue:hover h3 { color: var(--accent); }
+  .issue .by { font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
+  .issue .by a { color: var(--ink-soft); } .issue .by a:hover { color: var(--accent); }
+  .issue p { margin: 8px 0 0; color: var(--ink-soft); font-size: 16.5px; line-height: 1.55; max-width: 62ch; }
+  .issue .when { font-family: var(--sans); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); text-align: right; padding-top: 4px; font-variant-numeric: tabular-nums; }
+  @media (max-width: 760px) { .issue .when { text-align: left; padding-top: 0; } }
+
+  .lt-faq { padding: clamp(44px,6vw,72px) 0 0; }
+  .lt-faq .faq-item { padding: 22px 0; border-bottom: 1px solid var(--rule); }
+  .lt-faq .faq-item:first-of-type { border-top: 1px solid var(--rule); margin-top: 18px; }
+  .lt-faq .faq-item h3 { font-family: var(--serif-display); font-weight: 600; font-size: 20px; margin: 0 0 8px; }
+  .lt-faq .faq-item p { margin: 0; color: var(--ink-soft); font-size: 17px; line-height: 1.56; max-width: 66ch; }
+
+  .lt-closer { margin: clamp(44px,6vw,72px) 0 clamp(52px,7vw,88px); padding: clamp(32px,4vw,48px); text-align: center; border: 1px solid var(--rule); border-radius: 10px; background: var(--card); }
+  .lt-closer h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(24px,3vw,32px); margin: 0 0 10px; letter-spacing: -.01em; }
+  .lt-closer p { color: var(--ink-soft); margin: 0 auto 26px; max-width: 44ch; font-size: 17px; }
+  .lt-closer .lt-sub .subscribe { margin: 0 auto; }
+</style>
+
+<script>
+  import { supabase } from '../lib/supabase';
+  import { esc, fmtDate } from '../lib/feed-render';
+  const host = document.getElementById('lt-recent')!;
+  (async () => {
+    let posts: any[] = [];
+    try { const { data } = await supabase.rpc('list_feed_posts', { p_limit: 6 }); posts = data || []; }
+    catch { host.innerHTML = '<p class="feedlede" style="padding:22px 0">Couldn’t load recent essays.</p>'; return; }
+    if (!posts.length) { host.innerHTML = '<p class="feedlede" style="padding:22px 0">No essays published yet.</p>'; return; }
+    host.innerHTML = posts.map((p) => `<a class="issue" href="/@${esc(p.primary_handle)}/${esc(p.slug)}">
+        <div>
+          <h3><span>${esc(p.title)}</span></h3>
+          <span class="by">by ${esc(p.primary_name || p.primary_handle)}</span>
+          ${p.description ? `<p>${esc(p.description)}</p>` : ''}
+        </div>
+        <span class="when">${esc(fmtDate(p.pub_date))}</span>
+      </a>`).join('');
+  })();
+</script>
