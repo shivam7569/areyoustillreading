@@ -1,11 +1,12 @@
 ---
 /**
- * /admin — the dashboard Home / overview (Studio design).
- * At-a-glance tiles (audience · read-depth · revenue · drafts), the drafts "in
- * flight" table, the letter panel, recent posts, and a real completion ("where
- * readers stop") barrow. All data is loaded client-side from admin-gated
- * Functions AFTER the shared gate confirms an admin (whenAdmin) — nothing here
- * trusts the client, and every number is real (no design placeholders).
+ * /admin — the dashboard Home / overview (Studio design). ROLE-AWARE:
+ *   • Owner  → audience · read-depth · revenue tiles, the letter panel, recent posts,
+ *     and the "where readers stop" barrow, all from admin-gated Functions.
+ *   • Author → owner-only tiles/panels are hidden (AdminLayout's [data-owner] scoping);
+ *     the Published + In-draft tiles, In-flight drafts, and Recent posts are filled from
+ *     my_posts() (auth-scoped) — an author never hits an owner endpoint (they'd 401).
+ * All data is real (no design placeholders); the client is never trusted for authority.
  */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
@@ -13,26 +14,29 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 <AdminLayout title="Home — Studio" heading="Home" active="home">
   <section class="stack">
     <div class="tiles">
-      <a class="tile" href="/admin/audience" style="text-decoration:none;color:inherit">
+      <a class="tile" href="/admin/audience" style="text-decoration:none;color:inherit" data-owner>
         <div class="l">Subscribers</div><div class="v loading" id="k-subs">—</div><div class="d" id="k-subs-foot">confirmed</div>
       </a>
-      <a class="tile" href="/admin/engagement" style="text-decoration:none;color:inherit">
+      <a class="tile" href="/admin/engagement" style="text-decoration:none;color:inherit" data-owner>
         <div class="l">Read depth</div><div class="v loading" id="k-depth">—</div><div class="d" id="k-depth-foot">how far readers get</div>
       </a>
-      <a class="tile" href="/admin/revenue" style="text-decoration:none;color:inherit">
+      <a class="tile" href="/admin/revenue" style="text-decoration:none;color:inherit" data-owner>
         <div class="l">Revenue</div><div class="v loading" id="k-rev">—</div><div class="d" id="k-rev-foot">to date</div>
+      </a>
+      <a class="tile" href="/@" id="k-pub-tile" style="text-decoration:none;color:inherit" data-author hidden>
+        <div class="l">Published</div><div class="v" id="k-pub">—</div><div class="d" id="k-pub-foot">live on your page</div>
       </a>
       <a class="tile" href="/admin/drafts" style="text-decoration:none;color:inherit">
         <div class="l">In draft</div><div class="v loading" id="k-drafts">—</div><div class="d" id="k-drafts-foot">unfinished</div>
       </a>
     </div>
 
-    <div class="cols side3">
+    <div class="cols side3" id="row-flight">
       <div class="panel">
         <header><h2>In flight</h2><span class="hint">Drafts — only you can see these</span></header>
         <div class="pb flush" id="inflight"><div class="card-pad muted">Loading…</div></div>
       </div>
-      <div class="panel">
+      <div class="panel" data-owner>
         <header><h2>The letter</h2></header>
         <div class="pb">
           <div class="fr"><span>Recipients</span><span class="v" id="l-recip">—</span></div>
@@ -46,12 +50,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       </div>
     </div>
 
-    <div class="cols two">
+    <div class="cols two" id="row-recent">
       <div class="panel">
         <header><h2>Recent posts</h2><a class="hint" href="/admin/posts" style="color:var(--accent);text-decoration:none">Manage all →</a></header>
         <div class="pb flush" id="recent"><div class="card-pad muted">Loading…</div></div>
       </div>
-      <div class="panel">
+      <div class="panel" data-owner>
         <header><h2>Where readers stop</h2><span class="hint">By completion</span></header>
         <div class="pb" id="stops"><div class="muted">Loading…</div></div>
       </div>
@@ -60,7 +64,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 </AdminLayout>
 
 <script>
-  import { onAdminReady, swrFetch } from '../../lib/admin-gate';
+  import { onAdminReady, swrFetch, whenAdmin } from '../../lib/admin-gate';
+  import { supabase } from '../../lib/supabase';
   import { fmtNum, fmtMoney, fmtDate, esc } from '../../lib/admin-format';
 
   const $ = (id: string) => document.getElementById(id);
@@ -129,11 +134,49 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     });
   }
 
-  onAdminReady(() => {
-    // All three fire in parallel; SWR paints last-seen values instantly. loadDepth's
-    // barrow relabels with real titles once loadPosts populates the map (both cached).
-    loadOverview();
-    loadPosts();
-    loadDepth();
+  // An author's home: no owner endpoints (they'd 401). Owner-only tiles/panels are already
+  // hidden by AdminLayout's role scoping ([data-owner]); here we reveal the author tiles, let
+  // the single remaining panels span full width, and fill everything from my_posts (auth-scoped).
+  async function loadAuthorHome(handle?: string | null) {
+    document.querySelectorAll<HTMLElement>('[data-author]').forEach((el) => { el.hidden = false; });
+    const rf = $('row-flight'); if (rf) rf.style.gridTemplateColumns = '1fr';
+    const rr = $('row-recent'); if (rr) rr.style.gridTemplateColumns = '1fr';
+    if (handle) { const pt = $('k-pub-tile'); if (pt) pt.setAttribute('href', '/@' + handle); }
+
+    let posts: any[] = [];
+    try { const { data } = await supabase.rpc('my_posts'); posts = data || []; } catch { posts = []; }
+    const drafts = posts.filter((p) => p.status === 'draft' || p.status === 'scheduled');
+    const published = posts.filter((p) => p.status === 'published');
+    set('k-drafts', fmtNum(drafts.length));
+    set('k-pub', fmtNum(published.length));
+
+    const recent = [...posts].sort((a, b) => (+new Date(b.updated_at || b.pub_date || 0)) - (+new Date(a.updated_at || a.pub_date || 0))).slice(0, 5);
+    $('recent')!.innerHTML = recent.length
+      ? '<table class="t"><tbody>' + recent.map((p) => `<tr>
+            <td><a class="ti" href="/admin/write?slug=${encodeURIComponent(p.slug)}" style="text-decoration:none">${esc(p.title)}</a><span class="sub">${esc(fmtDate(p.pub_date) || 'Draft')}</span></td>
+            <td class="num">${p.status === 'published' ? '<span class="pill live">Live</span>' : '<span class="pill">Draft</span>'}</td>
+            <td class="num"><a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a></td>
+          </tr>`).join('') + '</tbody></table>'
+      : '<div class="card-pad muted">No posts yet. <a href="/admin/write" style="color:var(--accent)">Write your first →</a></div>';
+
+    $('inflight')!.innerHTML = drafts.length
+      ? '<table class="t"><tbody>' + drafts.slice(0, 6).map((p) => `<tr>
+            <td><a class="ti" href="/admin/write?slug=${encodeURIComponent(p.slug)}" style="text-decoration:none">${esc(p.title)}</a><span class="sub">Draft</span></td>
+            <td class="num" style="color:var(--ink-faint)">${esc(fmtDate(p.updated_at || p.pub_date) || '')}</td>
+            <td class="num"><a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Continue →</a></td>
+          </tr>`).join('') + '</tbody></table>'
+      : '<div class="card-pad muted">Nothing in flight. <a href="/admin/write" style="color:var(--accent)">Start something →</a></div>';
+  }
+
+  onAdminReady(async () => {
+    const chk = await whenAdmin;
+    if (chk && chk.owner) {
+      // Owner dashboard: all three fire in parallel; SWR paints last-seen values instantly.
+      loadOverview();
+      loadPosts();
+      loadDepth();
+    } else {
+      loadAuthorHome(chk && chk.handle);
+    }
   });
 </script>
