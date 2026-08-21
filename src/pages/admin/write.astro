@@ -220,6 +220,14 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
                   <input type="hidden" id="pm-series" />
                 </span></div>
                 <div class="rr"><span class="k">Address</span><span class="v slug"><i>areyoustillreading.dev/blog/</i><span id="pm-slug" class="pm-slug" contenteditable="true" spellcheck="false"></span></span></div>
+                <div class="rr"><span class="k">With</span><span class="v">
+                  <div id="pm-co-list" style="display:flex;flex-direction:column;gap:5px"></div>
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+                    <input id="pm-co-input" class="recin" placeholder="@handle of a co-writer" autocomplete="off" spellcheck="false" style="flex:1;min-width:120px" />
+                    <button type="button" class="btn btn-ghost btn-sm" id="pm-co-add">Invite</button>
+                  </div>
+                  <p id="pm-co-hint" style="margin:7px 0 0;font-family:var(--sans);font-size:11.5px;line-height:1.5;color:var(--ink-faint)"></p>
+                </span></div>
               </div>
               <div class="sub-x off" id="seriesknobs">
                 <div class="knob-h">On the series plate</div>
@@ -1293,6 +1301,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       document.getElementById('schedbox')?.classList.add('off');
       document.querySelectorAll('#whenpick .pk').forEach((x) => x.classList.toggle('on', (x as HTMLElement).dataset.w === 'now'));
       refreshAuthView();
+      loadCoauthors();   // co-author panel reflects the current post (or prompts to save first)
     };
     const closeModal = () => { modal.hidden = true; };
     $('publish-btn').addEventListener('click', openModal);
@@ -1739,6 +1748,74 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // reopening an existing post, so the FIRST save targets that post (UPDATE) and preserves its
     // original pub_date. Series/field attach is a later slice — DB posts publish standalone for now.
     let dbPostId = (typeof editing !== 'undefined' && editing && editing.id) ? editing.id : null;
+
+    // ——— Invite a co-author (Collaboration design, surface 1) ———
+    // A co-writer shares the byline and can edit + publish. We invite by @handle (public
+    // identity); the invitee ACCEPTS from their Studio Requests inbox. Needs the post saved
+    // (a post_id) first — a pending co-author never appears on a byline until they accept.
+    const coEsc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const coInitials = (n) => { const w = String(n || '').trim().split(/\s+/).filter(Boolean); return ((w.length >= 2 ? w[0][0] + w[1][0] : (w[0] || '?').slice(0, 2)) || '?').toUpperCase(); };
+    const coHint = (msg) => { const h = document.getElementById('pm-co-hint'); if (h) h.textContent = msg || ''; };
+
+    async function loadCoauthors() {
+      const list = document.getElementById('pm-co-list');
+      const input = document.getElementById('pm-co-input');
+      const addBtn = document.getElementById('pm-co-add');
+      if (!list) return;
+      if (!dbPostId) {
+        list.innerHTML = '';
+        if (input) input.disabled = true;
+        if (addBtn) addBtn.disabled = true;
+        coHint('Save this draft first, then you can invite a co-writer.');
+        return;
+      }
+      if (input) input.disabled = false;
+      if (addBtn) addBtn.disabled = false;
+      coHint('A co-writer shares the byline and can publish. They accept from their own Requests.');
+      const { data } = await supabase.rpc('post_coauthors', { p_post: dbPostId });
+      const rows = Array.isArray(data) ? data : [];
+      list.innerHTML = rows.map((a) => {
+        const role = a.is_primary ? 'Author' : a.accepted ? 'Co-writing' : 'Pending';
+        const dim = a.is_primary ? '' : a.accepted ? 'color:var(--accent)' : 'color:var(--ink-faint)';
+        const chipDim = a.accepted ? '' : 'opacity:.5';
+        const remove = a.is_primary ? '' :
+          `<button type="button" data-co-remove="${coEsc(a.user_id)}" aria-label="Remove ${coEsc(a.name)}" style="background:none;border:0;padding:2px;line-height:0;color:var(--ink-faint);cursor:pointer"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg></button>`;
+        return `<div style="display:flex;align-items:center;gap:9px;padding:2px 0">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;border-radius:999px;font-family:var(--serif-display);font-weight:600;font-size:9.5px;color:var(--on-accent);background:var(--accent);${chipDim}">${coEsc(coInitials(a.name))}</span>
+          <span style="flex:1;min-width:0;font-family:var(--sans);font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${coEsc(a.name)}</span>
+          <span style="font-family:var(--sans);font-size:9px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;${dim}">${role}</span>
+          ${remove}
+        </div>`;
+      }).join('');
+    }
+
+    async function inviteCoauthor() {
+      if (!dbPostId) { coHint('Save this draft first, then you can invite a co-writer.'); return; }
+      const input = document.getElementById('pm-co-input');
+      const q = (input.value || '').trim();
+      if (!q) return;
+      coHint('Looking up @' + q.replace(/^@/, '') + '…');
+      const { data: found, error: fe } = await supabase.rpc('find_author', { p_query: q });
+      const author = Array.isArray(found) ? found[0] : found;
+      if (fe || !author) { coHint('No author writes here under that @handle.'); return; }
+      const { error } = await supabase.rpc('invite_coauthor', { p_post: dbPostId, p_invitee: author.id, p_note: '' });
+      if (error) { coHint(error.message); return; }
+      input.value = '';
+      await loadCoauthors();
+      coHint('Invited ' + author.name + ' — they’ll see it in their Requests.');
+    }
+
+    document.getElementById('pm-co-add')?.addEventListener('click', inviteCoauthor);
+    document.getElementById('pm-co-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inviteCoauthor(); } });
+    document.getElementById('pm-co-list')?.addEventListener('click', async (e) => {
+      const b = (e.target instanceof Element) ? e.target.closest('[data-co-remove]') : null;
+      if (!b || !dbPostId) return;
+      b.disabled = true;
+      const { error } = await supabase.rpc('remove_coauthor', { p_post: dbPostId, p_user: b.getAttribute('data-co-remove') });
+      if (error) { coHint(error.message); b.disabled = false; return; }
+      loadCoauthors();
+    });
+
     async function publishToDb({ title, description, slug, body, tags, draft, token, penName, email, series, scheduleAt }, status) {
       status.textContent = 'Saving…';
       let saveJson;
@@ -1754,6 +1831,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         if (!saveRes.ok || !saveJson.post_id) { status.textContent = (saveJson && saveJson.error) || 'Could not save.'; return; }
       } catch (e) { status.textContent = 'Could not save: ' + ((e && e.message) || e); return; }
       dbPostId = saveJson.post_id;
+      loadCoauthors();   // the post now exists → the co-author panel becomes active
       // A pure draft (Save as draft) stops here; a SCHEDULED post still renders + is committed
       // with a future publish_at (draft is also set for scheduling, so exclude it here).
       if (draft && !scheduleAt) { status.textContent = 'Draft saved.'; return; }
