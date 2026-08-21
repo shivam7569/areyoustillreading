@@ -35,6 +35,30 @@ import SubscribeForm from '../components/SubscribeForm.astro';
     <div id="directory"><p class="feedlede" id="srloading" style="padding:26px 0">Loading series…</p></div>
     <p class="noneleft" id="noneleft"></p>
 
+    {/* The gap — the real publication rhythm of each series + how many readers came back across each
+        wait (from reader_progress; "—" where too few reads to be honest about). No author prose. */}
+    <section class="gp" id="gp" hidden>
+      <div class="gpin">
+        <div class="gphead">
+          <div class="kicker"><span class="line"></span><span class="eyebrow">The gap</span></div>
+          <h2>A series is lost <em>between the parts.</em></h2>
+          <p>Nobody abandons an essay they are enjoying — they abandon the series, months later, when the next part lands and they have forgotten why they cared. Pick a series and a gap: the wait is real, and where enough readers finished a part, so is the share who came back for the next.</p>
+        </div>
+        <div class="gppick" id="gppick"></div>
+        <div class="gpline" id="gpline"></div>
+        <div class="gpread">
+          <div><span class="k">The wait</span><span class="v" id="gpWait">—</span><span class="sub" id="gpWaitSub">—</span></div>
+          <div><span class="k">Came back for it</span><span class="v" id="gpBack">—</span><span class="sub" id="gpBackSub">—</span></div>
+          <div><span class="k">Safe to start?</span><span class="v small" id="gpSafe">—</span><span class="sub" id="gpSafeSub">—</span></div>
+        </div>
+        <div class="gpfind" id="gpfind" hidden>
+          <span class="lb">Across the series here</span>
+          <span class="gpbars" id="gpBars"></span>
+          <p id="gpFindText"></p>
+        </div>
+      </div>
+    </section>
+
     <div class="legend" id="srlegend" hidden>
       <svg viewBox="0 0 50 16" aria-hidden="true"><path d="M0 5 C 11 6 21 4 31 5 S 44 7 50 6" fill="none" stroke="var(--accent)" stroke-width="1.4"/><circle cx="9" cy="5.4" r="2.4" fill="var(--accent)"/><circle cx="41" cy="6" r="2.4" fill="var(--paper)" stroke="var(--accent)" stroke-width="1.2"/></svg>
       <span>Every run carries its own mark: the comb thickens with the length of the series, each node sits at that part's reading time, and a <b style="color:var(--accent);font-weight:600">solid dot</b> is a published part where a hollow ring is still to come.</span>
@@ -152,6 +176,47 @@ import SubscribeForm from '../components/SubscribeForm.astro';
   .blank h3 { font-family:var(--serif-display); font-weight:600; font-size:clamp(20px,2.4vw,25px); line-height:1.18; letter-spacing:-.015em; margin:0 0 11px; }
   .blank p { margin:0; font-size:16px; line-height:1.6; color:var(--ink-soft); max-width:50ch; }
   .blank .bm { margin-top:16px; padding-top:14px; border-top:1px solid var(--rule-soft); font-family:var(--sans); font-size:12px; color:var(--ink-faint); }
+  /* ——— the gap ——— */
+  .gp { margin:clamp(34px,4.6vw,58px) calc(var(--gutter) * -1) 0; padding:clamp(28px,3.6vw,44px) var(--gutter) clamp(26px,3.4vw,38px); border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); background:var(--paper-2); position:relative; }
+  .gp::before { content:""; position:absolute; inset:0; pointer-events:none; background:radial-gradient(74% 120% at 14% 0%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 62%); }
+  .gpin { position:relative; }
+  .gphead .kicker { display:flex; align-items:center; gap:14px; margin-bottom:6px; }
+  .gphead .kicker .line { height:1px; width:48px; background:var(--accent); opacity:.6; }
+  .gphead h2 { font-family:var(--serif-display); font-weight:600; font-size:clamp(25px,3.2vw,36px); line-height:1.06; letter-spacing:-.022em; margin:12px 0 0; text-wrap:balance; }
+  .gphead h2 em { font-style:italic; color:var(--accent); }
+  .gphead p { margin:13px 0 clamp(16px,2.2vw,22px); font-size:clamp(15.5px,1.9vw,17.5px); line-height:1.58; color:var(--ink-soft); max-width:60ch; text-wrap:pretty; }
+  .gppick { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:clamp(16px,2.2vw,22px); }
+  .gppick button { font-family:var(--sans); font-size:12px; color:var(--ink-faint); background:transparent; border:1px solid var(--rule); border-radius:999px; padding:6px 13px; cursor:pointer; transition:border-color .18s,color .18s,background .18s; }
+  .gppick button:hover { border-color:var(--accent); color:var(--accent); }
+  .gppick button.gpon { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  .gpline { position:relative; }
+  .gpline svg { display:block; width:100%; height:auto; overflow:visible; }
+  .gpline .axis { stroke:var(--rule); stroke-width:1; }
+  .gpline .seg { stroke:var(--accent); stroke-width:2.4; opacity:.28; transition:opacity .18s,stroke-width .18s; }
+  .gpline .seg.gphot { opacity:1; stroke-width:3.4; }
+  .gpline .hit { stroke:transparent; stroke-width:30; cursor:pointer; }
+  .gpline .nd { fill:var(--accent); transition:r .18s; }
+  .gpline .nd.plan { fill:var(--paper-2); stroke:var(--accent); stroke-width:1.3; }
+  .gpline .rate { font-family:var(--serif-display); font-weight:600; font-size:15px; fill:var(--ink-faint); transition:fill .18s; }
+  .gpline .rate.gphot { fill:var(--accent); }
+  .gpline .mo { font-family:var(--sans); font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; fill:var(--ink-faint); }
+  .gpline .pt { font-family:var(--sans); font-size:10px; letter-spacing:.1em; fill:var(--ink-faint); }
+  .gpline .pt.gphot { fill:var(--accent); }
+  .gpread { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; margin-top:clamp(18px,2.4vw,26px); background:var(--rule); border:1px solid var(--rule); border-radius:5px; overflow:hidden; }
+  @media(max-width:820px){ .gpread { grid-template-columns:1fr; } }
+  .gpread div { background:var(--card); padding:16px 18px 15px; min-width:0; }
+  .gpread .k { display:block; font-family:var(--sans); font-size:9.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .gpread .v { display:block; margin-top:9px; font-family:var(--serif-display); font-weight:600; font-size:clamp(23px,2.8vw,31px); line-height:1.04; letter-spacing:-.02em; color:var(--accent); font-variant-numeric:tabular-nums; }
+  .gpread .v.small { font-size:clamp(16px,1.9vw,19px); letter-spacing:-.01em; line-height:1.28; color:var(--ink); }
+  .gpread .sub { display:block; margin-top:7px; font-family:var(--sans); font-size:11.5px; line-height:1.45; color:var(--ink-faint); }
+  .gpfind { display:flex; align-items:center; gap:clamp(14px,2.4vw,26px); flex-wrap:wrap; margin-top:clamp(18px,2.4vw,24px); padding-top:clamp(16px,2.2vw,20px); border-top:1px solid var(--rule); }
+  .gpfind .lb { font-family:var(--sans); font-size:9.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); flex:none; }
+  .gpbars { display:flex; align-items:flex-end; gap:9px; flex:none; min-height:64px; }
+  .gpbars i { position:relative; display:block; width:34px; background:color-mix(in srgb,var(--accent) 22%,transparent); border-top:2px solid var(--accent); }
+  .gpbars b { position:absolute; left:0; right:0; top:-19px; text-align:center; font-family:var(--serif-display); font-size:13px; font-weight:600; color:var(--accent); font-variant-numeric:tabular-nums; }
+  .gpbars s { position:absolute; left:0; right:0; bottom:-17px; text-align:center; font-family:var(--sans); font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); text-decoration:none; }
+  .gpfind p { margin:0; font-family:var(--sans); font-size:12.5px; line-height:1.55; color:var(--ink-soft); max-width:46ch; } .gpfind p b { color:var(--ink); font-weight:600; }
+
   .series-foot { padding:clamp(44px,6vw,72px) 0 clamp(52px,7vw,88px); }
   .series-foot .subscribe { max-width:720px; }
 </style>
@@ -293,6 +358,83 @@ import SubscribeForm from '../components/SubscribeForm.astro';
     initSeriesPlates($('feat'));
   }
 
+  // ——— the gap: real publication rhythm + return rate across each wait (reader_progress) ———
+  let gaps: any[] = [];
+  let gsi = 0, ggi = 0;
+  const monthIdx = (d: string) => { const t = new Date(d); return t.getUTCFullYear() * 12 + t.getUTCMonth(); };
+  const monthName = (mi: number) => { const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']; return M[((mi % 12) + 12) % 12] + ' ’' + String(Math.floor(mi / 12)).slice(-2); };
+  const monthsWord = (n: number) => n <= 0 ? 'same month' : n === 1 ? '1 month' : n + ' months';
+  const NS = 'http://www.w3.org/2000/svg';
+  const svgEl = (n: string, a: any) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, String(a[k])); return e; };
+
+  async function initGap() {
+    const cands = series.filter((s) => (s.published || 0) >= 2).slice(0, 12);
+    const loaded = await Promise.all(cands.map(async (s) => {
+      try {
+        const { data } = await supabase.rpc('series_gaps', { p_owner_handle: s.owner_handle, p_series_slug: s.slug });
+        const parts = (data || []).filter((p: any) => p.pub_date).sort((a: any, b: any) => monthIdx(a.pub_date) - monthIdx(b.pub_date));
+        return parts.length >= 2 ? { series: s, parts } : null;
+      } catch { return null; }
+    }));
+    gaps = loaded.filter(Boolean) as any[];
+    if (!gaps.length) return;
+    $('gppick').innerHTML = gaps.map((g, i) => `<button type="button" data-g="${i}"${i === 0 ? ' class="gpon"' : ''}>${esc(g.series.title)}</button>`).join('');
+    $('gppick').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button') as HTMLElement; if (!b) return; gsi = +b.dataset.g!; ggi = 0; $('gppick').querySelectorAll('button').forEach((x) => x.classList.toggle('gpon', x === b)); drawGap(); paintGap(); });
+    drawGap(); paintGap(); buildAggregate();
+    $('gp').hidden = false;
+  }
+
+  function drawGap() {
+    const parts = gaps[gsi].parts;
+    const lo = monthIdx(parts[0].pub_date), hi = monthIdx(parts[parts.length - 1].pub_date), span = Math.max(1, hi - lo);
+    const W = 1000, L = 26, R = 34, Y = 104;
+    const x = (mi: number) => L + (mi - lo) / span * (W - L - R);
+    const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' 168', role: 'group', 'aria-label': 'Publication rhythm' });
+    svg.appendChild(svgEl('line', { class: 'axis', x1: 0, y1: Y + 40, x2: W, y2: Y + 40 }));
+    for (let i = 0; i < parts.length - 1; i++) {
+      const x1 = x(monthIdx(parts[i].pub_date)), x2 = x(monthIdx(parts[i + 1].pub_date)), mid = (x1 + x2) / 2;
+      const gm = monthIdx(parts[i + 1].pub_date) - monthIdx(parts[i].pub_date);
+      svg.appendChild(svgEl('line', { class: 'seg', x1, y1: Y, x2, y2: Y, 'data-seg': i }));
+      svg.appendChild(svgEl('line', { class: 'hit', x1, y1: Y, x2, y2: Y, 'data-g': i }));
+      if (parts[i].return_pct != null) { const r = svgEl('text', { class: 'rate', 'text-anchor': 'middle', x: mid.toFixed(1), y: Y - 16, 'data-rate': i }); r.textContent = parts[i].return_pct + '%'; svg.appendChild(r); }
+      const m = svgEl('text', { class: 'mo', 'text-anchor': 'middle', x: mid.toFixed(1), y: Y + 22 }); m.textContent = monthsWord(gm); svg.appendChild(m);
+    }
+    parts.forEach((p: any, i: number) => {
+      svg.appendChild(svgEl('circle', { class: 'nd', cx: x(monthIdx(p.pub_date)).toFixed(1), cy: Y, r: 5.4 }));
+      const lb = svgEl('text', { class: 'pt', 'text-anchor': i === 0 ? 'start' : i === parts.length - 1 ? 'end' : 'middle', x: x(monthIdx(p.pub_date)).toFixed(1), y: Y + 58 }); lb.textContent = monthName(monthIdx(p.pub_date)); svg.appendChild(lb);
+    });
+    $('gpline').innerHTML = ''; $('gpline').appendChild(svg);
+    svg.addEventListener('click', (e) => { const t = (e.target as HTMLElement).closest('[data-g]') as HTMLElement; if (!t) return; ggi = +t.dataset.g!; paintGap(); });
+  }
+
+  function paintGap() {
+    const g = gaps[gsi], parts = g.parts;
+    if (ggi > parts.length - 2) ggi = 0;
+    $('gpline').querySelectorAll('[data-seg]').forEach((n: any) => n.classList.toggle('gphot', +n.dataset.seg === ggi));
+    $('gpline').querySelectorAll('[data-rate]').forEach((n: any) => n.classList.toggle('gphot', +n.dataset.rate === ggi));
+    const from = parts[ggi], to = parts[ggi + 1];
+    const wait = monthIdx(to.pub_date) - monthIdx(from.pub_date);
+    $('gpWait').textContent = wait <= 1 ? monthsWord(wait) : wait + ' mo';
+    $('gpWaitSub').textContent = 'Between part ' + (ggi + 1) + ' and part ' + (ggi + 2) + ' · ' + monthName(monthIdx(from.pub_date)) + ' to ' + monthName(monthIdx(to.pub_date));
+    const rp = from.return_pct;
+    $('gpBack').textContent = rp == null ? '—' : rp + '%';
+    $('gpBackSub').textContent = rp == null ? 'Not enough reads yet to tell honestly' : rp >= 85 ? 'Almost nobody dropped out here' : rp >= 70 ? 'A normal wait, and a normal loss' : rp >= 50 ? 'The wait cost readers' : 'Half the run walked away';
+    const st = g.series.status;
+    const longest = Math.max(...parts.slice(0, -1).map((p: any, i: number) => monthIdx(parts[i + 1].pub_date) - monthIdx(p.pub_date)));
+    $('gpSafe').textContent = st === 'complete' ? 'Yes — it is finished' : st === 'paused' ? 'Not yet' : 'If you can wait';
+    $('gpSafeSub').textContent = st === 'complete' ? ('Every part is out. Longest wait you’d have sat through: ' + monthsWord(longest) + '.') : st === 'paused' ? 'Paused mid-run — two parts may be worth reading on their own; the rest may not come.' : ('Still running. Its longest wait so far is ' + monthsWord(longest) + '.');
+  }
+
+  function buildAggregate() {
+    const b: Record<number, number[]> = {};
+    gaps.forEach((g) => g.parts.slice(0, -1).forEach((p: any, i: number) => { if (p.return_pct != null) { const w = monthIdx(g.parts[i + 1].pub_date) - monthIdx(p.pub_date); (b[w] = b[w] || []).push(p.return_pct); } }));
+    const keys = Object.keys(b).map(Number).filter((k) => k > 0).sort((a, c) => a - c);
+    if (!keys.length) return;
+    $('gpBars').innerHTML = keys.map((k) => { const v = b[k].reduce((a, c) => a + c, 0) / b[k].length; return '<i style="height:' + (v * 0.6).toFixed(0) + 'px"><b>' + Math.round(v) + '%</b><s>' + k + ' mo</s></i>'; }).join('');
+    $('gpFindText').textContent = keys.length > 1 ? 'Across the series here, the shorter the wait the more readers return — the argument for finishing a series before starting another.' : 'As more series accumulate gaps, the shape of waiting against return builds up here.';
+    $('gpfind').hidden = false;
+  }
+
   async function boot() {
     try { const { data } = await supabase.rpc('list_public_series', { p_limit: 100 }); series = data || []; }
     catch { $('directory').innerHTML = '<p class="feedlede" style="padding:26px 0">Couldn’t load series.</p>'; return; }
@@ -306,6 +448,7 @@ import SubscribeForm from '../components/SubscribeForm.astro';
     await renderFeatured();
     render();
     ['sq', 'sfield', 'sstatus'].forEach((id) => { const el = $(id); el.addEventListener('input', applyFilters); el.addEventListener('change', applyFilters); });
+    initGap();
   }
   boot();
 </script>
