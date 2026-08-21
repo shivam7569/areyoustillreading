@@ -19,6 +19,9 @@
     "loadtest:analytics": "node scripts/loadtest/seed-analytics.mjs",
     "loadtest:probe": "node scripts/loadtest/probe.mjs",
     "loadtest:teardown": "node scripts/loadtest/teardown.mjs",
+    "fixtures:reset": "node scripts/fixtures/reset.mjs",
+    "fixtures:seed": "node scripts/fixtures/seed.mjs",
+    "fixtures:reseed": "node scripts/fixtures/reset.mjs && node scripts/fixtures/seed.mjs",
     "deploy": "npm run build && wrangler pages deploy dist --project-name=areyoustillreading",
     "deploy:preview": "npm run build && wrangler pages deploy dist --project-name=areyoustillreading --branch=preview"
   },
