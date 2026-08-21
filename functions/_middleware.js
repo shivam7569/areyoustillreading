@@ -49,6 +49,7 @@
  * ============================================================================
  */
 import { flattenCopy, readFreshCopy, emphHtml, boldHtml } from '../lib/site-copy.js';
+import { renderNonce, securityHeaders } from '../lib/permalink-headers.js';
 import { assemblePermalinkHtml } from '../lib/assemble-permalink.js';
 import { assembleAuthorHtml } from '../lib/assemble-author.js';
 import { assembleSeriesHtml } from '../lib/assemble-series.js';
@@ -235,13 +236,18 @@ async function renderPermalinkPost(context, url, handle, slug) {
 
     const canonicalPath = `/@${row.primary_handle}/${row.slug}`;
     const canonicalUrl = new URL(canonicalPath, url).toString();
-    const html = assemblePermalinkHtml(shell, row, canonicalPath, canonicalUrl);
+    // Per-request nonce: the shell's first-party scripts are stamped with it; the injected author
+    // body_html is not, so the strict nonce CSP (set below) blocks any script the inert-guard
+    // ever missed while the trusted chrome + CDN scripts keep running.
+    const nonce = renderNonce();
+    const html = assemblePermalinkHtml(shell, row, canonicalPath, canonicalUrl, nonce);
     return new Response(request.method === 'HEAD' ? null : html, {
       status: 200,
       headers: {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'public, max-age=0, must-revalidate',
         'x-served-by': 'permalink',
+        ...securityHeaders(nonce),
       },
     });
   } catch {
@@ -285,7 +291,7 @@ async function renderAuthorPage(context, url, handle) {
     });
     return new Response(request.method === 'HEAD' ? null : html, {
       status: 200,
-      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate', 'x-served-by': 'author' },
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate', 'x-served-by': 'author', ...securityHeaders() },
     });
   } catch {
     return next();
@@ -315,7 +321,7 @@ async function renderSeriesPage(context, url, ownerHandle, seriesSlug) {
     const html = assembleSeriesHtml(shell, row, Array.isArray(prows) ? prows : [], canonicalPath, canonicalUrl);
     return new Response(request.method === 'HEAD' ? null : html, {
       status: 200,
-      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate', 'x-served-by': 'series' },
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate', 'x-served-by': 'series', ...securityHeaders() },
     });
   } catch {
     return next();
@@ -353,7 +359,7 @@ async function renderFieldPage(context, url, ownerHandle, fieldSlug) {
     const html = assembleFieldHtml(shell, field, list, partsBySeries, canonicalPath, canonicalUrl);
     return new Response(request.method === 'HEAD' ? null : html, {
       status: 200,
-      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate', 'x-served-by': 'field' },
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate', 'x-served-by': 'field', ...securityHeaders() },
     });
   } catch {
     return next();
