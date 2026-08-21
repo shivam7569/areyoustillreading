@@ -153,13 +153,15 @@
   font-size: 13.5px; color: var(--ink-soft);
   text-decoration: none; transition: background 0.16s ease, color 0.16s ease;
 }
-.admin-nav a:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); text-decoration: none; }
-.admin-nav a.is-active { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); font-weight: 600; }
+.admin-nav a:hover { background: var(--card); color: var(--ink); text-decoration: none; }
+/* Active item is a solid accent fill (studio-editorial.css .stnav a.ston), not a tint. */
+.admin-nav a.is-active { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.admin-nav a.is-active:hover { background: var(--accent); color: var(--on-accent); }
 .admin-nav a svg { width: 15px; height: 15px; flex: none; opacity: 0.85; }
 .admin-nav a.is-active svg { opacity: 1; }
 .admin-nav a .ct { margin-left: auto; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 .admin-nav a .ct.live { color: var(--accent); font-weight: 600; }
-.admin-nav a.is-active .ct { color: var(--accent); }
+.admin-nav a.is-active .ct, .admin-nav a.is-active .ct.live { color: var(--on-accent); opacity: 0.85; }
 
 /* Footer: quiet routes (Settings, View the site) + the account row. */
 .admin-side-foot { flex: none; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--rule); display: flex; flex-direction: column; gap: 1px; }
@@ -383,7 +385,9 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 13px; }
 .tile { border: 1px solid var(--rule); border-radius: 4px; background: var(--card); padding: 16px 17px; }
 .tile .l { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
-.tile .v { font-family: var(--serif-display); font-size: 31px; font-weight: 600; margin: 9px 0 0; letter-spacing: -0.015em; line-height: 1; font-variant-numeric: tabular-nums; }
+.tile .v { font-family: var(--serif-display); font-size: 31px; font-weight: 600; margin: 9px 0 0; letter-spacing: -0.015em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--accent); }
+/* A text value (not a number) stays ink, per the design's .stv.stq. */
+.tile .v.q { color: var(--ink); font-size: 18px; letter-spacing: -0.01em; line-height: 1.26; }
 .tile .d { font-size: 12px; color: var(--ink-faint); margin-top: 8px; }
 .tile .d b { color: var(--accent); font-weight: 600; }
 
