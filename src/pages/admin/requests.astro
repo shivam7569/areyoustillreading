@@ -1,0 +1,362 @@
+---
+/**
+ * /admin/requests — the Studio "Requests" surface (Collaboration design, surfaces 3 + 4).
+ * ===========================================================================
+ * A real two-sided workflow, not a static mockup:
+ *   • THE INBOX — everything waiting on you (accept / decline) and everything you asked for
+ *     (withdraw), from public.my_requests(). Co-writing invites, post→series attaches, and
+ *     series→field attaches, each answered with the matching respond_/remove_ RPC.
+ *   • THE COMPOSER — "Ask to attach": pick one of your posts (or series), pick a target series
+ *     (or field) owned by anyone, write a sentence, send. public.add_series_post /
+ *     add_field_series are symmetric, so the target's owner receives the ask and decides.
+ *
+ * All RPCs are auth.uid()-scoped and client-callable, so this page talks to Supabase directly
+ * (like the reader pages) — no /api bridge. Nothing about shared work is decided by one person:
+ * the counterparty always accepts. Available to every author (not owner-only).
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Requests — Studio" heading="Requests" active="requests">
+  <div class="reqpage">
+    <p class="reqlede">Everything waiting on you, and everything waiting on someone else. Shared work is never folded into one byline — a co-writer, a series owner, or a field owner always says yes first.</p>
+
+    <!-- ——— The inbox ——— -->
+    <section class="reqsec">
+      <div class="cotabs" id="cotabs">
+        <button type="button" class="coon" data-t="in">Needs you<span class="con2" id="cntIn"></span></button>
+        <button type="button" data-t="out">You asked<span class="con2" id="cntOut"></span></button>
+      </div>
+      <ul class="coinbox" id="coin"><li class="coloading">Loading…</li></ul>
+      <p class="coempty" id="coempty" hidden></p>
+    </section>
+
+    <!-- ——— The composer ——— -->
+    <section class="reqsec coboard">
+      <div class="cotag"><span class="con">Compose</span><span class="cok">Ask to attach</span></div>
+      <h2>Ask another author to take your work into their series or field.</h2>
+      <p class="colede">A series belongs to whoever runs it, so a part cannot be added without asking — same for a series joining a field. Pick the target, say why in a sentence, send. The owner sees your work in place before deciding.</p>
+      <div class="coframe">
+        <div class="copad">
+          <span class="colbl">What you are attaching</span>
+          <div class="coseg" id="cmode" style="margin-bottom:18px">
+            <button type="button" class="coon" data-m="ps">A post → a series</button>
+            <button type="button" data-m="sf">A series → a field</button>
+          </div>
+
+          <span class="colbl" id="lblYour" style="display:block;margin-bottom:9px">Your post</span>
+          <ul class="copick" id="pickYour" style="margin-bottom:18px"><li class="copk-empty">Loading…</li></ul>
+
+          <span class="colbl" id="lblInto" style="display:block;margin-bottom:9px">Into</span>
+          <ul class="copick" id="pickInto"><li class="copk-empty">Loading…</li></ul>
+
+          <span class="colbl" style="display:block;margin:18px 0 9px">A short note</span>
+          <textarea class="conote" id="cnote" aria-label="Note to the owner" placeholder="A sentence or two on why it belongs there — the owner reads this before deciding."></textarea>
+          <div class="corow" style="margin-top:16px">
+            <button class="btn btn-primary btn-sm" id="csend" type="button" disabled>Send request</button>
+            <span class="cohint" id="csendhint" style="margin:0">Pick your work and a target to send.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</AdminLayout>
+
+<style is:global>
+  /* Ported from the Claude Design collaboration template (co* classes are design-namespaced).
+     GLOBAL because the inbox + pick-lists are injected at runtime; ships only on /admin/requests. */
+  .reqpage { max-width: 940px; margin: 0 auto; padding: clamp(14px,2.4vw,26px) 0 96px; }
+  .reqlede { margin: 0 0 clamp(22px,3vw,32px); font-family: var(--serif-body); font-size: clamp(15px,1.8vw,16.5px); line-height: 1.6; color: var(--admin-ink-soft, var(--ink-soft)); max-width: 68ch; }
+  .reqsec + .reqsec { margin-top: clamp(34px,4.6vw,58px); }
+  .reqchip { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex: none; border-radius: 999px; font-family: var(--serif-display); font-weight: 600; font-size: 11.5px; letter-spacing: .04em; color: var(--on-accent); background: var(--accent); }
+  .reqchip.sm { width: 26px; height: 26px; font-size: 10.5px; }
+
+  /* section label + heading */
+  .cotag { display: flex; align-items: baseline; gap: 13px; flex-wrap: wrap; margin-bottom: 12px; }
+  .cotag .con { font-family: var(--serif-display); font-weight: 600; font-size: 14px; color: var(--accent); letter-spacing: .02em; }
+  .cotag .cok { font-family: var(--sans); font-size: 10.5px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-faint); }
+  .coboard h2 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(21px,2.6vw,28px); line-height: 1.1; letter-spacing: -.02em; margin: 0; }
+  .coboard .colede { margin: 11px 0 clamp(18px,2.4vw,24px); font-size: clamp(14.5px,1.8vw,16px); line-height: 1.56; color: var(--ink-soft); max-width: 64ch; }
+
+  /* inbox tabs */
+  .cotabs { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 16px; }
+  .cotabs button { font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); background: transparent; border: 1px solid var(--rule); border-radius: 999px; padding: 7px 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: border-color .16s, color .16s, background .16s; }
+  .cotabs button:hover { border-color: var(--accent); color: var(--accent); }
+  .cotabs button.coon { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .cotabs button .con2 { font-variant-numeric: tabular-nums; font-size: 11px; opacity: .8; }
+  .cotabs button .con2:empty { display: none; }
+
+  /* inbox list */
+  .coinbox { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+  .coinbox li { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; gap: clamp(12px,1.8vw,20px); align-items: start; padding: 16px 2px; border-bottom: 1px solid var(--rule-soft); }
+  .coinbox li.coloading, .coinbox li.corowfull { display: block; }
+  @media (max-width: 720px) { .coinbox li { grid-template-columns: 30px minmax(0,1fr); } .coinbox .coside { grid-column: 2; justify-content: flex-start; } }
+  .coinbox .coloading { color: var(--ink-faint); font-family: var(--sans); font-size: 13px; padding: 20px 2px; }
+  .coinbox .cowhat { min-width: 0; }
+  .coinbox .cokind { font-family: var(--sans); font-size: 9.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+  .coinbox .cokind.coq { color: var(--ink-faint); }
+  .coinbox .cowhat b { display: block; font-family: var(--serif-display); font-weight: 600; font-size: 17px; line-height: 1.28; letter-spacing: -.012em; margin-top: 6px; color: var(--ink); }
+  .coinbox .cowhat b em { font-style: italic; color: var(--accent); }
+  .coinbox .cowhat p { margin: 7px 0 0; padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); font-family: var(--serif-body); font-size: 14.5px; line-height: 1.5; color: var(--ink-soft); max-width: 60ch; }
+  .coinbox .cometa { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 9px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); }
+  .coinbox .coside { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
+  .coinbox .costat { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; }
+  .coinbox .costat.cowait { color: var(--ink-faint); }
+  .coempty { padding: 26px 2px; font-family: var(--sans); font-size: 13.5px; line-height: 1.6; color: var(--ink-faint); }
+
+  /* the compose frame */
+  .coframe { border: 1px solid var(--rule); border-radius: 6px; background: var(--paper-2); overflow: hidden; }
+  .copad { padding: clamp(18px,2.6vw,28px); }
+  .colbl { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); }
+  .coseg { display: inline-flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--card); }
+  .coseg button { background: none; border: 0; font-family: var(--sans); font-size: 12.5px; color: var(--ink-soft); padding: 9px 15px; cursor: pointer; }
+  .coseg button + button { border-left: 1px solid var(--rule); }
+  .coseg button.coon { background: var(--accent); color: var(--on-accent); }
+  .coseg button:not(.coon):hover { color: var(--accent); }
+  .copick { list-style: none; margin: 0; padding: 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--card); overflow: hidden; max-height: 232px; overflow-y: auto; }
+  .copick li + li { border-top: 1px solid var(--rule-soft); }
+  .copick .copk-empty { padding: 14px; font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); }
+  .copick button { width: 100%; display: flex; align-items: center; gap: 11px; padding: 12px 14px; background: none; border: 0; text-align: left; cursor: pointer; font: inherit; }
+  .copick button:hover { background: var(--paper-2); }
+  .copick .cordo { width: 14px; height: 14px; border-radius: 999px; border: 1px solid var(--rule); flex: none; position: relative; }
+  .copick button.coon .cordo { border-color: var(--accent); }
+  .copick button.coon .cordo::after { content: ""; position: absolute; inset: 3px; border-radius: 999px; background: var(--accent); }
+  .copick .cot { min-width: 0; flex: 1; }
+  .copick .cot b { display: block; font-family: var(--serif-display); font-weight: 600; font-size: 15.5px; line-height: 1.22; color: var(--ink); }
+  .copick .cot span { display: block; margin-top: 4px; font-family: var(--sans); font-size: 11px; color: var(--ink-faint); }
+  .copick .comark { font-family: var(--sans); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); flex: none; }
+  .conote { width: 100%; box-sizing: border-box; min-height: 92px; resize: vertical; font-family: var(--serif-body); font-size: 15px; line-height: 1.6; color: var(--ink); background: var(--card); border: 1px solid var(--rule); border-radius: 3px; padding: 12px 14px; }
+  .conote:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .corow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .cohint { font-family: var(--sans); font-size: 11.5px; line-height: 1.5; color: var(--ink-faint); }
+  .cominor { background: transparent; border: 1px solid var(--rule); border-radius: 3px; font-family: var(--sans); font-size: 12.5px; color: var(--ink-soft); padding: 8px 14px; cursor: pointer; }
+  .cominor:hover { border-color: var(--accent); color: var(--accent); }
+  .cominor[disabled], .btn[disabled] { opacity: .5; pointer-events: none; }
+  .reqflash { margin-top: 14px; font-family: var(--sans); font-size: 12.5px; color: var(--accent); }
+  .reqflash.bad { color: #b4453a; }
+</style>
+
+<script>
+  import { supabase } from '../../lib/supabase';
+  import { onAdminReady } from '../../lib/admin-gate';
+
+  const $ = (id: string) => document.getElementById(id)!;
+  const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+  const initials = (n: string) => { const w = String(n || '').trim().split(/\s+/).filter(Boolean); return ((w.length >= 2 ? w[0][0] + w[1][0] : (w[0] || '?').slice(0, 2)) || '?').toUpperCase(); };
+  const relTime = (iso: string) => {
+    const d = Date.parse(iso); if (isNaN(d)) return '';
+    const s = Math.max(0, (Date.now() - d) / 1000);
+    if (s < 90) return 'just now';
+    const m = s / 60; if (m < 60) return `${Math.round(m)} min ago`;
+    const h = m / 60; if (h < 24) return `${Math.round(h)} hr ago`;
+    const dy = Math.round(h / 24); return dy === 1 ? 'yesterday' : `${dy} days ago`;
+  };
+
+  let rows: any[] = [];
+  let view: 'in' | 'out' = 'in';
+
+  const KIND: Record<string, string> = { coauthor: 'Co-writing invitation', 'series-post': 'Attach a post', 'field-series': 'Attach a series' };
+
+  function headline(r: any): string {
+    const subj = `“${esc(r.subject_title)}”`, tgt = `<em>${esc(r.target_title)}</em>`, who = esc(r.counter_name);
+    if (view === 'in') {
+      if (r.kind === 'coauthor') return `${who} wants to co-write ${subj}`;
+      if (r.kind === 'series-post') return `${who} would like ${subj} in ${tgt}`;
+      return `${who} would like <em>${esc(r.subject_title)}</em> in your field ${tgt}`;
+    }
+    if (r.kind === 'coauthor') return `${subj} — a co-writing invite to ${who}`;
+    if (r.kind === 'series-post') return `${subj} → ${tgt}`;
+    return `<em>${esc(r.subject_title)}</em> → the field ${tgt}`;
+  }
+
+  function metaBits(r: any): string {
+    const bits: string[] = [];
+    if (r.created_at) bits.push(esc(relTime(r.created_at)));
+    if ((r.kind === 'series-post' || r.kind === 'field-series') && r.seq > 0) bits.push(`Proposed as part ${r.seq}`);
+    return bits.map((b) => `<span>${b}</span>`).join('<span aria-hidden="true">·</span>');
+  }
+
+  function rowHtml(r: any, i: number): string {
+    const chip = `<span class="reqchip sm">${esc(initials(r.counter_name))}</span>`;
+    const note = r.note ? `<p>“${esc(r.note)}”</p>` : '';
+    let side: string;
+    if (view === 'in') {
+      side = `<button class="btn btn-primary btn-sm" data-i="${i}" data-act="accept">Accept</button>`
+           + `<button class="cominor" data-i="${i}" data-act="decline">Decline</button>`;
+    } else {
+      side = `<span class="costat cowait">Waiting on ${esc(r.counter_name)}</span>`
+           + `<button class="cominor" data-i="${i}" data-act="withdraw">Withdraw</button>`;
+    }
+    return `<li>${chip}<div class="cowhat"><span class="cokind${view === 'out' ? ' coq' : ''}">${esc(KIND[r.kind] || 'Request')}</span>`
+      + `<b>${headline(r)}</b>${note}<span class="cometa">${metaBits(r)}</span></div>`
+      + `<div class="coside">${side}</div></li>`;
+  }
+
+  function paint() {
+    const inN = rows.filter((r) => r.bucket === 'in').length;
+    const outN = rows.filter((r) => r.bucket === 'out').length;
+    $('cntIn').textContent = inN ? String(inN) : '';
+    $('cntOut').textContent = outN ? String(outN) : '';
+    const list = rows.filter((r) => r.bucket === view);
+    const el = $('coin');
+    if (!list.length) {
+      el.innerHTML = '';
+      const empty = $('coempty') as HTMLElement;
+      empty.textContent = view === 'in'
+        ? 'Nothing needs you right now. When someone asks to join your work, it lands here.'
+        : 'You have not asked to join anyone else’s work yet. Use the composer below.';
+      empty.hidden = false;
+    } else {
+      ($('coempty') as HTMLElement).hidden = true;
+      el.innerHTML = list.map((r, i) => rowHtml(r, i)).join('');
+    }
+  }
+
+  async function refresh() {
+    const { data } = await supabase.rpc('my_requests');
+    rows = Array.isArray(data) ? data : [];
+    paint();
+  }
+
+  // Inbox actions (event-delegated)
+  $('coin').addEventListener('click', async (e) => {
+    const btn = (e.target as HTMLElement).closest('button[data-act]') as HTMLButtonElement | null;
+    if (!btn) return;
+    const list = rows.filter((r) => r.bucket === view);
+    const r = list[+(btn.dataset.i || -1)]; if (!r) return;
+    const act = btn.dataset.act!;
+    const accept = act === 'accept';
+    btn.disabled = true;
+    let call;
+    if (r.kind === 'coauthor') {
+      call = act === 'withdraw'
+        ? supabase.rpc('remove_coauthor', { p_post: r.post_id, p_user: r.counter_id })
+        : supabase.rpc('respond_coauthor', { p_post: r.post_id, p_accept: accept });
+    } else if (r.kind === 'series-post') {
+      call = act === 'withdraw'
+        ? supabase.rpc('remove_series_post', { p_series: r.series_id, p_post: r.post_id })
+        : supabase.rpc('respond_series_post', { p_series: r.series_id, p_post: r.post_id, p_accept: accept });
+    } else {
+      call = act === 'withdraw'
+        ? supabase.rpc('remove_field_series', { p_field: r.field_id, p_series: r.series_id })
+        : supabase.rpc('respond_field_series', { p_field: r.field_id, p_series: r.series_id, p_accept: accept });
+    }
+    const { error } = await call;
+    if (error) { btn.disabled = false; btn.closest('li')!.insertAdjacentHTML('beforeend', `<span class="reqflash bad" style="grid-column:2">${esc(error.message)}</span>`); return; }
+    await refresh();
+    bumpBadge();
+  });
+
+  // Sidebar "needs you" badge, kept in step after an action.
+  function bumpBadge() {
+    const n = rows.filter((r) => r.bucket === 'in').length;
+    const el = document.querySelector('.admin-nav .ct[data-ct="requests"]') as HTMLElement | null;
+    if (el) { el.textContent = String(n); el.hidden = n === 0; }
+  }
+
+  // Tabs
+  $('cotabs').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('button') as HTMLButtonElement | null; if (!b) return;
+    $('cotabs').querySelectorAll('button').forEach((x) => x.classList.toggle('coon', x === b));
+    view = (b.dataset.t as 'in' | 'out') || 'in';
+    paint();
+  });
+
+  // ——— the composer ———
+  const comp: { mode: 'ps' | 'sf'; your: string | null; into: string | null; intoMine: boolean; intoWho: string } = { mode: 'ps', your: null, into: null, intoMine: false, intoWho: '' };
+
+  function pickItem(kind: 'your' | 'into', id: string, label: string, sub: string, mark: string): string {
+    return `<li><button type="button" data-pick="${kind}" data-id="${esc(id)}" data-mine="" data-who="">`
+      + `<span class="cordo"></span><span class="cot"><b>${esc(label)}</b><span>${esc(sub)}</span></span>`
+      + (mark ? `<span class="comark">${esc(mark)}</span>` : '') + `</button></li>`;
+  }
+
+  async function loadComposer() {
+    const psMode = comp.mode === 'ps';
+    $('lblYour').textContent = psMode ? 'Your post' : 'Your series';
+    $('lblInto').textContent = psMode ? 'Into a series' : 'Into a field';
+    comp.your = comp.into = null; comp.intoMine = false;
+    updateSend();
+    $('pickYour').innerHTML = '<li class="copk-empty">Loading…</li>';
+    $('pickInto').innerHTML = '<li class="copk-empty">Loading…</li>';
+
+    if (psMode) {
+      const [{ data: mine }, { data: targets }] = await Promise.all([
+        supabase.rpc('my_posts'), supabase.rpc('attach_targets_series'),
+      ]);
+      const posts = (mine || []).filter((p: any) => p.status === 'published');
+      $('pickYour').innerHTML = posts.length
+        ? posts.map((p: any) => pickItem('your', p.id, p.title, `${p.reading_min || 1} min · ${p.status}`, '')).join('')
+        : '<li class="copk-empty">No published posts of yours yet.</li>';
+      renderTargets(targets || [], 'series');
+    } else {
+      const [{ data: mine }, { data: targets }] = await Promise.all([
+        supabase.rpc('my_series'), supabase.rpc('attach_targets_fields'),
+      ]);
+      $('pickYour').innerHTML = (mine || []).length
+        ? (mine || []).map((s: any) => pickItem('your', s.id, s.title, `${s.published} of ${s.total} published`, '')).join('')
+        : '<li class="copk-empty">No series of yours yet.</li>';
+      renderTargets(targets || [], 'field');
+    }
+  }
+
+  function renderTargets(targets: any[], kind: 'series' | 'field') {
+    if (!targets.length) { $('pickInto').innerHTML = `<li class="copk-empty">No ${kind}s to attach to yet.</li>`; return; }
+    $('pickInto').innerHTML = targets.map((t: any) => {
+      const sub = t.is_mine
+        ? (kind === 'series' ? `Yours · ${t.published} of ${t.total} published` : `Yours · ${t.series_count} series`)
+        : (kind === 'series' ? `${t.owner_name} · ${t.published} of ${t.total} published` : `${t.owner_name} · ${t.series_count} series`);
+      return `<li><button type="button" data-pick="into" data-id="${esc(t.id)}" data-mine="${t.is_mine ? '1' : ''}" data-who="${esc(t.owner_name)}">`
+        + `<span class="cordo"></span><span class="cot"><b>${esc(t.title)}</b><span>${esc(sub)}</span></span>`
+        + `<span class="comark">${esc(initials(t.owner_name))}</span></button></li>`;
+    }).join('');
+  }
+
+  function updateSend() {
+    const ready = !!(comp.your && comp.into);
+    ($('csend') as HTMLButtonElement).disabled = !ready;
+    const hint = $('csendhint');
+    if (!ready) { hint.textContent = 'Pick your work and a target to send.'; return; }
+    hint.textContent = comp.intoMine
+      ? 'This target is yours — it attaches immediately, no approval needed.'
+      : `${comp.intoWho} can accept, decline, or reposition.`;
+  }
+
+  function bindPick(container: string) {
+    $(container).addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('button[data-pick]') as HTMLButtonElement | null; if (!b) return;
+      const kind = b.dataset.pick as 'your' | 'into';
+      $(container).querySelectorAll('button').forEach((x) => x.classList.toggle('coon', x === b));
+      if (kind === 'your') comp.your = b.dataset.id || null;
+      else { comp.into = b.dataset.id || null; comp.intoMine = b.dataset.mine === '1'; comp.intoWho = b.dataset.who || 'The owner'; }
+      updateSend();
+    });
+  }
+  bindPick('pickYour'); bindPick('pickInto');
+
+  $('cmode').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('button') as HTMLButtonElement | null; if (!b) return;
+    $('cmode').querySelectorAll('button').forEach((x) => x.classList.toggle('coon', x === b));
+    comp.mode = (b.dataset.m as 'ps' | 'sf') || 'ps';
+    ($('cnote') as HTMLTextAreaElement).value = '';
+    loadComposer();
+  });
+
+  $('csend').addEventListener('click', async () => {
+    if (!comp.your || !comp.into) return;
+    const note = ($('cnote') as HTMLTextAreaElement).value.trim();
+    const btn = $('csend') as HTMLButtonElement; btn.disabled = true;
+    const call = comp.mode === 'ps'
+      ? supabase.rpc('add_series_post', { p_series: comp.into, p_post: comp.your, p_position: 0, p_note: note })
+      : supabase.rpc('add_field_series', { p_field: comp.into, p_series: comp.your, p_position: 0, p_note: note });
+    const { error } = await call;
+    const hint = $('csendhint');
+    if (error) { btn.disabled = false; hint.innerHTML = `<span class="reqflash bad">${esc(error.message)}</span>`; return; }
+    hint.innerHTML = `<span class="reqflash">${comp.intoMine ? 'Attached.' : 'Sent — it’s now in “You asked”.'}</span>`;
+    ($('cnote') as HTMLTextAreaElement).value = '';
+    await loadComposer();
+    await refresh();
+  });
+
+  onAdminReady(() => { refresh(); loadComposer(); });
+</script>

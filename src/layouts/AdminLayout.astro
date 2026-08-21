@@ -37,7 +37,7 @@ import BaseHead from '../components/BaseHead.astro';
 interface Props {
   title: string;
   heading?: string;
-  active?: 'home' | 'posts' | 'drafts' | 'write' | 'series' | 'resume' | 'projects' | 'content' | 'audience' | 'engagement' | 'analytics' | 'revenue' | 'settings';
+  active?: 'home' | 'posts' | 'drafts' | 'write' | 'series' | 'requests' | 'resume' | 'projects' | 'content' | 'audience' | 'engagement' | 'analytics' | 'revenue' | 'settings';
 }
 const { title, heading, active } = Astro.props;
 
@@ -66,6 +66,7 @@ const icon = {
   fields: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></svg>',
   authors: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M17 5.5a3 3 0 0 1 0 5.8M19.5 20a5 5 0 0 0-3.5-4.8"/></svg>',
   profile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>',
+  requests: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h4l1.8 2.6h4.4L16 13h4"/><path d="M5.2 5h13.6l1.2 8v4.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V13Z"/></svg>',
 };
 // Grouped nav, matching the Claude Design studio pane: Home on its own, then
 // WRITING (Posts, Drafts), PAGES (Projects, Resume), READERS (Audience, Engagement),
@@ -84,6 +85,7 @@ const navGroups = [
     { key: 'drafts', href: '/admin/drafts', label: 'Drafts', icon: icon.drafts, count: 'drafts', countAccent: true },
     { key: 'series', href: '/admin/series', label: 'Series', icon: icon.series },
     { key: 'fields', href: '/admin/fields', label: 'Fields', icon: icon.fields },
+    { key: 'requests', href: '/admin/requests', label: 'Requests', icon: icon.requests, count: 'requests', countAccent: true },
   ] },
   { label: 'People', owner: true, items: [
     { key: 'authors', href: '/admin/authors', label: 'Authors', icon: icon.authors, owner: true },
@@ -264,6 +266,14 @@ const navGroups = [
           const el = document.querySelector('.admin-nav .ct[data-ct="projects"]') as HTMLElement | null;
           if (el) { el.textContent = String(n); el.hidden = false; }
         });
+        // Requests badge: the number of collaboration asks WAITING ON ME (client RPC, per-user).
+        // Only shown when > 0 — a zero badge is noise, never a fake count.
+        supabase.rpc('my_requests').then(({ data }: any) => {
+          if (!Array.isArray(data)) return;
+          const n = data.filter((r: any) => r.bucket === 'in').length;
+          const el = document.querySelector('.admin-nav .ct[data-ct="requests"]') as HTMLElement | null;
+          if (el && n > 0) { el.textContent = String(n); el.hidden = false; }
+        }).catch(() => {});
       });
 
       const gateView = document.getElementById('admin-gate-view')!;
