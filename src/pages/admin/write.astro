@@ -265,6 +265,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     </div>
     <div class="wr">
       <div class="wcanvas">
+        {/* Live co-editing presence — shown only when a co-authored post has a live session. */}
+        <div id="coedit-bar" class="coedit-bar" hidden>
+          <span class="coedit-faces" id="coedit-faces"></span>
+          <span class="coedit-live" id="coedit-live"></span>
+          <span class="coedit-sync"><i></i>Live</span>
+        </div>
         <div id="milkdown"></div>
         <pre id="md-out" hidden></pre>
       </div>
@@ -486,6 +492,20 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   #editor-wrap .milkdown .ProseMirror hr { border: 0; height: 1px; background: var(--rule); margin: 2.4em 0; }
   #editor-wrap .milkdown .ProseMirror ul, #editor-wrap .milkdown .ProseMirror ol { padding-left: 1.4em; margin: 0 0 1.35em; }
   #editor-wrap .milkdown .ProseMirror li { margin: 0.4em 0; }
+
+  /* ——— Live co-editing: presence row + remote carets/selections (Collaboration design) ——— */
+  .coedit-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 18px; padding: 9px 14px; border: 1px solid var(--rule); border-radius: 6px; background: var(--card); }
+  .coedit-faces { display: flex; align-items: center; gap: 6px; }
+  .coedit-face { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex: none; border-radius: 999px; font-family: var(--serif-display); font-weight: 600; font-size: 10px; letter-spacing: .04em; color: #fff; box-shadow: 0 0 0 2px var(--card), 0 0 0 3px color-mix(in srgb, var(--face, var(--accent)) 45%, transparent); background: var(--face, var(--accent)); }
+  .coedit-live { font-family: var(--sans); font-size: 12px; color: var(--ink-faint); }
+  .coedit-live b { color: var(--ink-soft); font-weight: 500; }
+  .coedit-sync { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .coedit-sync i { width: 6px; height: 6px; border-radius: 999px; background: #2f6b63; display: block; animation: coeditpulse 2.4s ease-in-out infinite; }
+  @keyframes coeditpulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+  /* y-prosemirror injects these for remote users; colour comes from each user's awareness state. */
+  #editor-wrap .milkdown .ProseMirror-yjs-cursor { position: relative; margin-left: -1px; margin-right: -1px; border-left: 1px solid; border-right: 1px solid; border-color: currentColor; word-break: normal; pointer-events: none; }
+  #editor-wrap .milkdown .ProseMirror-yjs-cursor > div { position: absolute; top: -1.35em; left: -1px; font-family: var(--sans); font-size: 10px; font-weight: 600; line-height: 1; white-space: nowrap; color: #fff; padding: 2px 6px; border-radius: 2px; user-select: none; }
 </style>
 
 <script>
@@ -499,6 +519,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
   import { keymap } from '@codemirror/view';
   import { $prose } from '@milkdown/kit/utils';
+  import { collab, collabServiceCtx } from '@milkdown/plugin-collab';
+  import { startCoedit, colorForHandle } from '../../lib/coedit';
   import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state';
   import { Decoration, DecorationSet } from '@milkdown/kit/prose/view';
   import { renderPlotlyFigure, loadPlotlyJs, makeRotatingGif } from '../../lib/plotly';
@@ -915,6 +937,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // When editing, this carries the existing post's identity/metadata into the
     // publish modal so the slug/date/tags are preserved (not re-derived).
     let editing = null;
+    // The room for live co-editing (a saved post's id) — set only for co-authored posts, so solo
+    // editing never loads the collab plugin. Filled after the post loads (below).
+    let coRoom = null;
     // Set if an edit-load was requested but failed — we must NOT silently fall back to
     // a blank new post (which would clobber the local draft and, on publish, create a
     // new file instead of updating). Autosave stays off and Publish is disabled.
@@ -949,6 +974,11 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
           gateable: row.gateable === true,
         };
         restoredMsg = 'Editing “' + title + '”';
+        // Co-editing is on for a post with ≥2 accepted authors (someone to actually be here with).
+        try {
+          const { data: cas } = await supabase.rpc('post_coauthors', { p_post: editing.id });
+          if (Array.isArray(cas) && cas.filter((a) => a.accepted).length >= 2) coRoom = editing.id;
+        } catch { /* co-editing stays off */ }
       } catch (e) {
         console.error('[editor] load-for-edit failed', e);
         editLoadFailed = true;
@@ -1048,8 +1078,43 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     crepe.editor.use(bracketPairing);
     crepe.editor.use(fenceCodeBlock);
     crepe.editor.use(plotlyCells);
+    if (coRoom) crepe.editor.use(collab);   // live co-editing — ONLY for co-authored posts
     await crepe.create();
     if (restoredMsg) statusEl.textContent = restoredMsg;
+
+    // ——— Live co-editing (Collaboration design, surface 2) ———
+    // y-prosemirror binds the shared Y.Doc to this editor; the SupabaseCollabProvider carries it
+    // over Supabase Realtime. Presence + coloured remote carets come from awareness. Solo posts
+    // never reach here (no collab plugin loaded), so single-author editing is byte-for-byte unchanged.
+    let coedit = null;
+    if (coRoom) {
+      try {
+        const { data: prof } = await supabase.rpc('my_profile');
+        const me = Array.isArray(prof) ? prof[0] : prof;
+        const myName = (me && (me.pen_name || me.handle)) || 'You';
+        const myHandle = (me && me.handle) || '';
+        const bar = document.getElementById('coedit-bar');
+        const faces = document.getElementById('coedit-faces');
+        const live = document.getElementById('coedit-live');
+        const renderPresence = (peers) => {
+          if (!bar || !faces || !live) return;
+          bar.hidden = false;
+          faces.innerHTML = peers.map((p) => `<span class="coedit-face" style="--face:${p.color}" title="${(p.name || '').replace(/"/g, '&quot;')}">${(p.name || '?').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()}</span>`).join('');
+          const others = peers.filter((p) => p.handle !== myHandle);
+          live.innerHTML = others.length
+            ? `<b>${others.length === 1 ? others[0].name : others.length + ' others'}</b> ${others.length === 1 ? 'is' : 'are'} here with you`
+            : `<b>Just you</b> — anyone you invited will appear here`;
+        };
+        coedit = startCoedit({
+          supabase, room: coRoom, template: startDoc,
+          user: { name: myName, color: colorForHandle(myHandle), handle: myHandle },
+          getService: () => crepe.editor.action((ctx) => ctx.get(collabServiceCtx)),
+          onPeers: renderPresence,
+        });
+        renderPresence(coedit.provider.peers());
+        window.addEventListener('beforeunload', () => coedit && coedit.stop());
+      } catch (e) { console.error('[coedit] failed to start', e); }
+    }
 
     // ======================================================================
     // WRITE CHROME — session stats, outline, notes, length target, focus mode.
