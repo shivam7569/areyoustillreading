@@ -317,15 +317,14 @@
       "penPlaceholder": "Your pen name",
       "save": "Save",
       "cancel": "Cancel",
-      "navLibrary": "Your library",
+      "navLibrary": "Library",
       "navMarks": "Notes & highlights",
       "navLetter": "The letter",
       "navStudio": "Studio",
       "signOut": "Sign out",
       "eyebrow": "Your account",
-      "heading": "Everything you've unlocked",
-      "libraryHeading": "Your library",
-      "libraryEmpty": "You haven't unlocked any paid essays yet — most of the writing here is free. {browse}",
+      "heading": "Yes — still reading.",
+      "libraryHeading": "Library",
       "libraryEmptyLink": "Browse the archive →",
       "marksHeading": "Notes & highlights",
       "marksEmpty": "You haven't saved any notes or highlights yet — while reading, select a passage to highlight it or keep a private note. {browse}",
@@ -337,7 +336,9 @@
       "newsletter": {
         "heading": "Get the next essay by email",
         "blurb": "New essays on LLM engineering and the systems underneath. No noise — and you can unsubscribe from any email in one click."
-      }
+      },
+      "navReading": "Still reading",
+      "readingHeading": "Still reading"
     },
     "msg": {
       "redirecting": "Redirecting to GitHub…",

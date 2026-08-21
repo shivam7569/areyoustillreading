@@ -28,10 +28,8 @@ import { getCollection } from 'astro:content';
 const c = (site as any).account || {};
 const so = c.signedOut || {};
 const si = c.signedIn || {};
-const accountCopy = { msg: c.msg || {}, lib: c.lib || {}, libraryHeading: si.libraryHeading || 'Your library', marksHeading: si.marksHeading || 'Notes & highlights' };
+const accountCopy = { msg: c.msg || {}, lib: c.lib || {}, readingHeading: si.readingHeading || 'Still reading', libraryHeading: si.libraryHeading || 'Library', marksHeading: si.marksHeading || 'Notes & highlights' };
 const esc = (s = '') => String(s).replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] as string));
-const libEmptyHtml = esc(si.libraryEmpty || "You haven't unlocked any paid essays yet — most of the writing here is free. {browse}")
-  .replace('{browse}', `<a class="link" href="/blog">${esc(si.libraryEmptyLink || 'Browse the archive →')}</a>`);
 const marksEmptyHtml = esc(si.marksEmpty || "You haven't saved any notes or highlights yet — while reading, select a passage to highlight it or keep a private note. {browse}")
   .replace('{browse}', `<a class="link" href="/blog">${esc(si.libraryEmptyLink || 'Browse the archive →')}</a>`);
 
@@ -97,7 +95,8 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
           </div>
         </div>
         <nav>
-          <a href="#library" data-cms="account.signedIn.navLibrary">{si.navLibrary || 'Your library'}</a>
+          <a href="#reading" data-cms="account.signedIn.navReading">{si.navReading || 'Still reading'}</a>
+          <a href="#library" data-cms="account.signedIn.navLibrary">{si.navLibrary || 'Library'}</a>
           <a href="#marks" data-cms="account.signedIn.navMarks">{si.navMarks || 'Notes & highlights'}</a>
           <a href="#letter" data-hide-admin data-cms="account.signedIn.navLetter">{si.navLetter || 'The letter'}</a>
           <a href="#studio" id="ac-studio-nav" hidden data-cms="account.signedIn.navStudio">{si.navStudio || 'Studio'}</a>
@@ -108,13 +107,19 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
       <div>
         <header class="acct-head">
           <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="account.signedIn.eyebrow">{si.eyebrow || 'Your account'}</span></div>
-          <h1 data-cms="account.signedIn.heading">{si.heading || "Everything you've unlocked"}</h1>
+          <h1 data-cms="account.signedIn.heading">{si.heading || 'Yes — still reading.'}</h1>
         </header>
 
+        <section class="panel" id="reading">
+          <h2 id="reading-heading" data-cms="account.signedIn.readingHeading">{si.readingHeading || 'Still reading'}</h2>
+          <div class="reading" id="reading-list"></div>
+          <p class="lib-empty" id="reading-empty" hidden>Nothing open right now. When you start an essay and stop partway, it waits for you here — the site remembers exactly where you left off.</p>
+        </section>
+
         <section class="panel" id="library">
-          <h2 id="lib-heading" data-cms="account.signedIn.libraryHeading">{si.libraryHeading || 'Your library'}</h2>
+          <h2 id="lib-heading" data-cms="account.signedIn.libraryHeading">{si.libraryHeading || 'Library'}</h2>
           <div class="lib" id="lib-list"></div>
-          <p class="lib-empty" id="lib-empty" hidden set:html={libEmptyHtml}></p>
+          <p class="lib-empty" id="lib-empty" hidden>Nothing finished yet. Essays you read to the end land here, so you can find your way back to them.</p>
         </section>
 
         <section class="panel" id="marks">
@@ -161,6 +166,8 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
   const AC: any = (() => { try { return JSON.parse(document.getElementById('account-copy')?.textContent || '{}'); } catch { return {}; } })();
   const ACM = AC.msg || {};
   const ACL = AC.lib || {};
+  const si_readingHeading = AC.readingHeading || 'Still reading';
+  const si_libraryHeading = AC.libraryHeading || 'Library';
 
   const show = (el) => {
     for (const v of [checking, signedout, signedin]) v.hidden = v !== el;
@@ -177,45 +184,88 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
   let seq = 0;
   let lastUid = '';
 
-  // Build the "Your library" rows from the reader's entitlements (RLS reads-own).
-  async function loadLibrary(my) {
+  // The reading corner: "Still reading" (in-progress) + "Library" (finished), both from the
+  // reader's OWN reader_progress via public.my_library. Canonical post URL is /@handle/slug; a
+  // resume link carries the furthest-heading anchor so the reader lands where they stopped.
+  const postUrl = (r, withAnchor) =>
+    `/@${encodeURIComponent(r.handle)}/${encodeURIComponent(r.slug)}` + (withAnchor && r.anchor ? `/#${r.anchor}` : '/');
+
+  async function loadReading(my) {
+    let rows = [];
+    try { const { data } = await supabase.rpc('my_library'); rows = data || []; } catch { rows = []; }
+    if (my !== seq) return; // superseded by a newer render — do not touch the DOM
+
+    const inProgress = rows.filter((r) => !r.read && r.pct >= 1 && r.pct <= 99);
+    const finished = rows.filter((r) => r.read);
+
+    // ——— Still reading ———
+    const rList = document.getElementById('reading-list');
+    const rEmpty = document.getElementById('reading-empty');
+    const rHead = document.getElementById('reading-heading');
+    rList.textContent = '';
+    if (!inProgress.length) {
+      rEmpty.hidden = false;
+      rHead.textContent = si_readingHeading;
+    } else {
+      rEmpty.hidden = true;
+      rHead.textContent = `${si_readingHeading} — ${inProgress.length} open`;
+      for (const r of inProgress) {
+        const a = document.createElement('a');
+        a.className = 're-row';
+        a.href = postUrl(r, true);
+        const main = document.createElement('span');
+        main.className = 're-main';
+        const t = document.createElement('span');
+        t.className = 're-t';
+        t.textContent = r.title; // textContent = XSS-safe
+        main.appendChild(t);
+        const sub = document.createElement('span');
+        sub.className = 're-sub';
+        const left = Math.max(1, Math.round((r.reading_min || 1) * (1 - (r.pct || 0) / 100)));
+        sub.textContent = (r.heading ? `Continue from “${r.heading}” · ` : '') + `${r.pct}% in · about ${left} min left`;
+        main.appendChild(sub);
+        const bar = document.createElement('span');
+        bar.className = 're-bar';
+        const fill = document.createElement('i');
+        fill.style.width = `${Math.min(100, Math.max(2, r.pct))}%`;
+        bar.appendChild(fill);
+        main.appendChild(bar);
+        const go = document.createElement('span');
+        go.className = 'go';
+        go.textContent = 'Resume →';
+        a.append(main, go);
+        rList.appendChild(a);
+      }
+    }
+
+    // ——— Library (finished) ———
     const list = document.getElementById('lib-list');
     const empty = document.getElementById('lib-empty');
     const heading = document.getElementById('lib-heading');
-    let rows = [];
-    try {
-      const { data } = await supabase
-        .from('entitlements')
-        .select('post_id, created_at')
-        .order('created_at', { ascending: false });
-      rows = data || [];
-    } catch { rows = []; }
-    if (my !== seq) return; // superseded by a newer render — do not touch the DOM
     list.textContent = '';
-    if (!rows.length) {
+    if (!finished.length) {
       empty.hidden = false;
-      heading.textContent = AC.libraryHeading || 'Your library';
+      heading.textContent = si_libraryHeading;
       return;
     }
     empty.hidden = true;
-    heading.textContent = `${AC.libraryHeading || 'Your library'} — ${rows.length} ${rows.length === 1 ? (ACL.essaySingular || 'essay') : (ACL.essayPlural || 'essays')}`;
-    for (const r of rows) {
-      const meta = postsMeta[r.post_id];
+    heading.textContent = `${si_libraryHeading} — ${finished.length} ${finished.length === 1 ? 'essay' : 'essays'}`;
+    for (const r of finished) {
       const a = document.createElement('a');
       a.className = 'lib-row';
-      a.href = `/blog/${r.post_id}`;
+      a.href = postUrl(r, false);
       const t = document.createElement('span');
       t.className = 't';
-      t.textContent = meta ? meta.title : r.post_id; // textContent = XSS-safe
+      t.textContent = r.title; // textContent = XSS-safe
       const small = document.createElement('small');
-      small.textContent = `${ACL.unlockedPrefix || 'Unlocked'} ${fmt(r.created_at)}${meta ? ` · ${meta.mins} ${ACL.minLabel || 'min'}` : ''}`;
+      small.textContent = `Finished ${fmt(r.updated_at)}${r.reading_min ? ` · ${r.reading_min} min` : ''}`;
       t.appendChild(small);
       const st = document.createElement('span');
-      st.className = 'st';
-      st.textContent = ACL.owned || 'Owned';
+      st.className = 'st done';
+      st.textContent = 'Finished';
       const go = document.createElement('span');
       go.className = 'go';
-      go.textContent = ACL.readAgain || 'Read again →';
+      go.textContent = 'Read again →';
       a.append(t, st, go);
       list.appendChild(a);
     }
@@ -337,7 +387,7 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
     document.getElementById('ac-initial').textContent = (name || 'r').trim().charAt(0) || 'r';
     show(signedin);
 
-    loadLibrary(my);
+    loadReading(my);
     loadMarks(my);
 
     // Admins get the Studio panel + sidebar link.
@@ -542,6 +592,20 @@ for (const p of await getCollection('blog', ({ data }) => !data.draft)) {
   :global(.mark-row .go) { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); text-align: right; }
   :global(.mark-row:hover .go) { color: var(--accent); }
   @media (max-width: 760px) { :global(.mark-row .go) { text-align: left; } }
+
+  /* Still reading — in-progress rows with a resume progress bar. JS-created, so :global. */
+  .reading { border-top: 1px solid var(--rule); }
+  :global(.re-row) { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 22px; align-items: center; padding: 18px 6px; border-bottom: 1px solid var(--rule); transition: background 0.22s; }
+  :global(.re-row:hover) { background: var(--paper-2); }
+  @media (max-width: 760px) { :global(.re-row) { grid-template-columns: 1fr; gap: 10px; } }
+  :global(.re-row .re-main) { min-width: 0; }
+  :global(.re-row .re-t) { display: block; font-family: var(--serif-display); font-size: 19px; line-height: 1.28; color: var(--ink); }
+  :global(.re-row:hover .re-t) { color: var(--accent); }
+  :global(.re-row .re-sub) { display: block; font-family: var(--sans); font-size: 13px; color: var(--ink-faint); margin-top: 6px; }
+  :global(.re-row .re-bar) { display: block; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 13%, transparent); overflow: hidden; margin-top: 11px; max-width: 340px; }
+  :global(.re-row .re-bar i) { display: block; height: 100%; background: var(--accent); }
+  :global(.re-row .go) { font-family: var(--sans); font-size: 14px; color: var(--accent); text-align: right; white-space: nowrap; }
+  @media (max-width: 760px) { :global(.re-row .go) { text-align: left; } }
 
   .studio-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: clamp(22px, 2.6vw, 28px); }
   .studio-card .sc-t { font-family: var(--serif-display); font-size: 21px; color: var(--ink); }
