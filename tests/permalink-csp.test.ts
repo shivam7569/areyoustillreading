@@ -67,6 +67,19 @@ describe('permalink-headers: nonce stamping', () => {
   it('renderNonce is random per call', () => {
     expect(renderNonce()).not.toBe(renderNonce());
   });
+
+  it('a $-pattern in body_html is inserted verbatim (no String.replace splice)', () => {
+    const dollarQuote = '$' + String.fromCharCode(39); // $'  → would splice the shell TAIL
+    const row: any = {
+      title: 'T', description: 'D', post_id: '1', primary_handle: 'a', primary_name: 'A',
+      slug: 'p', pub_date: '2026-08-21T00:00:00Z', reading_min: 1, tags: [], authors: [{ handle: 'a', name: 'A' }],
+      body_html: `<p>amp:$&amp; tick:$\` quote:${dollarQuote} END</p>`,
+    };
+    const html = assemblePermalinkHtml(shell, row, '/@a/p', 'https://s/@a/p', 'NONCE');
+    // The literal $-sequences survive and the body closes where it should — no shell content spliced in.
+    expect(html).toContain('amp:$&amp; tick:$`');
+    expect(html).toContain('END</p>');
+  });
 });
 
 describe('permalink-headers: policy shape', () => {

