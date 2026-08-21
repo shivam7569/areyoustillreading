@@ -72,6 +72,19 @@ export async function onRequest(context) {
   const { request, env, next } = context;
   const url = new URL(request.url);
 
+  // ── usercontent.* — the RESERVED cookieless sandbox origin (Phase 4, deferred) ─
+  // The subdomain is attached to this Pages project, so without this it would serve a full
+  // DUPLICATE of the site (and the edge-rendered pages below would self-canonicalize to this
+  // host). Phase 4 (the isolated author-HTML origin) is deferred — a blog can't move the essay
+  // body into a cross-origin frame without an SEO hit + breaking the session-based reader
+  // islands. Until/unless that's built, reserve the host by 301-ing every request to the apex.
+  if (url.hostname === 'usercontent.areyoustillreading.dev') {
+    return new Response(null, {
+      status: 301,
+      headers: { location: `https://areyoustillreading.dev${url.pathname}${url.search}`, 'cache-control': 'public, max-age=3600' },
+    });
+  }
+
   // ── DB-served permalinks (/@handle/…) ────────────────────────────────────────
   // Resolve live from the content RPCs and render into the /permalink-shell donor. Any
   // miss/error falls to next() (the static 404), so this can never break other routes.
