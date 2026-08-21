@@ -105,28 +105,39 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   const statusPill = (p: any) => p.draft ? '<span class="pill">Draft</span>' : '<span class="pill live">Live</span>';
 
   function loadPosts() {
-    return swrFetch('/api/admin/posts', (d: any) => {
-      if (d.__error) { $('recent')!.innerHTML = `<div class="card-pad notice err">Couldn't load posts: ${esc(d.error || ('HTTP ' + d.status))}</div>`; return; }
-      const posts = d.posts || [];
+    // Owner catalog = legacy file posts + every DB post (all authors), since publishing now goes
+    // to content.posts for everyone. Recent shows any author's; In-flight is the owner's own drafts.
+    return swrFetch('/api/admin/posts', async (d: any) => {
+      const filePosts = (d && !d.__error) ? (d.posts || []) : [];
+      let dbPosts: any[] = [];
+      try {
+        const { data } = await supabase.rpc('owner_all_posts');
+        dbPosts = (data || []).map((r: any) => ({ slug: r.slug, title: r.title, draft: r.status !== 'published', pubDate: r.pub_date, series: null, paid: false, _db: true, _own: r.is_owner_post, _handle: r.author_handle, _name: r.author_name }));
+      } catch { /* DB unavailable — fall back to file posts only */ }
+      const bySlug = new Map<string, any>();
+      for (const p of filePosts) bySlug.set(p.slug, p);
+      for (const p of dbPosts) bySlug.set(p.slug, p);
+      const posts = [...bySlug.values()];
       titles = {}; for (const p of posts) titles[p.slug] = p.title;
+      const editable = (p: any) => !p._db || p._own;
 
-      // Recent posts (newest five)
+      // Recent posts (newest five published, any author)
       const recentHost = $('recent')!;
-      const recent = posts.slice(0, 5);
+      const recent = posts.filter((p: any) => !p.draft).sort((a: any, b: any) => String(b.pubDate || '').localeCompare(String(a.pubDate || ''))).slice(0, 5);
       recentHost.innerHTML = recent.length
         ? '<table class="t"><tbody>' + recent.map((p: any) => `<tr>
-              <td><a class="ti" href="/admin/write?slug=${encodeURIComponent(p.slug)}" style="text-decoration:none">${esc(p.title)}</a><span class="sub">${esc(fmtDate(p.pubDate))}</span></td>
+              <td><a class="ti" href="${editable(p) ? `/admin/write?slug=${encodeURIComponent(p.slug)}` : `/@${esc(p._handle)}/${encodeURIComponent(p.slug)}/`}" style="text-decoration:none">${esc(p.title)}</a><span class="sub">${(p._db && !p._own) ? 'by ' + esc(p._name) : esc(fmtDate(p.pubDate))}</span></td>
               <td class="num">${statusPill(p)}${p.paid ? ' <span class="pill">Paid</span>' : ''}</td>
-              <td class="num"><a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a></td>
+              <td class="num">${editable(p) ? `<a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a>` : `<a class="btn btn-sm btn-ghost" href="/@${esc(p._handle)}/${encodeURIComponent(p.slug)}/" target="_blank" rel="noopener">View</a>`}</td>
             </tr>`).join('') + '</tbody></table>'
         : '<div class="card-pad muted">No posts yet. <a href="/admin/write" style="color:var(--accent)">Write your first →</a></div>';
 
-      // In flight (drafts)
+      // In flight (the owner's OWN drafts + any file drafts)
       const flightHost = $('inflight')!;
-      const drafts = posts.filter((p: any) => p.draft);
+      const drafts = posts.filter((p: any) => p.draft && editable(p));
       flightHost.innerHTML = drafts.length
         ? '<table class="t"><tbody>' + drafts.slice(0, 6).map((p: any) => `<tr>
-              <td><a class="ti" href="/admin/write?slug=${encodeURIComponent(p.slug)}" style="text-decoration:none">${esc(p.title)}</a><span class="sub">${p.series ? esc(p.series) : 'No series'}</span></td>
+              <td><a class="ti" href="/admin/write?slug=${encodeURIComponent(p.slug)}" style="text-decoration:none">${esc(p.title)}</a><span class="sub">${p.series ? esc(p.series) : 'Draft'}</span></td>
               <td class="num" style="color:var(--ink-faint)">${esc(fmtDate(p.pubDate))}</td>
               <td class="num"><a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Continue →</a></td>
             </tr>`).join('') + '</tbody></table>'
