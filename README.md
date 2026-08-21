@@ -15,6 +15,16 @@ history of decisions.
 > technical plumbing (slugs, keys, jargon) into the UI; auth is invisible; flows feel like
 > Medium's. "It works" is not "done" — it must be beautiful.
 
+> **⚠️ Current status (2026-08) — read this first.** The site has since been rebuilt into an
+> **invite-only, multi-author platform**. Every post now lives at one clean URL,
+> **`/@handle/slug`**, rendered **live from the database at the edge** (no rebuild to publish —
+> posts go live in seconds). Authors are invited by the owner; readers just sign up. The
+> **paywall still exists in the code but is switched OFF** (not in the critical path). Sections
+> 2–16 below still describe the earlier single-author, file-based, paywall-centric design and
+> are partly out of date — trust the **Capabilities & test checklist** immediately below as the
+> authoritative list of what the site does today, and **[`LAUNCH.md`](LAUNCH.md)** for what to
+> do before going live.
+
 ---
 
 ## 1. What this is
@@ -42,6 +52,104 @@ A personal platform with four jobs:
 
 The site is **static by default** (SEO/speed/cost) and adds server behavior only where
 required, via **Cloudflare Pages Functions**. There is no traditional always-on server.
+
+---
+
+## ✅ Capabilities & test checklist
+
+This is the plain-English list of **everything the site can do**, each paired with a simple way
+to check it still works. Tick a box once you've confirmed it. Test on the **dev** site (you'll
+need to be logged in through Cloudflare Access) or locally with `npm run dev`. **Reader** items
+work signed-out; **author/owner** items need you signed in. A few features only fully work once
+the production setup in [`LAUNCH.md`](LAUNCH.md) is done.
+
+### 1 · Reading a post (`/@handle/slug`)
+- [ ] **Post opens and reads beautifully** — open any post from the homepage or `/blog`. Expect the title, author byline, a drop-cap first paragraph, and clean typography.
+- [ ] **Series / field breadcrumb** — on a post that's part of a series, a small "Field → Series · Part N of M" line sits above the title, each part a link.
+- [ ] **Code blocks** — syntax colours, a language label, a copy button; looks right in light *and* dark.
+- [ ] **Math** — equations are properly typeset (inline and centered blocks).
+- [ ] **Diagrams (D2)** — a crisp diagram that follows the light/dark theme.
+- [ ] **Interactive plots (Plotly)** — an interactive chart (hover, zoom; 3-D ones rotate) with a "code / output" toggle.
+- [ ] **Reading-progress bar** — a thin accent bar at the very top fills as you scroll.
+- [ ] **Share bar** — offers X / LinkedIn / Reddit / Hacker News / Bluesky and a "Copy link" that flips to "Copied!".
+- [ ] **Social preview image** — paste a post URL into a chat box (or view the page's `og:image`); expect a branded card with the post title.
+- [ ] **Light/dark theme** — the sun/moon toggle flips the whole page; a refresh keeps your choice.
+
+### 2 · Reader engagement
+- [ ] **Highlight text** *(signed in)* — select a sentence → a small toolbar offers Highlight / Note / Copy / Quote. Highlights persist on reload and across devices.
+- [ ] **Popular passages** — a passage many readers highlighted shows a dotted underline with a "Many readers marked this" tooltip.
+- [ ] **Highlights drawer** — a floating pill shows your count; opening it lists your highlights with Jump / Copy / Note / Discussion / Remove.
+- [ ] **Discussion on a highlight** — you can post; the author's replies show an "Author" badge.
+- [ ] **Private notes** *(signed in)* — the "Your private note" box saves a note only you (and the owner) can see.
+- [ ] **Comments** *(signed in)* — post, reply (threaded), upvote, delete your own. Signed-out shows a "Sign in to join in" prompt.
+- [ ] **"Did it hold?" poll** — tap Held me / Skimmed it / Lost me; see where other readers landed. One tap, no account needed.
+- [ ] **Continue reading** *(signed in)* — read part-way, come back later; you're offered to continue exactly where you stopped, and finished posts are marked.
+
+### 3 · Reader account (`/account`)
+- [ ] **Sign in** — `/login` → enter email → code/link signs you in; or "Continue with GitHub".
+- [ ] **Still reading** — posts you're mid-way through, each with a "continue" link to the exact spot.
+- [ ] **Library** — posts you've finished.
+- [ ] **Notes & highlights** — your notes and highlights across all posts, each linking back to the passage.
+- [ ] **Sign out** — signs you out cleanly.
+
+### 4 · Newsletter
+- [ ] **Subscribe** — the form (with the anti-bot check) accepts your email and says "check your inbox".
+- [ ] **Confirm** — the emailed link confirms you (double opt-in).
+- [ ] **Unsubscribe** — one confirm click removes you.
+- [ ] **The letter page** — `/letter` explains the newsletter honestly (no fake stats), with recent essays and a subscribe box.
+- [ ] **Broadcast on publish** *(owner)* — publishing with "email subscribers" ticked sends the essay to confirmed subscribers.
+
+### 5 · Discovery & site pages
+- [ ] **Homepage** — `/` shows the last-fortnight feed, each row carrying its "reading shape" curve; a "how much time do you have?" dial; and "coming next" series.
+- [ ] **Reading-pace personalization** — the homepage's "measure your pace" times you reading a paragraph and (with your OK) re-labels every reading time in *your* minutes (kept only on your device).
+- [ ] **Blog index** — `/blog` shows fields, "ways in", the full stream, and cross-author "read them together" pairs.
+- [ ] **Author page** — `/@handle` shows the author's masthead, their fields and series, their work, and a colophon.
+- [ ] **Series page** — `/@handle/s/slug` shows the series plate, progress, its parts in order, and "The Gap" (its publishing rhythm).
+- [ ] **Field page** — `/@handle/f/slug` shows the field's generative mark, its member series, and "The Crossings" (shared subjects).
+- [ ] **Topics** — `/blog/tags` lists subjects; a subject page lists every essay on it across all authors.
+- [ ] **Search** — the search box finds posts by their content.
+- [ ] **RSS + sitemap** — `/rss.xml` lists recent posts; `/sitemap-posts.xml` lists post URLs.
+- [ ] **About / Projects / Resume** — `/about`, `/projects` (case study), `/resume` with a working "Download PDF".
+- [ ] **404** — a bad URL shows a styled not-found page.
+
+### 6 · Writing in the Studio (`/admin` — authors)
+- [ ] **Studio sign-in + scope** — an author sees only their sections (Write, Posts, Drafts, Series, Fields, Requests, Profile); the owner sees everything.
+- [ ] **Onboarding** — a freshly-invited author is guided to claim a permanent @handle + set pen name / bio / picture, then can write.
+- [ ] **The editor** — `/admin/write`: type Markdown with live formatting, a `/` slash menu, math as you type, and language-aware code blocks.
+- [ ] **Live diagrams** — a `d2` block previews the diagram live as you edit.
+- [ ] **Live Python plots** — a `python` block runs (Pyodide) and shows its Plotly figure or output; a 3-D plot rotates; "export GIF" sweeps the camera.
+- [ ] **Draft autosave** — writing saves automatically; multiple drafts are kept; "New" starts a fresh one without losing the others.
+- [ ] **Publish to your page** — the publish sheet (title, description, tags, permalink, series, optional email) → Publish → live at `/@handle/slug` **within seconds** (no rebuild wait).
+- [ ] **Series + scheduling** — assign a post to a series with a part number; schedule a post and confirm it goes live on time.
+- [ ] **Edit a published post** — reopen a live post, change it, re-publish; it updates in place (no duplicate).
+- [ ] **Preview + focus mode** — preview renders the post exactly as it'll look; focus mode hides the chrome for distraction-free writing.
+
+### 7 · Collaboration (authors)
+- [ ] **Invite a co-author** — in the publish sheet, add a co-author by @handle; they appear on the post once they accept.
+- [ ] **Live co-editing** — two authors open the same post and see each other's cursor and edits in real time.
+- [ ] **Requests inbox** — `/admin/requests`: propose a post into someone's series, or a series into a field; the other party accepts/declines; a badge flags what needs you.
+- [ ] **Shared work shows everywhere** — a co-authored post / shared series / shared field appears on every involved author's page, marked "with X".
+
+### 8 · Owner control (`/admin` — owner only)
+- [ ] **Home dashboard** — `/admin` shows recent + in-flight posts and key numbers.
+- [ ] **Authors management** — `/admin/authors`: invite an author by email (get a share link), set their role / publishing rights, suspend.
+- [ ] **All posts** — `/admin/posts`: see every author's posts; view/edit your own; unpublish/delete any.
+- [ ] **Content Management** — `/admin/content`: pick any page **or a reader widget** (share bar, series nav, subscribe form, feedback poll, comments, highlights, notes) and edit its wording; the site updates.
+- [ ] **Analytics** — `/admin/analytics`: cookieless views / read-depth, referrers, completion.
+- [ ] **Audience / Engagement / Revenue** — subscribers; comments/highlights/notes/verdicts; sales (dormant).
+- [ ] **Settings** — manage admins by email; edit pen name / byline.
+- [ ] **Resume / Projects editors** — edit `/resume` and `/projects` from the Studio; the public pages update.
+- [ ] **Author notifications** *(owner)* — you get an email when a reader comments / highlights / notes / votes / gives a verdict.
+
+### 9 · Under the hood (worth a spot-check)
+- [ ] **Instant publish** — a published post is live in seconds, served from the database at the edge (no site rebuild in the path).
+- [ ] **Security headers on posts** — a `/@handle/slug` response carries a Content-Security-Policy with a **per-request nonce** and `X-Frame-Options: DENY` (view the response headers). Author content cannot run scripts.
+- [ ] **Publish safety net** — the publish step rejects any post body containing executable HTML (the parser-based inert-guard); normal posts pass untouched.
+- [ ] **Bot check + rate limiting** — the subscribe form uses Turnstile; public endpoints are rate-limited.
+- [ ] **Paywall (dormant)** — the code exists but is switched off; leave it unless you decide to monetize.
+
+> **Before some of these work in production:** apply the database migrations, set the environment
+> variables, and purge the load-test data — the full go-live sequence is in **[`LAUNCH.md`](LAUNCH.md)**.
 
 ---
 
@@ -567,9 +675,24 @@ is green. Current: **69 tests / 23 files.**
   publish** ✅, **first-party analytics** ✅, **data-driven resume + projects with Studio
   editors** ✅, **series** ✅.
 - **Phase 5 — UI/UX design refinement + Content Management.** ✅ the Editorial design system
-  across the whole site; ✅ **Content Management** makes every page's copy editable from the
-  Studio (16 of the site's surfaces done; the shared reader widgets — subscribe form, share
-  bar, series nav, paywall band, comments/notes/highlights — are the remaining batch).
-- **Pre-launch backlog:** remove the scaffolding test posts (`src/content/blog/`); flip Dodo
-  test → live keys (§13). Activation steps for the newest features: run `db/feedback.sql`,
-  `db/notify.sql` (+ set `NOTIFY_SECRET`/`AUTHOR_EMAIL`) and `db/admins-manage.sql`.
+  across the whole site; ✅ **Content Management** now makes **every** user-visible string
+  editable from the Studio — all pages *and* the shared reader widgets (subscribe form, share
+  bar, series nav, comments/notes/highlights/feedback). Complete.
+- **Phase 6 — Invite-only MULTI-AUTHOR rebuild.** ✅ The platform now runs on a `content.*`
+  Postgres schema with per-author RLS; every post/author/series/field is served **live from the
+  DB at the edge** at `/@handle/slug` (no rebuild to publish). ✅ DB authoring pipeline
+  (`/api/author/*`), role-scoped Studio, invite-by-email + onboarding (permanent `@handle`),
+  ✅ **live co-editing** + co-author invites + a collaboration **Requests** inbox, ✅ fields
+  (series-of-series) + topic pages + a live homepage feed, ✅ reader progress ("continue"),
+  ✅ **security hardening** (parser-based inert-guard + per-request-nonce CSP + full security
+  headers on the edge-rendered pages). The **paywall is dropped from the critical path** (code
+  kept, switched off). Remaining: the two "lock-the-cage" pillars that need infrastructure — a
+  **cookieless sandbox origin** for author HTML and an **authoritative server-side re-render** —
+  see [`LAUNCH.md`](LAUNCH.md) and the security notes.
+- **Going live:** the full go-live sequence (prod DB migrations, env vars, purge the load-test
+  data, then raise the OG/sitemap caps) lives in **[`LAUNCH.md`](LAUNCH.md)**.
+
+> Sections 2–15 above predate the multi-author rebuild and describe the earlier single-author,
+> file-based, paywall-centric design. They remain useful for the per-file mechanics (build
+> pipeline, D2/Plotly, email, Supabase setup), but for **what the site does today**, the
+> **Capabilities & test checklist** near the top is authoritative.
