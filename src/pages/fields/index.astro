@@ -3,9 +3,11 @@
  * /fields — every public field across all authors, grouped by author (Claude Design "fields" template,
  * wired to the DB). Live from public.list_public_fields_full; a field appears under EACH involved
  * author with its role. The generative field MARK (one of ten, parameterised by the field's real
- * series) is drawn by src/lib/field-marks.js. The design's "crossings" section (author-annotated
- * handoffs between series, with quoted passages) runs on data we don't collect, so it's omitted
- * rather than faked. A field is public only with ≥2 series and a published part.
+ * series) is drawn by src/lib/field-marks.js. The design's "crossings" section is built from real
+ * data: a crossing is where a part in one series and a part in another take up the SAME subject (a
+ * shared tag) — direction is chronological (earlier part raised it, the later one took it up), never
+ * an invented handoff or quote. Powered by public.all_field_crossings. A field is public only with
+ * ≥2 series and a published part.
  */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import SubscribeForm from '../../components/SubscribeForm.astro';
@@ -19,6 +21,40 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
       <p class="lede">One series answers a question. A field is what happens when the answers start needing each other — several runs, sometimes by different people, that add up to a body of work. A field opens here only once it holds two series.</p>
       <p class="fdcount" id="fdcount" hidden></p>
     </header>
+
+    <section class="cx" id="cx" hidden>
+      <div class="cxinner">
+        <div class="cxhead">
+          <div class="cxt">
+            <div class="kicker"><span class="line"></span><span class="eyebrow">The crossings</span></div>
+            <h2>Where one series <em>takes up another.</em></h2>
+            <p>A field is not a folder. It is a set of runs that keep circling the same questions — and every crossing below is a real place where a part in one series and a part in another take up the same subject. The earlier part raised it; the later one returned to it. Follow an arc and read both sides.</p>
+          </div>
+          <div class="cxpick" id="cxpick"></div>
+        </div>
+        <div class="cxmap" id="cxmap"></div>
+        <div class="cxpair">
+          <article class="cxside">
+            <span class="cxk">First raised in</span>
+            <p class="cxwhere" id="cxaWhere"></p>
+            <h3><a href="#" id="cxaTitle"></a></h3>
+            <a class="cxgo" id="cxaGo" href="#">Read this part →</a>
+          </article>
+          <div class="cxverb"><span class="ln"></span><b id="cxVerb"></b><small id="cxVerbSub">shared subject</small><span class="ln"></span></div>
+          <article class="cxside">
+            <span class="cxk">Then taken up in</span>
+            <p class="cxwhere" id="cxbWhere"></p>
+            <h3><a href="#" id="cxbTitle"></a></h3>
+            <a class="cxgo" id="cxbGo" href="#">Read this part →</a>
+          </article>
+        </div>
+        <p class="cxfoot">
+          <span class="cxnav"><button type="button" id="cxPrev" aria-label="Previous crossing">←</button><button type="button" id="cxNext" aria-label="Next crossing">→</button></span>
+          <span class="cxof" id="cxOf"></span>
+          <span class="cxhint">Click an arc, or use the arrow keys</span>
+        </p>
+      </div>
+    </section>
 
     <div id="fddir"><p class="feedlede" id="fdloading" style="padding:26px 0">Loading fields…</p></div>
 
@@ -120,6 +156,63 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
   .flist .fdst.fdq { color:var(--ink-faint); }
   .flist .fdmins { font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
 
+  /* ——— The Crossings (ported from the Claude Design "fields" template). The band bleeds to the
+     gutter with negative margins and re-pads, so it spans full width while its content stays on
+     the page measure. Every crossing is a real shared subject between two published parts. ——— */
+  .cx { margin:clamp(34px,4.6vw,58px) 0 0; padding:clamp(28px,3.6vw,44px) 0 clamp(26px,3.4vw,38px); border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); background:var(--paper-2); position:relative; margin-left:calc(var(--gutter) * -1); margin-right:calc(var(--gutter) * -1); padding-left:var(--gutter); padding-right:var(--gutter); }
+  .cx::before { content:""; position:absolute; inset:0; pointer-events:none; background:radial-gradient(74% 120% at 12% 0%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 62%); }
+  .cxinner { position:relative; }
+  .cx .kicker { display:flex; align-items:center; gap:14px; margin-bottom:0; }
+  .cx .kicker .line { height:1px; width:48px; background:var(--accent); opacity:.6; }
+  .cxhead { position:relative; display:flex; align-items:flex-end; gap:clamp(16px,3vw,34px); flex-wrap:wrap; margin-bottom:clamp(20px,2.6vw,28px); }
+  .cxhead .cxt { min-width:0; }
+  .cxhead h2 { font-family:var(--serif-display); font-weight:600; font-size:clamp(25px,3.2vw,36px); line-height:1.06; letter-spacing:-.022em; margin:12px 0 0; text-wrap:balance; }
+  .cxhead h2 em { font-style:italic; color:var(--accent); }
+  .cxhead p { margin:13px 0 0; font-size:clamp(15.5px,1.9vw,17.5px); line-height:1.58; color:var(--ink-soft); max-width:58ch; text-wrap:pretty; }
+  .cxpick { margin-left:auto; display:inline-flex; flex-wrap:wrap; border:1px solid var(--rule); border-radius:3px; overflow:hidden; background:var(--card); flex:none; max-width:min(100%,520px); }
+  .cxpick button { background:none; border:0; font-family:var(--sans); font-size:12.5px; color:var(--ink-soft); padding:9px 14px; cursor:pointer; white-space:nowrap; transition:background .18s,color .18s; }
+  .cxpick button + button { border-left:1px solid var(--rule); }
+  .cxpick button:hover { color:var(--accent); }
+  .cxpick button.cxon { background:var(--accent); color:var(--on-accent); }
+  @media(max-width:820px){ .cxpick { margin-left:0; } }
+  .cxmap { position:relative; }
+  .cxmap svg { display:block; width:100%; height:auto; overflow:visible; cursor:crosshair; }
+  .cxmap .lane { stroke:var(--rule); stroke-width:1; }
+  .cxmap .lbl { font-family:var(--sans); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; fill:var(--ink-faint); }
+  .cxmap .nd { fill:var(--accent); opacity:.32; transition:opacity .18s,r .18s; }
+  .cxmap .nd.hot { opacity:1; }
+  .cxmap .arc2 { fill:none; stroke:var(--accent); stroke-width:1.4; opacity:.26; transition:opacity .18s,stroke-width .18s; }
+  .cxmap .arc2.hot { opacity:1; stroke-width:2.4; }
+  .cxmap .hit { fill:none; stroke:transparent; stroke-width:22; cursor:pointer; }
+  .cxmap .cnum { font-family:var(--sans); font-size:9.5px; font-weight:600; fill:var(--ink-faint); letter-spacing:.06em; }
+  .cxmap .cnum.hot { fill:var(--accent); }
+  .cxpair { display:grid; grid-template-columns:minmax(0,1fr) 128px minmax(0,1fr); gap:clamp(14px,2vw,22px); align-items:stretch; margin-top:clamp(18px,2.4vw,26px); }
+  @media(max-width:880px){ .cxpair { grid-template-columns:1fr; gap:12px; } }
+  .cxside { border:1px solid var(--rule); border-radius:5px; background:var(--card); padding:17px 19px 16px; display:flex; flex-direction:column; min-width:0; }
+  .cxside .cxk { font-family:var(--sans); font-size:9.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+  .cxside .cxwhere { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; margin:11px 0 0; font-family:var(--sans); font-size:11px; color:var(--ink-faint); }
+  .cxside .cxwhere .mono { font-size:10.5px; letter-spacing:.13em; padding:0; color:var(--accent); }
+  .cxside .cxwhere .mono::after { display:none; }
+  .cxside .cxwhere .srs { font-family:var(--serif-display); font-size:13.5px; color:var(--ink-soft); letter-spacing:-.005em; }
+  .cxside h3 { font-family:var(--serif-display); font-weight:600; font-size:19px; line-height:1.22; letter-spacing:-.012em; margin:9px 0 0; text-wrap:pretty; }
+  .cxside h3 a { color:var(--ink); } .cxside h3 a:hover { color:var(--accent); }
+  .cxside .cxgo { margin-top:auto; padding-top:14px; font-family:var(--sans); font-size:11.5px; color:var(--accent); }
+  .cxside .cxgo:hover { text-decoration:underline; text-underline-offset:3px; }
+  .cxverb { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; text-align:center; }
+  @media(max-width:880px){ .cxverb { flex-direction:row; padding:2px 0; } }
+  .cxverb .ln { width:1px; flex:1; background:var(--rule); min-height:14px; }
+  @media(max-width:880px){ .cxverb .ln { width:auto; height:1px; min-height:0; } }
+  .cxverb b { font-family:var(--serif-display); font-style:italic; font-weight:600; font-size:17px; letter-spacing:-.01em; color:var(--accent); white-space:nowrap; max-width:112px; overflow:hidden; text-overflow:ellipsis; }
+  .cxverb small { font-family:var(--sans); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+  .cxfoot { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:clamp(14px,2vw,20px); font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); }
+  .cxfoot .cxnav { display:inline-flex; border:1px solid var(--rule); border-radius:3px; overflow:hidden; background:var(--card); }
+  .cxfoot .cxnav button { background:none; border:0; color:var(--ink-soft); font:inherit; padding:7px 13px; cursor:pointer; }
+  .cxfoot .cxnav button + button { border-left:1px solid var(--rule); }
+  .cxfoot .cxnav button:hover { color:var(--accent); }
+  .cxfoot .cxof { font-variant-numeric:tabular-nums; }
+  .cxfoot .cxhint { margin-left:auto; }
+  @media(max-width:620px){ .cxfoot .cxhint { display:none; } }
+
   .fdlegend { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:clamp(24px,3vw,32px) 0 0; border-top:1px solid var(--rule); margin-top:clamp(4px,1vw,10px); font-family:var(--sans); font-size:11.5px; line-height:1.55; color:var(--ink-faint); }
   .fdlegend .fdsw { display:flex; align-items:center; gap:7px; flex:none; }
   .fdlegend .fdsw i { width:8px; height:8px; border-radius:999px; background:var(--accent); display:block; }
@@ -193,6 +286,97 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
     </article>`;
   }
 
+  // ——— The Crossings: draw the field map (a strand per series, a node per part, an arc at every
+  // real shared-subject crossing) and browse the pairs. All data from public.all_field_crossings. ———
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const clip = (s: string, n: number) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  const pageUrl = (handle: string, slug: string) => `/@${esc(handle)}/${esc(slug)}`;
+  const cx: { rows: any[]; fi: number; ci: number; nameBy: Map<string, string> } = { rows: [], fi: 0, ci: 0, nameBy: new Map() };
+
+  function drawMap(row: any) {
+    const map = row.series_map || [], cxs = row.crossings || [];
+    const VBW = 900, labelW = 132, plotL = labelW + 6, plotR = VBW - 20, plotW = plotR - plotL;
+    const y0 = 30, step = 60, VBH = y0 + Math.max(0, map.length - 1) * step + 34;
+    const pos: Record<string, { x: number; y: number }> = {};
+    let lanes = '', nodes = '';
+    map.forEach((s: any, li: number) => {
+      const y = y0 + li * step;
+      lanes += `<line class="lane" x1="${plotL}" y1="${y}" x2="${plotR}" y2="${y}"/>`;
+      lanes += `<text class="lbl" x="0" y="${y + 3.5}">${esc(clip(s.title, 20))}</text>`;
+      const parts = s.parts || [], n = parts.length;
+      parts.forEach((p: any, i: number) => {
+        const x = n > 1 ? plotL + (i / (n - 1)) * plotW : (plotL + plotR) / 2;
+        pos[p.slug] = { x, y };
+        nodes += `<circle class="nd" data-slug="${esc(p.slug)}" cx="${x.toFixed(1)}" cy="${y}" r="5"><title>${esc(p.title)}</title></circle>`;
+      });
+    });
+    let arcs = '', hits = '', nums = '';
+    cxs.forEach((c: any, ci: number) => {
+      const a = pos[c.a.slug], b = pos[c.b.slug];
+      if (!a || !b) return;
+      const my = (a.y + b.y) / 2;
+      const d = `M ${a.x.toFixed(1)} ${a.y} C ${a.x.toFixed(1)} ${my} ${b.x.toFixed(1)} ${my} ${b.x.toFixed(1)} ${b.y}`;
+      arcs += `<path class="arc2" data-ci="${ci}" d="${d}"/>`;
+      hits += `<path class="hit" data-ci="${ci}" d="${d}"/>`;
+      const mx = (a.x + b.x) / 2;
+      nums += `<text class="cnum" data-ci="${ci}" x="${(mx + 5).toFixed(1)}" y="${(my + 3).toFixed(1)}">${ci + 1}</text>`;
+    });
+    const el = $('cxmap');
+    el.innerHTML = `<svg viewBox="0 0 ${VBW} ${VBH}" role="img" aria-label="Map of crossings in ${esc(row.field_title)}">${lanes}${arcs}${nodes}${nums}${hits}</svg>`;
+    el.querySelectorAll<SVGPathElement>('.hit').forEach((h) => h.addEventListener('click', () => selectCrossing(+(h.dataset.ci || 0))));
+  }
+
+  function selectCrossing(ci: number) {
+    const row = cx.rows[cx.fi]; if (!row) return;
+    const cxs = row.crossings || []; if (!cxs.length) return;
+    cx.ci = (ci + cxs.length) % cxs.length;
+    const c = cxs[cx.ci];
+    // earlier-published part RAISED the subject; later one TOOK IT UP (real, from pub_date)
+    const [rz, tu] = (Date.parse(c.a.pub) <= Date.parse(c.b.pub)) ? [c.a, c.b] : [c.b, c.a];
+    const side = (which: 'a' | 'b', p: any) => {
+      const nm = cx.nameBy.get(String(p.handle)) || p.handle;
+      $(`cx${which}Where`).innerHTML = `<a href="/@${esc(p.handle)}" class="mono">${esc(initials(nm))}</a><span class="srs">${esc(p.series)}</span>`;
+      const t = $(`cx${which}Title`) as HTMLAnchorElement; t.textContent = p.title; t.href = pageUrl(p.handle, p.slug);
+      ($(`cx${which}Go`) as HTMLAnchorElement).href = pageUrl(p.handle, p.slug);
+    };
+    side('a', rz); side('b', tu);
+    $('cxVerb').textContent = c.subject || 'same subject';
+    $('cxOf').textContent = `${cx.ci + 1} of ${cxs.length}`;
+    const map = $('cxmap');
+    map.querySelectorAll('.arc2,.cnum').forEach((n) => n.classList.toggle('hot', +((n as HTMLElement).dataset.ci || -1) === cx.ci));
+    const hotSlugs = new Set([c.a.slug, c.b.slug]);
+    map.querySelectorAll('.nd').forEach((n) => n.classList.toggle('hot', hotSlugs.has((n as HTMLElement).dataset.slug || '')));
+  }
+
+  function selectField(fi: number) {
+    cx.fi = fi;
+    $('cxpick').querySelectorAll('button').forEach((b, i) => b.classList.toggle('cxon', i === fi));
+    drawMap(cx.rows[fi]);
+    selectCrossing(0);
+  }
+
+  async function initCrossings(nameBy: Map<string, string>) {
+    let rows: any[] = [];
+    try { const { data } = await supabase.rpc('all_field_crossings'); rows = data || []; } catch { return; }
+    if (!rows.length) return;               // no field has a real crossing yet → section stays hidden
+    cx.rows = rows; cx.nameBy = nameBy;
+    $('cxpick').innerHTML = rows.map((r, i) =>
+      `<button type="button" class="${i === 0 ? 'cxon' : ''}" data-f="${i}">${esc(clip(r.field_title, 26))}</button>`).join('');
+    $('cxpick').querySelectorAll('button').forEach((b, i) => b.addEventListener('click', () => selectField(i)));
+    $('cxPrev').addEventListener('click', () => selectCrossing(cx.ci - 1));
+    $('cxNext').addEventListener('click', () => selectCrossing(cx.ci + 1));
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const sec = document.getElementById('cx'); if (!sec || sec.hidden) return;
+      const tag = (document.activeElement?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      const r = sec.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return;
+      e.preventDefault(); selectCrossing(cx.ci + (e.key === 'ArrowRight' ? 1 : -1));
+    });
+    selectField(0);
+    $('cx').hidden = false;
+  }
+
   async function boot() {
     let fields: any[] = [];
     try { const { data } = await supabase.rpc('list_public_fields_full', { p_limit: 40 }); fields = data || []; }
@@ -223,6 +407,11 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
     ).join('');
     initFieldMarks($('fddir'));
     $('fdlegend').hidden = false;
+
+    // author handle → display name, so the crossings panels can show a real byline
+    const nameBy = new Map<string, string>();
+    for (const [h, b] of byAuthor) nameBy.set(h, b.name);
+    initCrossings(nameBy);
   }
   boot();
 </script>
