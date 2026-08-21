@@ -276,21 +276,24 @@
       "title": "Sign in — areyoustillreading",
       "description": "Sign in to areyoustillreading."
     },
-    "heading": "Sign in",
-    "lede": "Sign in to comment, highlight, and keep private notes on posts.",
+    "heading": "Sign in to pick up <em>where you stopped.</em>",
+    "lede": "There’s no password. Put in your email and I’ll send a code that signs you in — right here in this tab.",
     "emailPlaceholder": "you@example.com",
     "sendCode": "Email me a sign-in code",
     "codePlaceholder": "6-digit code",
     "verify": "Verify & sign in",
-    "useDifferent": "Use a different email",
+    "useDifferent": "Try a different address",
     "divider": "or",
-    "github": "Sign in with GitHub",
+    "github": "Continue with GitHub",
     "msgSending": "Sending…",
     "msgCodeSent": "We emailed you a 6-digit code. Enter it here to finish signing in.",
     "msgVerifying": "Verifying…",
     "msgSignedIn": "Signed in — taking you in…",
     "msgEnterCode": "Enter the code from your email.",
-    "msgRedirecting": "Redirecting to GitHub…"
+    "msgRedirecting": "Redirecting to GitHub…",
+    "eyebrow": "Your account",
+    "panelHeading": "Sign in",
+    "panelSub": "No account yet? Entering your address makes one."
   },
   "account": {
     "seo": {

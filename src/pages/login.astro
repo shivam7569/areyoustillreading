@@ -2,62 +2,16 @@
 /**
  * src/pages/login.astro — the public sign-in page (route: /login)
  * ---------------------------------------------------------------
- * SINGLE RESPONSIBILITY
- *   Render a static sign-in UI and wire two client-side Supabase auth flows:
- *     1. Passwordless email "magic link" (OTP) sign-in.
- *     2. GitHub OAuth sign-in.
- *   Both flows hand the browser off to Supabase; on success the user lands
- *   back on /account (see `redirectTo` below).
- *
- * WHERE IT FITS IN THE ARCHITECTURE
- *   - This is a static Astro page (prerendered at build, deployed to
- *     Cloudflare Pages). There is NO server-side code here: the frontmatter
- *     only imports the layout, and all auth logic runs in the browser via the
- *     Supabase JS client. That is intentional — auth tokens must be minted by
- *     Supabase directly in the user's browser, never proxied through our edge.
- *   - This page only STARTS the handshake; it never sees the returned session.
- *     The magic-link email click (or the GitHub OAuth redirect) both land on
- *     /account with the auth params in the URL, and supabase-js finalizes the
- *     session THERE via its default `autoDetectSessionInUrl: true` (see
- *     src/lib/supabase.ts) — writing the JWT + refresh token to localStorage.
- *     Downstream pages/Functions then read that persisted session and rely on
- *     Supabase Row-Level Security (RLS) + the `is_admin()` SQL function for
- *     authorization. This page performs NO authorization of its own.
- *
- * DEPENDENCIES (imports)
- *   - ../layouts/BaseLayout.astro : shared page shell (head, nav, theming vars
- *     like --bg/--fg/--accent/--border/--muted used by the <style> block).
- *   - ../lib/supabase (client <script> only) : the singleton browser Supabase
- *     client. It carries the public anon key + project URL. NOTE: the anon key
- *     is PUBLIC by design; it is safe to ship because every table is guarded by
- *     RLS. This file must never import service-role keys or server secrets.
- *
- * WHAT DEPENDS ON THIS FILE
- *   - Anything linking to /login (nav "Sign in" links, redirects from gated
- *     content / PaywallGate, /account when logged out). This is the canonical
- *     entry point for authentication.
- *
- * SECURITY ASSUMPTIONS & GOTCHAS
- *   - `redirectTo` is derived from window.location.origin (not a hardcoded
- *     URL) so it works across localhost/preview/prod. HOWEVER, Supabase only
- *     honours redirect URLs that are on the project's allow-list (Auth
- *     settings). This is the guardrail that stops an attacker from crafting a
- *     login link that redirects to an arbitrary origin — keep the allow-list
- *     tight and in sync with deployed origins, or valid logins will silently
- *     fail to redirect.
- *   - No bot protection (Turnstile) is wired into this form. Magic-link abuse
- *     is rate-limited by Supabase/Resend SMTP quotas rather than a CAPTCHA
- *     here; if abuse becomes a problem, Turnstile would be added around the
- *     signInWithOtp call.
- *   - There is no honeypot / entitlement / signature logic in this file — those
- *     live in the payment + gating layer, not in the auth entry point.
+ * Passwordless email OTP (a 6-digit code, verified IN-TAB so no second tab opens) + GitHub OAuth,
+ * both handed to Supabase in the browser; on success the visitor lands on `/` (BaseLayout's auth
+ * handler finalizes the session anywhere). No server code, no authorization here — RLS + is_admin()
+ * do that downstream. Canonical entry point for auth (nav, Comments, onboarding, the Studio all
+ * link here). Reskinned to the Claude Design "signin" (two columns: the pitch + the panel); the
+ * auth wiring is unchanged, only the markup/styles. Copy is Studio-editable via site.json.
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import site from '../data/site.json';
 
-// Copy editable from Studio → Content Management → Sign in. Server-rendered
-// strings use {c.x}; the client-side status messages are handed to the script
-// below via a JSON <script> it reads at runtime (so those are editable too).
 const c = (site as any).login || {};
 const msgs = {
   sending: c.msgSending || 'Sending…',
@@ -69,149 +23,158 @@ const msgs = {
 };
 ---
 
-<BaseLayout title={c.seo?.title || 'Sign in — areyoustillreading'} description={c.seo?.description || 'Sign in to areyoustillreading.'}>
-  {/* Client-side status strings, editable from Studio; the script below reads these. */}
+<BaseLayout title={c.seo?.title || 'Sign in — areyoustillreading'} description={c.seo?.description || 'Sign in to areyoustillreading.'} wide>
   <script type="application/json" id="login-copy" set:html={JSON.stringify(msgs)} />
-  <h1 data-cms="login.heading">{c.heading || 'Sign in'}</h1>
-  <p data-cms="login.lede">{c.lede || 'Sign in to comment, highlight, and keep private notes on posts.'}</p>
 
-  {/* Step 1 — email form. `id="magic-form"` is the hook the client script binds to.
-      No `action`/`method`: submission is intercepted in JS (preventDefault) and
-      routed through Supabase — this form never POSTs to our server. */}
-  <form id="magic-form" class="auth-form">
-    {/* `required` + type="email" give a free client-side validity gate before
-        we ever call Supabase. aria-label supplies an accessible name since the
-        visible label is only the placeholder. */}
-    <input type="email" name="email" required placeholder={c.emailPlaceholder || 'you@example.com'} aria-label="Email address" />
-    <button type="submit" data-cms="login.sendCode">{c.sendCode || 'Email me a sign-in code'}</button>
-  </form>
+  <div class="wrap auth">
+    <div class="pitch">
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="login.eyebrow">{c.eyebrow || 'Your account'}</span></div>
+      <h1 data-cms="login.heading" set:html={c.heading || 'Sign in to pick up <em>where you stopped.</em>'} />
+      <p data-cms="login.lede">{c.lede || "There's no password. Put in your email and I'll send a code that signs you in — right here in this tab."}</p>
+      <ul class="perks">
+        <li>Your reading position, kept across devices</li>
+        <li>A library of the essays you've finished</li>
+        <li>Your notes and highlights, saved</li>
+        <li>The letter, managed in one place</li>
+      </ul>
+    </div>
 
-  {/* Step 2 — code entry. Verifying the emailed code finishes sign-in RIGHT HERE
-      in this tab (no link click, so no second tab opens). Hidden until step 1 sends. */}
-  <form id="code-form" class="auth-form" hidden>
-    <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder={c.codePlaceholder || '6-digit code'} aria-label="Sign-in code" />
-    <button type="submit" data-cms="login.verify">{c.verify || 'Verify & sign in'}</button>
-    <button type="button" id="code-back" class="linkish" data-cms="login.useDifferent">{c.useDifferent || 'Use a different email'}</button>
-  </form>
+    <section class="card panel" id="panel">
+      {/* Step 1 — email. #magic-form is the auth-script hook. */}
+      <div class="form-state" id="email-step">
+        <h2 data-cms="login.panelHeading">{c.panelHeading || 'Sign in'}</h2>
+        <p class="sub" data-cms="login.panelSub">{c.panelSub || 'No account yet? Entering your address makes one.'}</p>
+        <form id="magic-form">
+          <div class="field">
+            <label for="li-email">Email address</label>
+            <input id="li-email" type="email" name="email" required placeholder={c.emailPlaceholder || 'you@example.com'} autocomplete="email" />
+          </div>
+          <button class="btn btn-primary" type="submit" data-cms="login.sendCode">{c.sendCode || 'Email me a sign-in code'}</button>
+        </form>
+        <div class="or" data-cms="login.divider">{c.divider || 'or'}</div>
+        <div class="oauth">
+          <button id="github-btn" class="btn btn-ghost" type="button" style="justify-content:center">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.3-1.1.6-1.4-2.2-.2-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.6 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.3.1 2.6.6.7 1 1.6 1 2.7 0 3.8-2.4 4.7-4.6 4.9.3.3.6.9.6 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+            <span data-cms="login.github">{c.github || 'Continue with GitHub'}</span>
+          </button>
+        </div>
+        <p class="fine">Signing in stores your email and your own reading — your position, library, and notes — and nothing else. No tracking, no list sales.</p>
+        <p class="fine" style="margin-top:10px">Writing here? <a class="link" href="/admin">Open the Studio</a>.</p>
+      </div>
 
-  <p class="divider" data-cms="login.divider">{c.divider || 'or'}</p>
+      {/* Step 2 — the emailed code, verified in-tab. #code-form is the auth-script hook. */}
+      <div class="sent" id="code-step" hidden>
+        <div class="mail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3z"/><path d="m3 7 9 6.5L21 7"/></svg></div>
+        <h2>Check your email</h2>
+        <p>A 6-digit sign-in code is on its way. Enter it to finish — it works once and expires in fifteen minutes.</p>
+        <form id="code-form" class="code-form">
+          <div class="field">
+            <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder={c.codePlaceholder || '6-digit code'} aria-label="Sign-in code" />
+          </div>
+          <button class="btn btn-primary" type="submit" data-cms="login.verify">{c.verify || 'Verify & sign in'}</button>
+        </form>
+        <p class="again">Nothing arrived? <button type="button" id="code-back" class="linkish" data-cms="login.useDifferent">{c.useDifferent || 'Try a different address'}</button></p>
+      </div>
 
-  {/* type="button" (NOT submit) so this GitHub button lives outside the form
-      and never triggers the magic-link submit handler. */}
-  <button id="github-btn" class="oauth-btn" type="button" data-cms="login.github">{c.github || 'Sign in with GitHub'}</button>
-
-  {/* Live status region. role="status" + aria-live="polite" announces
-      "Sending…" / success / error text to screen readers without stealing
-      focus. `min-height` in CSS reserves space so the layout doesn't jump when
-      text appears. */}
-  <p id="auth-msg" class="auth-msg" role="status" aria-live="polite"></p>
+      <p id="auth-msg" class="auth-msg" role="status" aria-live="polite"></p>
+    </section>
+  </div>
 </BaseLayout>
 
 <style>
-  .auth-form { display: flex; flex-wrap: wrap; gap: 0.5rem; max-width: 420px; }
-  .auth-form input {
-    flex: 1 1 220px;
-    padding: 0.55rem 0.7rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg);
-    color: var(--fg);
-  }
-  .auth-form button, .oauth-btn {
-    padding: 0.55rem 1rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--accent);
-    color: #fff;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .oauth-btn { background: var(--bg); color: var(--fg); }
-  .linkish { background: none; border: 0; color: var(--muted); font-weight: 500; cursor: pointer; text-decoration: underline; padding: 0.55rem 0.4rem; flex: 0 0 auto; }
-  .linkish:hover { color: var(--fg); }
-  .divider { color: var(--muted); max-width: 420px; text-align: center; }
-  .auth-msg { color: var(--muted); min-height: 1.2em; }
+  /* Ported from the Claude Design "signin" template. Build-time DOM only (no runtime injection),
+     so scoped styles are fine. Tokens from global.css. */
+  .auth { display: grid; grid-template-columns: minmax(0,1fr) 430px; gap: clamp(36px,7vw,88px); align-items: center; padding: clamp(40px,6vw,72px) 0; }
+  @media (max-width: 940px) { .auth { grid-template-columns: 1fr; gap: 40px; } }
+  .pitch .kicker { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+  .pitch .kicker .line { height: 1px; width: 48px; background: var(--accent); opacity: .6; }
+  .pitch h1 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(34px,5.2vw,54px); line-height: 1.05; letter-spacing: -.02em; margin: 0 0 22px; max-width: 16ch; }
+  .pitch h1 :global(em) { font-style: italic; color: var(--accent); }
+  .pitch p { color: var(--ink-soft); font-size: 19px; max-width: 46ch; margin: 0 0 30px; }
+  .perks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; max-width: 44ch; }
+  .perks li { position: relative; padding-left: 24px; font-size: 17px; color: var(--ink); line-height: 1.5; }
+  .perks li::before { content: ""; position: absolute; left: 0; top: .65em; width: 9px; height: 1px; background: var(--accent); }
+
+  .panel { padding: clamp(28px,3.4vw,38px); border: 1px solid var(--rule); border-radius: 8px; background: var(--card); }
+  .panel h2 { font-family: var(--serif-display); font-weight: 600; font-size: 26px; margin: 0 0 8px; letter-spacing: -.01em; }
+  .panel .sub { font-family: var(--sans); font-size: 14px; color: var(--ink-faint); margin: 0 0 26px; }
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-family: var(--sans); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 9px; }
+  .field input { width: 100%; box-sizing: border-box; font-family: var(--sans); font-size: 15px; padding: 13px 16px; border-radius: 3px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); }
+  .field input::placeholder { color: var(--ink-faint); }
+  .field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  .panel .btn { width: 100%; justify-content: center; }
+  .or { display: flex; align-items: center; gap: 14px; margin: 24px 0; font-family: var(--sans); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); }
+  .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+  .oauth .btn { border-color: var(--rule); display: inline-flex; align-items: center; gap: 10px; }
+  .oauth svg { width: 17px; height: 17px; }
+  .fine { font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); line-height: 1.6; margin: 24px 0 0; padding-top: 20px; border-top: 1px solid var(--rule); }
+  .fine:last-of-type { border-top: 0; padding-top: 0; margin-top: 10px; }
+  .fine a, .fine .link { color: var(--accent); }
+
+  .sent { text-align: center; }
+  .sent .mail { width: 52px; height: 52px; border-radius: 999px; display: grid; place-items: center; margin: 0 auto 20px; background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); }
+  .sent .mail svg { width: 23px; height: 23px; }
+  .sent h2 { margin-bottom: 12px; }
+  .sent p { color: var(--ink-soft); font-size: 17px; margin: 0 auto 18px; max-width: 40ch; }
+  .code-form { max-width: 260px; margin: 0 auto; }
+  .code-form .field input { text-align: center; letter-spacing: .3em; font-size: 18px; }
+  .again { font-family: var(--sans); font-size: 13.5px; color: var(--ink-faint); margin-top: 20px; }
+  .linkish { font: inherit; color: var(--accent); background: none; border: 0; border-bottom: 1px solid transparent; cursor: pointer; padding: 0; }
+  .linkish:hover { border-color: var(--accent); }
+  .auth-msg { color: var(--ink-faint); min-height: 1.2em; margin: 16px 0 0; font-family: var(--sans); font-size: 13px; text-align: center; }
 </style>
 
 <script>
-  // This <script> is bundled/hydrated by Astro and runs client-side only.
-  // The singleton browser Supabase client (public anon key + project URL).
   import { supabase } from '../lib/supabase';
 
-  // Editable status-message copy, read from the JSON <script id="login-copy"> above.
   const CM = (() => { try { return JSON.parse(document.getElementById('login-copy')?.textContent || '{}'); } catch { return {}; } })();
-
-  // Absolute post-auth landing URL, computed from the current origin so the
-  // same build works on localhost, Cloudflare preview deploys, and prod.
-  // IMPORTANT: this value must be present on Supabase's redirect allow-list or
-  // Supabase will reject the redirect (see security notes in frontmatter).
-  // Land on the HOMEPAGE after sign-in (the callback is consumed on any page by
-  // BaseLayout's auth handler), so a magic-link click doesn't dump the reader on a
-  // bare /account page.
   const redirectTo = window.location.origin + '/';
-  const msg = document.getElementById('auth-msg');
-  const form = document.getElementById('magic-form');
-  const codeForm = document.getElementById('code-form');
+  const msg = document.getElementById('auth-msg')!;
+  const form = document.getElementById('magic-form') as HTMLFormElement | null;
+  const codeForm = document.getElementById('code-form') as HTMLFormElement | null;
+  const emailStep = document.getElementById('email-step')!;
+  const codeStep = document.getElementById('code-step')!;
   let pendingEmail = '';
 
-  // --- Email OTP flow, SAME-TAB (R10) --------------------------------------
-  // Step 1 emails a 6-digit code (the template also carries a link as a fallback);
-  // step 2 verifies the code here, so sign-in finishes in THIS tab and never opens
-  // a second one. Optional-chained binding: no-op if the markup changed.
+  // Step 1 — email a 6-digit code, then swap to the code step (in-tab, no second tab opens).
   form?.addEventListener('submit', async (e) => {
-    // Stop the native form POST/navigation — we handle everything in JS.
     e.preventDefault();
-    const email = form.querySelector('[name="email"]').value.trim();
-    // Immediate feedback so the user isn't left wondering during the network call.
+    const email = (form.querySelector('[name="email"]') as HTMLInputElement).value.trim();
     msg.textContent = CM.sending || 'Sending…';
-    // signInWithOtp emails the code (and a link). Supabase always responds
-    // success-shaped here (it does NOT reveal whether the email exists) to avoid
-    // account enumeration — so we advance to the code step regardless.
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo },
-    });
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
     if (error) { msg.textContent = error.message; return; }
     pendingEmail = email;
-    form.hidden = true;
-    if (codeForm) codeForm.hidden = false;
-    msg.textContent = CM.codeSent || 'We emailed you a 6-digit code. Enter it here to finish signing in.';
-    codeForm?.querySelector('[name="code"]')?.focus();
+    emailStep.hidden = true;
+    codeStep.hidden = false;
+    msg.textContent = '';
+    (codeForm?.querySelector('[name="code"]') as HTMLInputElement | null)?.focus();
   });
 
-  // Step 2 — verify the emailed code and finish sign-in in-tab.
+  // Step 2 — verify the code and finish in-tab.
   codeForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const token = codeForm.querySelector('[name="code"]').value.trim();
+    const token = (codeForm.querySelector('[name="code"]') as HTMLInputElement).value.trim();
     if (!token) { msg.textContent = CM.enterCode || 'Enter the code from your email.'; return; }
     msg.textContent = CM.verifying || 'Verifying…';
-    // type 'email' verifies a magic-link/OTP token for an email sign-in.
     const { error } = await supabase.auth.verifyOtp({ email: pendingEmail, token, type: 'email' });
     if (error) { msg.textContent = error.message; return; }
-    // Session is now established in THIS tab — continue here, no new tab.
     msg.textContent = CM.signedIn || 'Signed in — taking you in…';
     window.location.assign('/');
   });
 
-  // "Use a different email" — back to step 1.
+  // "Try a different address" — back to step 1.
   document.getElementById('code-back')?.addEventListener('click', () => {
-    if (codeForm) codeForm.hidden = true;
-    if (form) form.hidden = false;
+    codeStep.hidden = true;
+    emailStep.hidden = false;
     msg.textContent = '';
-    form?.querySelector('[name="email"]')?.focus();
+    (form?.querySelector('[name="email"]') as HTMLInputElement | null)?.focus();
   });
 
-  // --- GitHub OAuth flow ----------------------------------------------------
+  // GitHub OAuth.
   document.getElementById('github-btn')?.addEventListener('click', async () => {
-    // On success this call navigates the whole page away to GitHub, so this
-    // "Redirecting…" text is the last thing shown before the handoff.
     msg.textContent = CM.redirecting || 'Redirecting to GitHub…';
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'github',
-      options: { redirectTo },
-    });
-    // We only reach this line if the redirect itself failed to start
-    // (e.g. misconfigured provider); the happy path has already navigated away.
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'github', options: { redirectTo } });
     if (error) msg.textContent = error.message;
   });
 </script>
