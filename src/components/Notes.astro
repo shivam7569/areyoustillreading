@@ -54,6 +54,8 @@
  *   - `hidden` starts true (see markup) so the panel never flashes for logged-
  *     out users before `init()` resolves the session.
  */
+import site from '../data/site.json';
+const wc = (site as any).notes || {};
 interface Props {
   postId: string;
 }
@@ -67,12 +69,13 @@ const { postId } = Astro.props;
   `data-post-id` is how the browser script recovers the build-time prop, since
   the frontmatter value is not otherwise available at runtime.
 */}
+<script type="application/json" id="notes-copy" set:html={JSON.stringify(wc)}></script>
 <section class="notes" data-post-id={postId} hidden>
-  <h2>Your private note</h2>
+  <h2>{wc.heading || 'Your private note'}</h2>
   {/* Status line: transient "Saving…" / "Saved." / error messages via setStatus(). */}
   <p class="notes-status muted"></p>
-  <textarea id="note-body" rows="5" placeholder="Private notes on this post — only you (and the admin) can see them."></textarea>
-  <div><button id="note-save">Save note</button></div>
+  <textarea id="note-body" rows="5" placeholder={wc.placeholder || 'Private notes on this post — only you (and the admin) can see them.'}></textarea>
+  <div><button id="note-save">{wc.saveButton || 'Save note'}</button></div>
   {/* Admin-only region: populated with other readers' notes during load(). Empty for non-admins. */}
   <div id="others-notes"></div>
 </section>
@@ -122,6 +125,9 @@ const { postId } = Astro.props;
   // ===========================================================================
   import { supabase } from '../lib/supabase';
 
+  // Studio-editable copy strings, hydrated from the JSON island above.
+  const CM = JSON.parse(document.getElementById('notes-copy')?.textContent || '{}');
+
   // Cache the DOM handles once. NOTE: querySelector('.notes') assumes a single
   // Notes island per page — rendering two <Notes/> on one page would break this
   // (both scripts would bind to the first section).
@@ -141,7 +147,7 @@ const { postId } = Astro.props;
   // to query auth.users, so the name is denormalised onto each note at save time.
   const authorNameOf = (u) => {
     const m = u.user_metadata || {};
-    return m.user_name || m.name || (u.email ? u.email.split('@')[0] : 'Reader');
+    return m.user_name || m.name || (u.email ? u.email.split('@')[0] : (CM.authorFallback || 'Reader'));
   };
   // Small helper so status writes are always via textContent (never innerHTML) —
   // avoids injecting error strings as markup.
@@ -157,7 +163,7 @@ const { postId } = Astro.props;
       .from('notes')
       .select('user_id, author_name, body, updated_at')
       .eq('post_id', postId);
-    if (error) { setStatus('Could not load notes: ' + error.message); return; }
+    if (error) { setStatus((CM.status?.loadFailed || 'Could not load notes: ') + error.message); return; }
     const rows = data || [];
     // Locate the caller's own note (if any) to prefill the editor.
     const mine = rows.find((n) => n.user_id === currentUser.id);
@@ -170,7 +176,7 @@ const { postId } = Astro.props;
       const readers = rows.filter((n) => n.user_id !== currentUser.id);
       if (readers.length) {
         const h = document.createElement('h3');
-        h.textContent = "Readers' notes";
+        h.textContent = CM.readersHeading || "Readers' notes";
         others.appendChild(h);
         for (const n of readers) {
           // Build each reader-note node via DOM APIs + textContent (NOT innerHTML)
@@ -198,12 +204,12 @@ const { postId } = Astro.props;
   // an emptied textarea as "I no longer want a note" rather than saving blank.
   saveBtn.addEventListener('click', async () => {
     const body = ta.value.trim();
-    setStatus('Saving…');
+    setStatus(CM.status?.saving || 'Saving…');
     if (!body) {
       // Delete only the caller's own row for this post. The user_id .eq is
       // belt-and-braces; RLS must also restrict DELETE to auth.uid()'s rows.
       const { error } = await supabase.from('notes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
-      setStatus(error ? 'Save failed: ' + error.message : 'Cleared.');
+      setStatus(error ? (CM.status?.saveFailed || 'Save failed: ') + error.message : (CM.status?.cleared || 'Cleared.'));
       return;
     }
     // Upsert keyed on the (post_id, user_id) unique constraint so re-saving edits
@@ -221,7 +227,7 @@ const { postId } = Astro.props;
       },
       { onConflict: 'post_id,user_id' }
     );
-    setStatus(error ? 'Save failed: ' + error.message : 'Saved.');
+    setStatus(error ? (CM.status?.saveFailed || 'Save failed: ') + error.message : (CM.status?.saved || 'Saved.'));
   });
 
   // Resolve auth state and, if signed in, reveal the panel and load notes.

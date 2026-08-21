@@ -19,40 +19,42 @@
  * SECURITY: RLS is the only guard (browser is untrusted). All user text is written
  * via textContent / esc()-then-DOM, never raw innerHTML of user content.
  */
+import site from '../data/site.json';
 interface Props {
   postId: string;
   author?: string;
   title?: string;
 }
 const { postId, author = '', title = '' } = Astro.props;
+const wc = (site as any).highlights || {};
 ---
 
 {/* Selection toolbar — appears above a text selection inside the article. Also
     carries postId/author/title to the client script via data-attrs. */}
-<div class="seltool" id="seltool" role="toolbar" aria-label="Selection actions" data-post-id={postId} data-author={author} data-title={title}>
-  <button data-act="hl" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16Z"></path><path d="M14 6l4 4"></path></svg>Highlight</button>
-  <button data-act="note" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v10l-4 4H4Z"></path><path d="M8 9h8M8 13h5"></path></svg>Note</button>
+<div class="seltool" id="seltool" role="toolbar" aria-label={wc.toolbar?.ariaLabel || 'Selection actions'} data-post-id={postId} data-author={author} data-title={title}>
+  <button data-act="hl" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16Z"></path><path d="M14 6l4 4"></path></svg>{wc.toolbar?.highlight || 'Highlight'}</button>
+  <button data-act="note" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v10l-4 4H4Z"></path><path d="M8 9h8M8 13h5"></path></svg>{wc.toolbar?.note || 'Note'}</button>
   <span class="sep"></span>
-  <button data-act="copy" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>Copy</button>
-  <button data-act="quote" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h4v5a4 4 0 0 1-4 4"></path><path d="M15 7h4v5a4 4 0 0 1-4 4"></path></svg>Quote</button>
+  <button data-act="copy" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>{wc.toolbar?.copy || 'Copy'}</button>
+  <button data-act="quote" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h4v5a4 4 0 0 1-4 4"></path><path d="M15 7h4v5a4 4 0 0 1-4 4"></path></svg>{wc.toolbar?.quote || 'Quote'}</button>
 </div>
 
 {/* Floating count pill — opens the drawer. Shown only once a signed-in reader's
     highlights are loaded (init reveals it). */}
-<button class="hlpill" id="hlpill" type="button" aria-label="Open your highlights">
+<button class="hlpill" id="hlpill" type="button" aria-label={wc.pill?.ariaLabel || 'Open your highlights'}>
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16Z"></path><path d="M14 6l4 4"></path></svg>
   <span id="hllabel"><b id="hlcount">0</b> highlights</span>
 </button>
 
 {/* Scrim + slide-in drawer. #hldbody is filled by the client script. */}
 <div class="hlscrim" id="hlscrim"></div>
-<aside class="hldraw" id="hldraw" aria-label="Your highlights">
+<aside class="hldraw" id="hldraw" aria-label={wc.drawer?.ariaLabel || 'Your highlights'}>
   <div class="hld-top">
-    <h3>Your highlights</h3><span class="n" id="hldn">none yet</span>
-    <button class="x" id="hlx" type="button" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
+    <h3>{wc.drawer?.title || 'Your highlights'}</h3><span class="n" id="hldn">{wc.drawer?.none || 'none yet'}</span>
+    <button class="x" id="hlx" type="button" aria-label={wc.drawer?.closeLabel || 'Close'}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
   </div>
   <div class="hld-body" id="hldbody"></div>
-  <div class="hld-foot"><button id="hlcopyall" type="button">Copy all</button><span>Saved to your account — on every device.</span></div>
+  <div class="hld-foot"><button id="hlcopyall" type="button">{wc.drawer?.copyAll || 'Copy all'}</button><span>{wc.drawer?.savedNote || 'Saved to your account — on every device.'}</span></div>
 </aside>
 
 {/* Global because mark.hl / .pip are injected at runtime (scoped styles wouldn't
@@ -149,15 +151,19 @@ const { postId, author = '', title = '' } = Astro.props;
   .hld-foot button:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 
+<script type="application/json" id="highlights-copy" set:html={JSON.stringify(wc)}></script>
+
 <script>
   import { supabase } from '../lib/supabase';
+
+  const CM: any = JSON.parse(document.getElementById('highlights-copy')?.textContent || '{}');
 
   const tool = document.getElementById('seltool');
   if (tool) initHighlights(tool as HTMLElement);
 
   function initHighlights(tool: HTMLElement) {
     const postId = tool.getAttribute('data-post-id') || '';
-    const AUTHOR = tool.getAttribute('data-author') || 'the author';
+    const AUTHOR = tool.getAttribute('data-author') || CM.defaults?.author || 'the author';
     const TITLE = tool.getAttribute('data-title') || document.title;
     const body = (document.querySelector('article.post-body') || document.querySelector('article')) as HTMLElement | null;
     const pill = document.getElementById('hlpill')!;
@@ -176,7 +182,7 @@ const { postId, author = '', title = '' } = Astro.props;
     let store: Record<number, any[]> = {};
     let noteTimer: number | undefined;
 
-    const authorNameOf = (u: any) => { const m = u.user_metadata || {}; return m.user_name || m.name || (u.email ? u.email.split('@')[0] : 'Reader'); };
+    const authorNameOf = (u: any) => { const m = u.user_metadata || {}; return m.user_name || m.name || (u.email ? u.email.split('@')[0] : (CM.defaults?.reader || 'Reader')); };
     const esc = (s: any) => String(s).replace(/[<&]/g, (c: string) => (c === '<' ? '&lt;' : '&amp;'));
     const grow = (ta: HTMLTextAreaElement) => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
     // Upvotes for discussion replies (kind 'hlcomment' in the shared `votes` table).
@@ -237,10 +243,10 @@ const { postId, author = '', title = '' } = Astro.props;
       closeMarkMenu();
       const el = document.createElement('div'); el.className = 'seltool on'; el.style.position = 'fixed'; el.style.zIndex = '82';
       el.innerHTML =
-        '<button type="button" data-mm="discuss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-9 8.3 8.5 8.5 0 0 1-3.9-.9L3 20l1.1-5.1A8.38 8.38 0 0 1 3.7 11 8.5 8.5 0 0 1 12 3a8.38 8.38 0 0 1 8.3 8.5Z"/></svg>Discuss</button>'
-        + '<button type="button" data-mm="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v10l-4 4H4Z"/><path d="M8 9h8"/></svg>Note</button>'
+        '<button type="button" data-mm="discuss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-9 8.3 8.5 8.5 0 0 1-3.9-.9L3 20l1.1-5.1A8.38 8.38 0 0 1 3.7 11 8.5 8.5 0 0 1 12 3a8.38 8.38 0 0 1 8.3 8.5Z"/></svg>' + (CM.markMenu?.discuss || 'Discuss') + '</button>'
+        + '<button type="button" data-mm="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v10l-4 4H4Z"/><path d="M8 9h8"/></svg>' + (CM.markMenu?.note || 'Note') + '</button>'
         + '<span class="sep"></span>'
-        + '<button type="button" data-mm="remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>Remove</button>';
+        + '<button type="button" data-mm="remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>' + (CM.markMenu?.remove || 'Remove') + '</button>';
       document.body.appendChild(el);
       const r = mark.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
       el.style.left = Math.min(Math.max(10, r.left + r.width / 2 - w / 2), innerWidth - w - 10) + 'px';
@@ -357,25 +363,25 @@ const { postId, author = '', title = '' } = Astro.props;
     }
 
     // ---- drawer list (design sync(), minus the localStorage-only bits) ----
-    const KEYHTML = '<details class="hlkey" open><summary><svg class="cv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>What the marks mean</summary>'
-      + '<div class="krow"><span class="s w">passage</span><span>Yours — highlighted by you</span></div>'
-      + '<div class="krow"><span class="s n">passage</span><span>Carries a private note</span></div>'
-      + '<div class="krow"><span class="s t">passage<i>3</i></span><span>Open discussion — tap the number</span></div></details>';
+    const KEYHTML = '<details class="hlkey" open><summary><svg class="cv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m9 6 6 6-6 6"/></svg>' + (CM.legend?.title || 'What the marks mean') + '</summary>'
+      + '<div class="krow"><span class="s w">' + (CM.legend?.sample || 'passage') + '</span><span>' + (CM.legend?.yours || 'Yours — highlighted by you') + '</span></div>'
+      + '<div class="krow"><span class="s n">' + (CM.legend?.sample || 'passage') + '</span><span>' + (CM.legend?.noted || 'Carries a private note') + '</span></div>'
+      + '<div class="krow"><span class="s t">' + (CM.legend?.sample || 'passage') + '<i>3</i></span><span>' + (CM.legend?.discussion || 'Open discussion — tap the number') + '</span></div></details>';
     function sync() {
       const list = all(); cnt.textContent = String(list.length); pill.classList.add('on');
-      plabel.innerHTML = list.length ? '<b>' + list.length + '</b> highlighted' : 'Highlights';
-      dn.textContent = list.length ? list.length + (list.length === 1 ? ' passage' : ' passages') : 'none yet';
+      plabel.innerHTML = list.length ? '<b>' + list.length + '</b> ' + (CM.pill?.counted || 'highlighted') : (CM.pill?.idle || 'Highlights');
+      dn.textContent = list.length ? list.length + ' ' + (list.length === 1 ? (CM.drawer?.countSingular || 'passage') : (CM.drawer?.countPlural || 'passages')) : (CM.drawer?.none || 'none yet');
       dbody.innerHTML = KEYHTML + (list.length
         ? list.map((p) => {
             const h = p[1];
             return '<div class="hitem" data-b="' + p[0] + '" data-id="' + h.id + '">'
               + '<q>' + esc(h.text) + '</q>'
-              + '<textarea placeholder="Add a note…">' + esc(h.note || '') + '</textarea>'
-              + '<div class="acts"><button data-go type="button">Jump to it</button><button data-cp type="button">Copy</button>'
-              + '<button data-dis type="button">Discussion</button>'
-              + '<button class="del" data-rm type="button">Remove</button></div></div>';
+              + '<textarea placeholder="' + (CM.item?.notePlaceholder || 'Add a note…') + '">' + esc(h.note || '') + '</textarea>'
+              + '<div class="acts"><button data-go type="button">' + (CM.item?.jump || 'Jump to it') + '</button><button data-cp type="button">' + (CM.item?.copy || 'Copy') + '</button>'
+              + '<button data-dis type="button">' + (CM.item?.discussion || 'Discussion') + '</button>'
+              + '<button class="del" data-rm type="button">' + (CM.item?.remove || 'Remove') + '</button></div></div>';
           }).join('')
-        : '<div class="hld-empty">Select any passage in the essay to highlight it. Add a note and it stays attached to the sentence that prompted it — or open it up and discuss it with the author.</div>');
+        : '<div class="hld-empty">' + (CM.drawer?.empty || 'Select any passage in the essay to highlight it. Add a note and it stays attached to the sentence that prompted it — or open it up and discuss it with the author.') + '</div>');
       dbody.querySelectorAll('.hitem textarea').forEach((ta) => grow(ta as HTMLTextAreaElement));
     }
 
@@ -383,30 +389,30 @@ const { postId, author = '', title = '' } = Astro.props;
     async function openThread(hid: string, quote: string) {
       open();
       dbody.dataset.hid = hid;
-      dbody.innerHTML = '<div class="thv"><button class="back" data-back type="button">← All highlights</button><q>' + esc(quote) + '</q>'
-        + '<div class="rep-list hld-empty" style="padding:14px 0">Loading…</div>'
-        + '<div class="repbox"><textarea placeholder="Add to the discussion…"></textarea>'
-        + '<div class="r"><span>Private — between you and the author</span><button class="btn btn-primary btn-sm" type="button" data-reply>Post reply</button></div></div></div>';
+      dbody.innerHTML = '<div class="thv"><button class="back" data-back type="button">' + (CM.thread?.back || '← All highlights') + '</button><q>' + esc(quote) + '</q>'
+        + '<div class="rep-list hld-empty" style="padding:14px 0">' + (CM.thread?.loading || 'Loading…') + '</div>'
+        + '<div class="repbox"><textarea placeholder="' + (CM.thread?.replyPlaceholder || 'Add to the discussion…') + '"></textarea>'
+        + '<div class="r"><span>' + (CM.thread?.privacy || 'Private — between you and the author') + '</span><button class="btn btn-primary btn-sm" type="button" data-reply>' + (CM.thread?.post || 'Post reply') + '</button></div></div></div>';
       const listEl = dbody.querySelector('.rep-list') as HTMLElement;
       const res = await supabase.from('highlight_comments').select('id,user_id,author_name,body,created_at,author_is_admin').eq('highlight_id', hid).order('created_at', { ascending: true });
-      if (res.error) { listEl.textContent = 'Could not load the discussion.'; return; }
+      if (res.error) { listEl.textContent = (CM.thread?.loadError || 'Could not load the discussion.'); return; }
       const rows = (res.data || []) as any[];
       if (rows.length) {
         listEl.className = 'rep-list';
         listEl.innerHTML = rows.map((r) => {
-          const who = r.author_name || 'Reader';
+          const who = r.author_name || (CM.defaults?.reader || 'Reader');
           const when = new Date(r.created_at).toLocaleDateString();
           return '<div class="rep' + (r.author_is_admin ? ' auth' : '') + '" data-cid="' + r.id + '"><div class="av">' + esc((who[0] || '?')) + '</div>'
-            + '<div><div class="hd"><b>' + esc(who) + '</b>' + (r.author_is_admin ? '<span class="bg">Author</span>' : '')
+            + '<div><div class="hd"><b>' + esc(who) + '</b>' + (r.author_is_admin ? '<span class="bg">' + (CM.thread?.authorBadge || 'Author') + '</span>' : '')
             + '<span class="w">' + esc(when) + '</span></div><p>' + esc(r.body) + '</p>'
-            + '<div class="rep-acts"><button type="button" class="up" data-up aria-label="Upvote"><span class="uparrow">▲</span> <span class="upn">0</span></button>'
-            + ((currentUser && (r.user_id === currentUser.id || isAdmin)) ? '<button type="button" class="repdel" data-repdel>Delete</button>' : '')
+            + '<div class="rep-acts"><button type="button" class="up" data-up aria-label="' + (CM.thread?.upvoteLabel || 'Upvote') + '"><span class="uparrow">▲</span> <span class="upn">0</span></button>'
+            + ((currentUser && (r.user_id === currentUser.id || isAdmin)) ? '<button type="button" class="repdel" data-repdel>' + (CM.thread?.delete || 'Delete') + '</button>' : '')
             + '</div></div></div>';
         }).join('');
         paintReplyVotes(rows.map((r) => r.id));
         addPip(hid, rows.length);
       } else {
-        listEl.textContent = 'No replies yet. Say the first thing.';
+        listEl.textContent = (CM.thread?.empty || 'No replies yet. Say the first thing.');
       }
     }
 
@@ -445,7 +451,7 @@ const { postId, author = '', title = '' } = Astro.props;
       if (act === 'note') return add(true);
       const out = act === 'quote' ? '“' + txt + '” — ' + AUTHOR + (TITLE ? ', ' + TITLE : '') + '\n' + location.href : txt;
       if (navigator.clipboard) navigator.clipboard.writeText(out);
-      b._t = b.innerHTML; b.innerHTML = 'Copied'; setTimeout(hide, 800);
+      b._t = b.innerHTML; b.innerHTML = (CM.toolbar?.copied || 'Copied'); setTimeout(hide, 800);
     });
 
     // clicks on inline marks / pips in the article body
@@ -464,10 +470,10 @@ const { postId, author = '', title = '' } = Astro.props;
       const repdel = t.closest('[data-repdel]') as HTMLElement | null;
       if (repdel) {
         const rep = repdel.closest('.rep') as HTMLElement | null; if (!rep || !rep.dataset.cid) return;
-        if (!confirm('Delete this reply? This can’t be undone.')) return;
+        if (!confirm(CM.thread?.deleteConfirm || 'Delete this reply? This can’t be undone.')) return;
         const hid = dbody.dataset.hid || ''; const qel = dbody.querySelector('.thv > q'); const q = qel ? qel.textContent! : '';
         supabase.from('highlight_comments').delete().eq('id', rep.dataset.cid).then((r) => {
-          if (r.error) { alert('Could not delete: ' + r.error.message); return; }
+          if (r.error) { alert((CM.thread?.deleteError || 'Could not delete: ') + r.error.message); return; }
           openThread(hid, q); // reload the thread (also re-counts the mark's pip)
         });
         return;
@@ -490,7 +496,7 @@ const { postId, author = '', title = '' } = Astro.props;
       if (t.closest('[data-rm]')) return remove(i, id);
       if (t.closest('[data-dis]')) { const h = findHl(id); if (h) openThread(id, h.text); return; }
       const cp = t.closest('[data-cp]') as HTMLElement | null;
-      if (cp) { if (navigator.clipboard) navigator.clipboard.writeText(it.querySelector('q')!.textContent!); cp.textContent = 'Copied'; setTimeout(() => { cp.textContent = 'Copy'; }, 1400); return; }
+      if (cp) { if (navigator.clipboard) navigator.clipboard.writeText(it.querySelector('q')!.textContent!); cp.textContent = (CM.item?.copied || 'Copied'); setTimeout(() => { cp.textContent = (CM.item?.copy || 'Copy'); }, 1400); return; }
       if (t.closest('[data-go]') || t.closest('q')) {
         const mk = body!.querySelector('mark.hl[data-id="' + id + '"]') as HTMLElement | null; if (!mk) return; close();
         scrollTo({ top: mk.getBoundingClientRect().top + scrollY - 140, behavior: 'smooth' });
@@ -518,7 +524,7 @@ const { postId, author = '', title = '' } = Astro.props;
       const b = this;
       const txt = all().map((p) => '“' + p[1].text + '”' + (p[1].note ? '\n  — ' + p[1].note : '')).join('\n\n');
       if (navigator.clipboard) navigator.clipboard.writeText(txt);
-      b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy all'; }, 1500);
+      b.textContent = (CM.drawer?.copiedAll || 'Copied'); setTimeout(() => { b.textContent = (CM.drawer?.copyAll || 'Copy all'); }, 1500);
     });
 
     // ---- auth gate + load. onAuthStateChange fires often (refocus) — only act on

@@ -36,11 +36,13 @@
  *     it touches only this post's own URL. The inline handler is CSP-safe under the
  *     existing 'unsafe-inline' script-src (no external hosts, no network calls).
  */
+import site from '../data/site.json';
 interface Props {
   url: string;
   title: string;
 }
 const { url, title } = Astro.props;
+const wc = (site as any).shareBar || {};
 
 // Pre-encode once. `text` is what networks that take a message (X, Bluesky) show
 // as the draft; `u`/`url` carry the canonical link.
@@ -86,8 +88,9 @@ const targets = [
 ];
 ---
 
-<aside class="sharebar" aria-label="Share this post">
-  <span class="sharebar-label">Share</span>
+<aside class="sharebar" aria-label={wc.regionLabel || 'Share this post'}>
+  <script type="application/json" id="shareBar-copy" set:html={JSON.stringify(wc)}></script>
+  <span class="sharebar-label">{wc.label || 'Share'}</span>
   <div class="sharebar-links">
     {targets.map((s) => (
       <a
@@ -95,20 +98,20 @@ const targets = [
         href={s.href}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label={`Share on ${s.label}`}
-        title={`Share on ${s.label}`}
+        aria-label={(wc.shareOn || 'Share on') + ' ' + s.label}
+        title={(wc.shareOn || 'Share on') + ' ' + s.label}
       >
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
           <path fill="currentColor" d={s.path} />
         </svg>
       </a>
     ))}
-    <button type="button" class="share-btn share-copy" data-share-url={url} aria-label="Copy link" title="Copy link">
+    <button type="button" class="share-btn share-copy" data-share-url={url} aria-label={wc.copyLabel || 'Copy link'} title={wc.copyLabel || 'Copy link'}>
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
         <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
           d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
       </svg>
-      <span class="share-copy-label">Copy link</span>
+      <span class="share-copy-label">{wc.copyLabel || 'Copy link'}</span>
     </button>
   </div>
 </aside>
@@ -166,13 +169,14 @@ const targets = [
 </style>
 
 <script>
+  const CM = JSON.parse(document.getElementById('shareBar-copy')?.textContent || '{}');
   // Copy-link handler. Async Clipboard API where available (needs a secure
   // context, which the live site is), with a legacy execCommand fallback. Only
   // ever copies this post's own canonical URL — no external calls, no user data.
   document.querySelectorAll('.share-copy').forEach((el) => {
     const btn = el as HTMLButtonElement;
     const labelEl = btn.querySelector('.share-copy-label');
-    const original = labelEl?.textContent ?? 'Copy link';
+    const original = labelEl?.textContent ?? (CM.copyLabel || 'Copy link');
     btn.addEventListener('click', async () => {
       const url = btn.getAttribute('data-share-url') || location.href;
       let ok = false;
@@ -195,7 +199,7 @@ const targets = [
         ok = false;
       }
       if (labelEl) {
-        labelEl.textContent = ok ? 'Copied!' : 'Press Ctrl+C';
+        labelEl.textContent = ok ? (CM.copied || 'Copied!') : (CM.copyError || 'Press Ctrl+C');
         btn.classList.toggle('is-copied', ok);
         window.setTimeout(() => {
           labelEl.textContent = original;

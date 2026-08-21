@@ -53,6 +53,15 @@
  *     in the POST body only.
  */
 
+import site from '../data/site.json';
+
+// Component-owned copy (email placeholder, aria-label, button label, and the inline
+// JS status messages). The subscribeForm section of site.json backs each of these;
+// every original literal is kept as the final `||` fallback so wording is unchanged
+// when a key is absent. NOTE: heading/blurb are caller-supplied props (see Props
+// below) and stay sourced from those props — they are intentionally NOT read here.
+const wc = (site as any).subscribeForm || {};
+
 // Read at build time. When present, the template renders the Turnstile widget and
 // loads its script; when absent (e.g. local dev without keys), both are skipped and
 // the form still works, deferring bot policy to the server.
@@ -79,6 +88,13 @@ const {
   headingKey,
   blurbKey,
 } = Astro.props;
+
+// Static (non-prop) copy the component owns. Prop-driven heading/blurb are handled
+// above; these fields have no prop, so site.json is the higher-priority source over
+// the original literal fallback.
+const emailPlaceholder = wc.emailPlaceholder || 'you@example.com';
+const emailLabel = wc.emailLabel || 'Email address';
+const buttonLabel = wc.button || 'Subscribe';
 ---
 
 {/*
@@ -96,8 +112,8 @@ const {
       type="email"
       name="email"
       required
-      placeholder="you@example.com"
-      aria-label="Email address"
+      placeholder={emailPlaceholder}
+      aria-label={emailLabel}
     />
     {/*
       HONEYPOT (spam trap). This "website" field is visually hidden off-screen via
@@ -119,7 +135,7 @@ const {
       the inline script reads and forwards to the server for verification.
     */}
     {siteKey && <div class="cf-turnstile" data-sitekey={siteKey}></div>}
-    <button type="submit">Subscribe</button>
+    <button type="submit">{buttonLabel}</button>
     {/* Live region: aria-live="polite" so the status text is announced to screen
         readers without stealing focus. Populated by the inline script. */}
     <p class="form-msg" role="status" aria-live="polite"></p>
@@ -181,6 +197,12 @@ const {
 </style>
 
 {/*
+  Copy island: the subscribeForm section of site.json, serialized so the inline
+  script below can read the same status-message overrides without a second import.
+*/}
+<script type="application/json" id="subscribeForm-copy" set:html={JSON.stringify(wc)}></script>
+
+{/*
   Progressive-enhancement submit handler. is:inline so Astro ships it verbatim (no
   bundling) and it runs immediately without imports. Written as an IIFE with var/ES5
   so it needs no module scope and runs in older browsers. If this script never runs,
@@ -192,10 +214,14 @@ const {
     // Defensive: bail if the form isn't on the page (e.g. component not rendered).
     if (!form) return;
     var msg = form.querySelector('.form-msg');
+    // Copy overrides emitted by the JSON island above; each message keeps its
+    // original text as a fallback so behaviour is unchanged when a key is missing.
+    var copyEl = document.getElementById('subscribeForm-copy');
+    var CM = JSON.parse((copyEl && copyEl.textContent) || '{}');
     form.addEventListener('submit', async function (e) {
       // Stop the native navigation so we can POST via fetch and show inline status.
       e.preventDefault();
-      msg.textContent = 'Submitting…';
+      msg.textContent = (CM.submitting || 'Submitting…');
       // Turnstile injects this hidden input; may be absent if no site key was
       // configured or the challenge hasn't resolved yet. We forward whatever exists
       // and let the server decide whether a missing/blank token is acceptable.
@@ -223,7 +249,7 @@ const {
         // Prefer the server's own message/error text; otherwise use status-based copy.
         // "Check your inbox to confirm." reflects the double-opt-in flow: success here
         // only means a confirmation email was queued, not that they're subscribed yet.
-        msg.textContent = data.message || data.error || (res.ok ? 'Check your inbox to confirm.' : 'Something went wrong.');
+        msg.textContent = data.message || data.error || (res.ok ? (CM.success || 'Check your inbox to confirm.') : (CM.genericError || 'Something went wrong.'));
         if (res.ok) {
           form.reset();
           // Reset Turnstile so a fresh token is issued for any subsequent submit
@@ -234,7 +260,7 @@ const {
       } catch (err) {
         // Network/transport failure (fetch rejected) — distinct from an HTTP error,
         // which is handled above via res.ok. Never surface the raw error to the user.
-        msg.textContent = 'Network error. Please try again.';
+        msg.textContent = (CM.networkError || 'Network error. Please try again.');
       }
     });
   })();

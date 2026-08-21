@@ -18,52 +18,54 @@
  *
  * INPUT: postId — the post slug. Placement: end of the essay, before the ShareBar.
  */
+import site from '../data/site.json';
 interface Props {
   postId: string;
 }
 const { postId } = Astro.props;
+const wc = (site as any).feedback || {};
 ---
 
 <section class="verdict" id="verdict" data-slug={postId}>
   <div class="vd-head">
-    <span class="vd-eyebrow">One tap, no account</span>
-    <h2>Did it hold?</h2>
-    <p>Answer and you&rsquo;ll see where <b><span id="vothers">other readers</span></b> landed &mdash; and what your own read looked like. Measured while you were reading it.</p>
+    <span class="vd-eyebrow">{wc.eyebrow || 'One tap, no account'}</span>
+    <h2>{wc.heading || 'Did it hold?'}</h2>
+    <p>{wc.intro?.lead || 'Answer and you’ll see where'} <b><span id="vothers">other readers</span></b> {wc.intro?.tail || 'landed — and what your own read looked like. Measured while you were reading it.'}</p>
   </div>
   <div class="vd-opts" id="vopts">
     <button class="vopt" type="button" data-v="held" aria-pressed="false">
       <span class="dot"></span>
-      <span class="txt"><b>Held me</b><small>Read it start to finish, and stayed with it</small></span>
+      <span class="txt"><b>{wc.options?.held?.label || 'Held me'}</b><small>{wc.options?.held?.hint || 'Read it start to finish, and stayed with it'}</small></span>
       <span class="pct"></span>
       <span class="bar"><i></i></span>
     </button>
     <button class="vopt" type="button" data-v="skimmed" aria-pressed="false">
       <span class="dot"></span>
-      <span class="txt"><b>Skimmed it</b><small>Took the argument, didn&rsquo;t read every line</small></span>
+      <span class="txt"><b>{wc.options?.skimmed?.label || 'Skimmed it'}</b><small>{wc.options?.skimmed?.hint || 'Took the argument, didn’t read every line'}</small></span>
       <span class="pct"></span>
       <span class="bar"><i></i></span>
     </button>
     <button class="vopt" type="button" data-v="lost" aria-pressed="false">
       <span class="dot"></span>
-      <span class="txt"><b>Lost me</b><small>Attention broke somewhere &mdash; tell me where</small></span>
+      <span class="txt"><b>{wc.options?.lost?.label || 'Lost me'}</b><small>{wc.options?.lost?.hint || 'Attention broke somewhere — tell me where'}</small></span>
       <span class="pct"></span>
       <span class="bar"><i></i></span>
     </button>
     <div class="vwhere" id="vwhere">
-      <span>Attention broke around</span><b id="vpara">&para;1</b>
-      <span class="step"><button type="button" id="vless" aria-label="Earlier paragraph">&minus;</button><button type="button" id="vmore" aria-label="Later paragraph">+</button></span>
-      <span style="color:var(--ink-faint)">estimated from your reading pace &mdash; nudge it if I guessed wrong</span>
+      <span>{wc.where?.prompt || 'Attention broke around'}</span><b id="vpara">&para;1</b>
+      <span class="step"><button type="button" id="vless" aria-label={wc.where?.earlierAria || 'Earlier paragraph'}>&minus;</button><button type="button" id="vmore" aria-label={wc.where?.laterAria || 'Later paragraph'}>+</button></span>
+      <span style="color:var(--ink-faint)">{wc.where?.note || 'estimated from your reading pace — nudge it if I guessed wrong'}</span>
     </div>
   </div>
   <div class="vd-receipt" id="vreceipt">
-    <div><span class="k">You read for</span><span class="val" id="rTime">&mdash;</span><span class="cmp" id="rTimeC"></span></div>
-    <div><span class="k">Your pace</span><span class="val" id="rPace">&mdash;</span><span class="cmp" id="rPaceC"></span></div>
-    <div><span class="k">You held to</span><span class="val" id="rHeld">&mdash;</span><span class="cmp" id="rHeldC"></span></div>
+    <div><span class="k">{wc.receipt?.timeLabel || 'You read for'}</span><span class="val" id="rTime">&mdash;</span><span class="cmp" id="rTimeC"></span></div>
+    <div><span class="k">{wc.receipt?.paceLabel || 'Your pace'}</span><span class="val" id="rPace">&mdash;</span><span class="cmp" id="rPaceC"></span></div>
+    <div><span class="k">{wc.receipt?.heldLabel || 'You held to'}</span><span class="val" id="rHeld">&mdash;</span><span class="cmp" id="rHeldC"></span></div>
   </div>
   <div class="vd-foot">
-    <span class="n"><b id="vtotal">&mdash;</b> answers &middot; <span id="vlostat"></span></span>
-    <span id="vprompt">Nothing is published under your name.</span>
-    <button class="undo" type="button" id="vundo">Change my answer</button>
+    <span class="n"><b id="vtotal">&mdash;</b> {wc.foot?.answers || 'answers'} &middot; <span id="vlostat"></span></span>
+    <span id="vprompt">{wc.foot?.promptDefault || 'Nothing is published under your name.'}</span>
+    <button class="undo" type="button" id="vundo">{wc.foot?.undo || 'Change my answer'}</button>
   </div>
 </section>
 
@@ -124,11 +126,14 @@ const { postId } = Astro.props;
   .verdict:not(.voted) .vd-foot .n{display:none}
 </style>
 
+<script type="application/json" id="feedback-copy" set:html={JSON.stringify(wc)}></script>
+
 <script>
   /* The verdict controller. Crowd numbers come from /api/feedback (server-authoritative,
      anonymous); the reading receipt + the "lost" paragraph are measured client-side from
      per-paragraph dwell. Ported from the Claude Design essay, with the fake static crowd
      swapped for the live backend. */
+  const CM = JSON.parse(document.getElementById('feedback-copy')?.textContent || '{}');
   (function () {
     var vd = document.getElementById('verdict');
     if (!vd) return;
@@ -196,16 +201,16 @@ const { postId } = Astro.props;
         o.querySelector('.bar i').style.width = pc + '%';
       });
       vd.classList.toggle('voted', !!mine);
-      if (othersEl) othersEl.textContent = (sum ? sum.toLocaleString() : 'no') + ' other reader' + (sum === 1 ? '' : 's');
+      if (othersEl) othersEl.textContent = (sum ? sum.toLocaleString() : (CM.crowd?.none || 'no')) + ' ' + (CM.crowd?.readerNoun || 'other reader') + (sum === 1 ? '' : 's');
       totalEl.textContent = sum ? sum.toLocaleString() : '0';
       var med = crowd.lostMedian;
       if (mine === 'lost' && saved.p) {
         paraEl.innerHTML = '&para;' + saved.p;
-        lostEl.innerHTML = 'you: &para;' + saved.p + (med ? ' &middot; most others: &para;' + med : '');
+        lostEl.innerHTML = (CM.foot?.lostYou || 'you: ¶{p}').replace('{p}', saved.p) + (med ? ' &middot; ' + (CM.foot?.lostOthers || 'most others: ¶{p}').replace('{p}', med) : '');
       } else {
-        lostEl.innerHTML = med ? 'most who lost it stopped near &para;' + med : 'no one has said they lost it';
+        lostEl.innerHTML = med ? (CM.foot?.lostMostNear || 'most who lost it stopped near ¶{p}').replace('{p}', med) : (CM.foot?.lostNone || 'no one has said they lost it');
       }
-      promptEl.textContent = mine ? 'Recorded. Nothing is published under your name.' : 'Nothing is published under your name.';
+      promptEl.textContent = mine ? (CM.foot?.promptRecorded || 'Recorded. Nothing is published under your name.') : (CM.foot?.promptDefault || 'Nothing is published under your name.');
       var rc = document.getElementById('vreceipt');
       var measured = mine && saved.ms != null && saved.ms > 3000;
       if (rc) rc.style.display = (mine && !measured) ? 'none' : '';
@@ -227,17 +232,17 @@ const { postId } = Astro.props;
       var t = document.getElementById('rTime'), tc = document.getElementById('rTimeC'),
           p = document.getElementById('rPace'), pc = document.getElementById('rPaceC'),
           hd = document.getElementById('rHeld'), hc = document.getElementById('rHeldC');
-      t.textContent = mins < 1 ? Math.max(1, Math.round(mins * 60)) + ' sec' : Math.round(mins) + ' min';
-      tc.textContent = mins < M.mins * 0.25 ? 'this one runs ' + M.mins + ' minutes' : 'of a ' + M.mins + ' minute essay';
-      p.textContent = pace ? pace + ' wpm' : '—';
-      pc.textContent = !pace ? 'too short to measure'
-        : pace > typical * 1.25 ? 'quicker than most here'
-        : pace < typical * 0.85 ? 'slower than most — the good kind'
-        : 'about typical (' + typical + ' wpm here)';
+      t.textContent = mins < 1 ? (CM.receipt?.timeSec || '{n} sec').replace('{n}', Math.max(1, Math.round(mins * 60))) : (CM.receipt?.timeMin || '{n} min').replace('{n}', Math.round(mins));
+      tc.textContent = mins < M.mins * 0.25 ? (CM.receipt?.timeRuns || 'this one runs {n} minutes').replace('{n}', M.mins) : (CM.receipt?.timeOf || 'of a {n} minute essay').replace('{n}', M.mins);
+      p.textContent = pace ? (CM.receipt?.paceUnit || '{n} wpm').replace('{n}', pace) : '—';
+      pc.textContent = !pace ? (CM.receipt?.paceTooShort || 'too short to measure')
+        : pace > typical * 1.25 ? (CM.receipt?.paceQuick || 'quicker than most here')
+        : pace < typical * 0.85 ? (CM.receipt?.paceSlow || 'slower than most — the good kind')
+        : (CM.receipt?.paceTypical || 'about typical ({n} wpm here)').replace('{n}', typical);
       hd.textContent = held ? '¶' + held : '—';
-      hc.textContent = !held ? 'no paragraph got a full read'
-        : held >= paras.length ? 'the whole thing'
-        : held > Math.round(paras.length * 0.7) ? 'further than most' : 'most readers reach ¶' + Math.round(paras.length * 0.7);
+      hc.textContent = !held ? (CM.receipt?.heldNone || 'no paragraph got a full read')
+        : held >= paras.length ? (CM.receipt?.heldAll || 'the whole thing')
+        : held > Math.round(paras.length * 0.7) ? (CM.receipt?.heldFurther || 'further than most') : (CM.receipt?.heldMost || 'most readers reach ¶{n}').replace('{n}', Math.round(paras.length * 0.7));
     }
 
     function save() { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} }

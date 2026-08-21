@@ -12,15 +12,18 @@
  * Comment text is HTML-escaped before any formatting; links restricted to
  * http(s)/relative; math rendered by KaTeX with trust:false. No raw HTML runs.
  */
+import site from '../data/site.json';
 interface Props { postId: string; }
 const { postId } = Astro.props;
+const wc = (site as any).comments || {};
 ---
 
 <section class="comments" data-post-id={postId}>
-  <div class="sec-head"><h2 id="cc-count">Comments</h2><span class="meta-caps">Sign in to join in</span></div>
+  <div class="sec-head"><h2 id="cc-count">{wc.heading || 'Comments'}</h2><span class="meta-caps">{wc.joinCaps || 'Sign in to join in'}</span></div>
   <div id="cc-compose"></div>
-  <div class="clist" id="cc-list"><p class="cc-muted">Loading comments…</p></div>
+  <div class="clist" id="cc-list"><p class="cc-muted">{wc.loading || 'Loading comments…'}</p></div>
 </section>
+<script type="application/json" id="comments-copy" set:html={JSON.stringify(wc)}></script>
 
 {/* Global because the thread is injected at runtime (scoped styles never reach
     runtime DOM). All selectors namespaced under .comments so nothing leaks. */}
@@ -67,6 +70,8 @@ const { postId } = Astro.props;
   import { supabase } from '../lib/supabase';
   import { commentMd, renderMathIn } from '../lib/comment-md';
 
+  const CM = JSON.parse(document.getElementById('comments-copy')?.textContent || '{}');
+
   const root = document.querySelector('.comments') as HTMLElement | null;
   if (root) initComments(root);
 
@@ -103,18 +108,18 @@ const { postId } = Astro.props;
     }
 
     function renderComment(r: any, kidsOf: Record<string, any[]>): string {
-      const who = r.author_name || 'Reader';
+      const who = r.author_name || (CM.authorFallback || 'Reader');
       const v = votes[r.id] || { n: 0, mine: false };
       const canDel = currentUser && (r.user_id === currentUser.id || isAdmin);
       const kids = (kidsOf[r.id] || []).map((c) => renderComment(c, kidsOf)).join('');
       return '<div class="comment" id="comment-' + r.id + '" data-id="' + r.id + '">'
         + '<div class="avatar' + (r.author_is_admin ? '' : ' q') + '" aria-hidden="true">' + esc((who[0] || '?')) + '</div>'
-        + '<div class="b"><div class="hd"><b>' + esc(who) + '</b>' + (r.author_is_admin ? '<span class="badge">Author</span>' : '') + '<span class="when">' + esc(timeAgo(r.created_at)) + '</span></div>'
+        + '<div class="b"><div class="hd"><b>' + esc(who) + '</b>' + (r.author_is_admin ? '<span class="badge">' + (CM.authorBadge || 'Author') + '</span>' : '') + '<span class="when">' + esc(timeAgo(r.created_at)) + '</span></div>'
         + '<p>' + md(r.body) + '</p>'
         + '<div class="acts">'
-        + '<button type="button" class="up' + (v.mine ? ' on' : '') + '" data-up aria-label="Upvote"><span class="uparrow">▲</span> <span class="upn">' + v.n + '</span></button>'
-        + '<button type="button" data-reply>Reply</button>'
-        + (canDel ? '<button type="button" class="del" data-del>Delete</button>' : '')
+        + '<button type="button" class="up' + (v.mine ? ' on' : '') + '" data-up aria-label="' + (CM.upvoteAria || 'Upvote') + '"><span class="uparrow">▲</span> <span class="upn">' + v.n + '</span></button>'
+        + '<button type="button" data-reply>' + (CM.replyButton || 'Reply') + '</button>'
+        + (canDel ? '<button type="button" class="del" data-del>' + (CM.deleteButton || 'Delete') + '</button>' : '')
         + '</div>'
         + (kids ? '<div class="reply">' + kids + '</div>' : '')
         + '<div class="reply-slot"></div></div></div>';
@@ -138,13 +143,13 @@ const { postId } = Astro.props;
     async function load() {
       let res = await supabase.from('comments').select('id,user_id,author_name,body,created_at,parent_id,author_is_admin').eq('post_id', postId).order('created_at', { ascending: true });
       if (res.error) { res = await supabase.from('comments').select('id,user_id,author_name,body,created_at').eq('post_id', postId).order('created_at', { ascending: true }); }
-      if (res.error) { list.innerHTML = '<p class="cc-muted">Could not load comments.</p>'; return; }
+      if (res.error) { list.innerHTML = '<p class="cc-muted">' + (CM.loadError || 'Could not load comments.') + '</p>'; return; }
       const rows = (res.data || []) as any[];
-      countEl.textContent = rows.length ? rows.length + (rows.length === 1 ? ' comment' : ' comments') : 'Comments';
+      countEl.textContent = rows.length ? rows.length + (rows.length === 1 ? (CM.count?.singular || ' comment') : (CM.count?.plural || ' comments')) : (CM.heading || 'Comments');
       const kidsOf: Record<string, any[]> = {};
       rows.forEach((r) => { if (r.parent_id) (kidsOf[r.parent_id] = kidsOf[r.parent_id] || []).push(r); });
       const top = rows.filter((r) => !r.parent_id);
-      list.innerHTML = top.length ? top.map((r) => renderComment(r, kidsOf)).join('') : '<p class="cc-muted">No comments yet. Be the first.</p>';
+      list.innerHTML = top.length ? top.map((r) => renderComment(r, kidsOf)).join('') : '<p class="cc-muted">' + (CM.empty || 'No comments yet. Be the first.') + '</p>';
       renderMath();
       loadVotes();
     }
@@ -166,18 +171,18 @@ const { postId } = Astro.props;
       btn.disabled = true;
       const payload: any = { post_id: postId, user_id: currentUser.id, author_name: authorNameOf(currentUser), body }; if (parentId) payload.parent_id = parentId;
       const res = await supabase.from('comments').insert(payload);
-      if (res.error) { btn.disabled = false; const foot = btn.closest('.foot'); if (foot) { let em = foot.querySelector('.cc-err') as HTMLElement | null; if (!em) { em = document.createElement('span'); em.className = 'cc-err'; em.style.color = '#b4453a'; foot.insertBefore(em, btn); } em.textContent = res.error.message || 'Could not post.'; } return; }
+      if (res.error) { btn.disabled = false; const foot = btn.closest('.foot'); if (foot) { let em = foot.querySelector('.cc-err') as HTMLElement | null; if (!em) { em = document.createElement('span'); em.className = 'cc-err'; em.style.color = '#b4453a'; foot.insertBefore(em, btn); } em.textContent = res.error.message || (CM.postError || 'Could not post.'); } return; }
       ta.value = ''; if (!parentId) setDraft(''); load();
     }
 
     function composerHTML(name: string, small: boolean) {
       return '<div class="cbox"><div class="avatar" aria-hidden="true">' + esc((name[0] || '?').toLowerCase()) + '</div>'
-        + '<div class="f"><textarea placeholder="' + (small ? 'Reply…' : 'Say something worth reading.') + '"></textarea>'
-        + '<div class="foot"><span>Signed in as ' + esc(name) + ' — Markdown + math work</span><button class="btn btn-primary btn-sm" type="button" data-post>' + (small ? 'Reply' : 'Post comment') + '</button></div></div></div>';
+        + '<div class="f"><textarea placeholder="' + (small ? (CM.replyPlaceholder || 'Reply…') : (CM.composerPlaceholder || 'Say something worth reading.')) + '"></textarea>'
+        + '<div class="foot"><span>' + (CM.signedInPrefix || 'Signed in as ') + esc(name) + (CM.composerHint || ' — Markdown + math work') + '</span><button class="btn btn-primary btn-sm" type="button" data-post>' + (small ? (CM.replyButton || 'Reply') : (CM.postButton || 'Post comment')) + '</button></div></div></div>';
     }
 
     function renderCompose() {
-      if (!currentUser) { compose.className = 'signin'; compose.innerHTML = '<a href="/login">Sign in</a> to join the conversation.'; return; }
+      if (!currentUser) { compose.className = 'signin'; compose.innerHTML = '<a href="/login">' + (CM.signin?.link || 'Sign in') + '</a>' + (CM.signin?.joinText || ' to join the conversation.'); return; }
       const name = authorNameOf(currentUser);
       compose.className = ''; compose.innerHTML = composerHTML(name, false);
       const ta = compose.querySelector('textarea') as HTMLTextAreaElement;
@@ -202,16 +207,16 @@ const { postId } = Astro.props;
       if (t.closest('[data-del]')) {
         const c = t.closest('.comment') as HTMLElement; if (!c) return;
         const hasReplies = !!c.querySelector(':scope > .b > .reply');
-        if (!confirm('Delete this comment' + (hasReplies ? ' and its replies' : '') + '? This can’t be undone.')) return;
+        if (!confirm((CM.deleteConfirm?.base || 'Delete this comment') + (hasReplies ? (CM.deleteConfirm?.withReplies || ' and its replies') : '') + (CM.deleteConfirm?.suffix || '? This can’t be undone.'))) return;
         const res = await supabase.from('comments').delete().eq('id', c.dataset.id);
-        if (res.error) { alert('Could not delete: ' + res.error.message); return; }
+        if (res.error) { alert((CM.deleteError || 'Could not delete: ') + res.error.message); return; }
         load(); return;
       }
       if (t.closest('[data-reply]')) {
         const b = (t.closest('[data-reply]')!.closest('.acts')!.parentNode) as HTMLElement; // the .b
         const slot = b.querySelector(':scope > .reply-slot') as HTMLElement; if (!slot) return;
         if (slot.firstChild) { slot.innerHTML = ''; return; } // toggle off
-        if (!currentUser) { slot.innerHTML = '<p class="cc-muted" style="margin:12px 0 0"><a href="/login" style="color:var(--accent)">Sign in</a> to reply.</p>'; return; }
+        if (!currentUser) { slot.innerHTML = '<p class="cc-muted" style="margin:12px 0 0"><a href="/login" style="color:var(--accent)">' + (CM.signin?.link || 'Sign in') + '</a>' + (CM.signin?.replyText || ' to reply.') + '</p>'; return; }
         slot.innerHTML = composerHTML(authorNameOf(currentUser), true);
         const cid = (b.closest('.comment') as HTMLElement).dataset.id!;
         const rbtn = slot.querySelector('[data-post]') as HTMLButtonElement;

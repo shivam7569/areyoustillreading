@@ -20,7 +20,8 @@
     },
     "footer": {
       "rss": "RSS",
-      "tagline": "Written to be finished."
+      "tagline": "Written to be finished.",
+      "letter": "The letter"
     },
     "seo": {
       "description": "Notes on LLM engineering, plus the projects behind them."
@@ -365,6 +366,219 @@
       "highlightWordPlural": "highlights",
       "noteWord": "note",
       "noteWordPlural": "notes"
+    }
+  },
+  "shareBar": {
+    "label": "Share",
+    "regionLabel": "Share this post",
+    "shareOn": "Share on",
+    "copyLabel": "Copy link",
+    "copied": "Copied!",
+    "copyError": "Press Ctrl+C"
+  },
+  "seriesNav": {
+    "crumbAria": "Series: {title}",
+    "spinePartTitle": "Part {order} · {title}",
+    "spinePartAria": "Part {order}: {title}",
+    "plannedNamed": "Part {n} · {name} (planned)",
+    "plannedUnnamed": "Part {n} · planned",
+    "pagerAria": "More in {title}",
+    "prev": {
+      "dir": "← Part {n}",
+      "suggestDir": "More to read",
+      "offDir": "The beginning",
+      "offTitle": "Part one of the series"
+    },
+    "next": {
+      "dir": "Part {n} →",
+      "fieldDir": "Next in the field →",
+      "suggestDir": "Read next",
+      "completeDir": "Series complete",
+      "completeTitle": "Back to all {n} parts"
+    }
+  },
+  "subscribeForm": {
+    "emailPlaceholder": "you@example.com",
+    "emailLabel": "Email address",
+    "button": "Subscribe",
+    "submitting": "Submitting…",
+    "success": "Check your inbox to confirm.",
+    "genericError": "Something went wrong.",
+    "networkError": "Network error. Please try again."
+  },
+  "feedback": {
+    "eyebrow": "One tap, no account",
+    "heading": "Did it hold?",
+    "intro": {
+      "lead": "Answer and you’ll see where",
+      "tail": "landed — and what your own read looked like. Measured while you were reading it."
+    },
+    "options": {
+      "held": {
+        "label": "Held me",
+        "hint": "Read it start to finish, and stayed with it"
+      },
+      "skimmed": {
+        "label": "Skimmed it",
+        "hint": "Took the argument, didn’t read every line"
+      },
+      "lost": {
+        "label": "Lost me",
+        "hint": "Attention broke somewhere — tell me where"
+      }
+    },
+    "where": {
+      "prompt": "Attention broke around",
+      "earlierAria": "Earlier paragraph",
+      "laterAria": "Later paragraph",
+      "note": "estimated from your reading pace — nudge it if I guessed wrong"
+    },
+    "receipt": {
+      "timeLabel": "You read for",
+      "paceLabel": "Your pace",
+      "heldLabel": "You held to",
+      "timeSec": "{n} sec",
+      "timeMin": "{n} min",
+      "timeRuns": "this one runs {n} minutes",
+      "timeOf": "of a {n} minute essay",
+      "paceUnit": "{n} wpm",
+      "paceTooShort": "too short to measure",
+      "paceQuick": "quicker than most here",
+      "paceSlow": "slower than most — the good kind",
+      "paceTypical": "about typical ({n} wpm here)",
+      "heldNone": "no paragraph got a full read",
+      "heldAll": "the whole thing",
+      "heldFurther": "further than most",
+      "heldMost": "most readers reach ¶{n}"
+    },
+    "foot": {
+      "answers": "answers",
+      "lostYou": "you: ¶{p}",
+      "lostOthers": "most others: ¶{p}",
+      "lostMostNear": "most who lost it stopped near ¶{p}",
+      "lostNone": "no one has said they lost it",
+      "promptDefault": "Nothing is published under your name.",
+      "promptRecorded": "Recorded. Nothing is published under your name.",
+      "undo": "Change my answer"
+    },
+    "crowd": {
+      "none": "no",
+      "readerNoun": "other reader"
+    }
+  },
+  "comments": {
+    "heading": "Comments",
+    "count": {
+      "singular": " comment",
+      "plural": " comments"
+    },
+    "joinCaps": "Sign in to join in",
+    "loading": "Loading comments…",
+    "loadError": "Could not load comments.",
+    "empty": "No comments yet. Be the first.",
+    "authorBadge": "Author",
+    "authorFallback": "Reader",
+    "upvoteAria": "Upvote",
+    "replyButton": "Reply",
+    "deleteButton": "Delete",
+    "postButton": "Post comment",
+    "composerPlaceholder": "Say something worth reading.",
+    "replyPlaceholder": "Reply…",
+    "signedInPrefix": "Signed in as ",
+    "composerHint": " — Markdown + math work",
+    "postError": "Could not post.",
+    "deleteError": "Could not delete: ",
+    "deleteConfirm": {
+      "base": "Delete this comment",
+      "withReplies": " and its replies",
+      "suffix": "? This can’t be undone."
+    },
+    "signin": {
+      "link": "Sign in",
+      "joinText": " to join the conversation.",
+      "replyText": " to reply."
+    }
+  },
+  "highlights": {
+    "toolbar": {
+      "highlight": "Highlight",
+      "note": "Note",
+      "copy": "Copy",
+      "quote": "Quote",
+      "ariaLabel": "Selection actions",
+      "copied": "Copied"
+    },
+    "pill": {
+      "ariaLabel": "Open your highlights",
+      "idle": "Highlights",
+      "counted": "highlighted"
+    },
+    "drawer": {
+      "ariaLabel": "Your highlights",
+      "title": "Your highlights",
+      "closeLabel": "Close",
+      "none": "none yet",
+      "countSingular": "passage",
+      "countPlural": "passages",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied",
+      "savedNote": "Saved to your account — on every device.",
+      "empty": "Select any passage in the essay to highlight it. Add a note and it stays attached to the sentence that prompted it — or open it up and discuss it with the author."
+    },
+    "item": {
+      "notePlaceholder": "Add a note…",
+      "jump": "Jump to it",
+      "copy": "Copy",
+      "copied": "Copied",
+      "discussion": "Discussion",
+      "remove": "Remove"
+    },
+    "legend": {
+      "title": "What the marks mean",
+      "sample": "passage",
+      "yours": "Yours — highlighted by you",
+      "noted": "Carries a private note",
+      "discussion": "Open discussion — tap the number"
+    },
+    "markMenu": {
+      "discuss": "Discuss",
+      "note": "Note",
+      "remove": "Remove"
+    },
+    "popular": {
+      "tooltip": "Many readers marked this one"
+    },
+    "thread": {
+      "loading": "Loading…",
+      "back": "← All highlights",
+      "replyPlaceholder": "Add to the discussion…",
+      "privacy": "Private — between you and the author",
+      "post": "Post reply",
+      "loadError": "Could not load the discussion.",
+      "empty": "No replies yet. Say the first thing.",
+      "authorBadge": "Author",
+      "upvoteLabel": "Upvote",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this reply? This can’t be undone.",
+      "deleteError": "Could not delete: "
+    },
+    "defaults": {
+      "author": "the author",
+      "reader": "Reader"
+    }
+  },
+  "notes": {
+    "heading": "Your private note",
+    "placeholder": "Private notes on this post — only you (and the admin) can see them.",
+    "saveButton": "Save note",
+    "readersHeading": "Readers' notes",
+    "authorFallback": "Reader",
+    "status": {
+      "saving": "Saving…",
+      "saved": "Saved.",
+      "cleared": "Cleared.",
+      "saveFailed": "Save failed: ",
+      "loadFailed": "Could not load notes: "
     }
   }
 }

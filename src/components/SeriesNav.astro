@@ -16,6 +16,7 @@
  */
 import type { SeriesNavData } from '../lib/series';
 import type { FieldNav } from '../lib/fields';
+import site from '../data/site.json';
 
 interface Props {
   data: SeriesNavData;
@@ -27,9 +28,10 @@ const { data, field = null, related = [], placement = 'top' } = Astro.props;
 const href = (slug: string) => `/blog/${slug}/`;
 const introHref = href(data.introSlug);
 const todoCount = Math.max(0, data.total - data.parts.length);
+const wc = (site as any).seriesNav || {};
 ---
 {placement === 'top' && (
-  <nav class="seriesbar" aria-label={`Series: ${data.title}`} data-pagefind-ignore>
+  <nav class="seriesbar" aria-label={(wc.crumbAria || 'Series: {title}').replace('{title}', data.title)} data-pagefind-ignore>
     <span class="crumb">
       {field && (
         <Fragment>
@@ -41,12 +43,12 @@ const todoCount = Math.max(0, data.total - data.parts.length);
     </span>
     <ol class="spine">
       {data.parts.map((p) => (
-        <li><a href={href(p.slug)} class={p.current ? 'here' : undefined} aria-current={p.current ? 'page' : undefined} title={`Part ${p.order} · ${p.title}`} aria-label={`Part ${p.order}: ${p.title}`}></a></li>
+        <li><a href={href(p.slug)} class={p.current ? 'here' : undefined} aria-current={p.current ? 'page' : undefined} title={(wc.spinePartTitle || 'Part {order} · {title}').replace('{order}', String(p.order)).replace('{title}', p.title)} aria-label={(wc.spinePartAria || 'Part {order}: {title}').replace('{order}', String(p.order)).replace('{title}', p.title)}></a></li>
       ))}
       {Array.from({ length: todoCount }).map((_, i) => {
         const n = data.parts.length + i + 1;
         const pl = data.planned[i];
-        const label = pl ? `Part ${n} · ${pl} (planned)` : `Part ${n} · planned`;
+        const label = pl ? (wc.plannedNamed || 'Part {n} · {name} (planned)').replace('{n}', String(n)).replace('{name}', pl) : (wc.plannedUnnamed || 'Part {n} · planned').replace('{n}', String(n));
         return <li><a class="todo" href={introHref} title={label} aria-label={label}></a></li>;
       })}
     </ol>
@@ -55,19 +57,19 @@ const todoCount = Math.max(0, data.total - data.parts.length);
 )}
 {placement === 'bottom' && (
   <Fragment>
-    <nav class="pager" aria-label={`More in ${data.title}`} data-pagefind-ignore>
+    <nav class="pager" aria-label={(wc.pagerAria || 'More in {title}').replace('{title}', data.title)} data-pagefind-ignore>
       {data.prev
-        ? <a class="prev" href={href(data.prev.slug)}><div class="dir">← Part {data.index - 1}</div><div class="t">{data.prev.title}</div></a>
+        ? <a class="prev" href={href(data.prev.slug)}><div class="dir">{(wc.prev?.dir || '← Part {n}').replace('{n}', String(data.index - 1))}</div><div class="t">{data.prev.title}</div></a>
         : related[0]
-          ? <a class="prev suggest" href={href(related[0].slug)}><div class="dir">More to read</div><div class="t">{related[0].title}</div></a>
-          : <span class="prev off"><div class="dir">The beginning</div><div class="t">Part one of the series</div></span>}
+          ? <a class="prev suggest" href={href(related[0].slug)}><div class="dir">{wc.prev?.suggestDir || 'More to read'}</div><div class="t">{related[0].title}</div></a>
+          : <span class="prev off"><div class="dir">{wc.prev?.offDir || 'The beginning'}</div><div class="t">{wc.prev?.offTitle || 'Part one of the series'}</div></span>}
       {data.next
-        ? <a class="next" href={href(data.next.slug)}><div class="dir">Part {data.index + 1} →</div><div class="t">{data.next.title}</div></a>
+        ? <a class="next" href={href(data.next.slug)}><div class="dir">{(wc.next?.dir || 'Part {n} →').replace('{n}', String(data.index + 1))}</div><div class="t">{data.next.title}</div></a>
         : (field && field.next)
-          ? <a class="next field-next" href={field.next.href}><div class="dir">Next in the field →</div><div class="t">{field.next.seriesTitle}</div></a>
+          ? <a class="next field-next" href={field.next.href}><div class="dir">{wc.next?.fieldDir || 'Next in the field →'}</div><div class="t">{field.next.seriesTitle}</div></a>
           : related[0]
-            ? <a class="next suggest" href={href(related[0].slug)}><div class="dir">Read next</div><div class="t">{related[0].title}</div></a>
-            : <a class="next" href={introHref}><div class="dir">Series complete</div><div class="t">Back to all {data.parts.length} parts</div></a>}
+            ? <a class="next suggest" href={href(related[0].slug)}><div class="dir">{wc.next?.suggestDir || 'Read next'}</div><div class="t">{related[0].title}</div></a>
+            : <a class="next" href={introHref}><div class="dir">{wc.next?.completeDir || 'Series complete'}</div><div class="t">{(wc.next?.completeTitle || 'Back to all {n} parts').replace('{n}', String(data.parts.length))}</div></a>}
     </nav>
   </Fragment>
 )}
