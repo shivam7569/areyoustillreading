@@ -25,8 +25,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
         <button type="button" data-filter="published">Published<span class="n" data-ct="published">—</span></button>
         <button type="button" data-filter="draft">Drafts<span class="n" data-ct="draft">—</span></button>
         <button type="button" data-filter="scheduled">Scheduled<span class="n" data-ct="scheduled">—</span></button>
-        <button type="button" data-filter="free">Free<span class="n" data-ct="free">—</span></button>
-        <button type="button" data-filter="paid">Paywalled<span class="n" data-ct="paid">—</span></button>
+        <button type="button" data-filter="free" data-owner>Free<span class="n" data-ct="free">—</span></button>
+        <button type="button" data-filter="paid" data-owner>Paywalled<span class="n" data-ct="paid">—</span></button>
       </div>
       <div class="search" style="margin-left:auto">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
@@ -35,8 +35,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       <a class="btn btn-primary btn-sm" href="/admin/write">New post</a>
     </div>
 
-    {/* Paywall summary — live counts + real (estimated) upgrades & revenue. */}
-    <div class="panel">
+    {/* Paywall summary — live counts + real (estimated) upgrades & revenue. Owner-only. */}
+    <div class="panel" data-owner>
       <header><h2>Paywall</h2><span class="hint">Where free readers stop, and what that earns</span></header>
       <div class="pb flush">
         <div class="pwgrid">
@@ -52,7 +52,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     <div class="panel">
       <div class="pb flush">
         <div class="t-scroll">
-          <table class="t">
+          <table class="t" id="posts-table">
             <thead><tr>
               <th>Post</th><th>Status</th><th>Access</th>
               <th class="num">Published</th><th class="num">Reads</th><th class="num">Completion</th>
@@ -155,7 +155,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
 <script>
   import { supabase } from '../../lib/supabase';
-  import { onAdminReady, adminFetch, swrFetch } from '../../lib/admin-gate';
+  import { onAdminReady, adminFetch, swrFetch, whenAdmin } from '../../lib/admin-gate';
   import { fmtDate, esc } from '../../lib/admin-format';
   import { mountSeriesPicker } from '../../lib/series-picker';
 
@@ -165,6 +165,8 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   let confirmedCount: number | null = null; // confirmed subscribers, for the confirm copy
   let emailTarget: any = null;               // the post being emailed via the modal
   let currentFilter = 'all';
+  let isOwnerView = true;        // owner → file catalog + paywall/metrics; author → their DB posts
+  let authorPosts: any[] = [];
 
   // Per-post analytics/sales, merged by slug after the catalog paints. Any slug
   // absent here renders "—" (never a fabricated 0 — see loadMetrics()).
@@ -213,6 +215,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   }
 
   function view() {
+    if (!isOwnerView) { authorDraw(); return; }   // author view reuses the tab/search wiring
     const q = qEl.value.trim().toLowerCase();
     let rows = all.slice();
     const f = currentFilter;
@@ -703,5 +706,75 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     view();
   });
 
-  onAdminReady(() => { load(); loadConfirmedCount(); });
+  // ——— Author view: the caller's OWN DB posts (my_posts). No paywall, no cross-author metrics.
+  // Publishing renders the body (editor-only), so a draft's action opens the editor; a live post
+  // can be unpublished or viewed here. Reuses the tab/search wiring via view() → authorDraw(). ———
+  const aPill = (p: any) => p.status === 'published' ? '<span class="pill live">Live</span>' : p.status === 'scheduled' ? '<span class="pill sched">Scheduled</span>' : '<span class="pill">Draft</span>';
+
+  function authorDraw() {
+    const table = document.getElementById('posts-table');
+    if (table && !table.dataset.author) {
+      table.dataset.author = '1';
+      table.innerHTML = '<thead><tr><th>Post</th><th>Status</th><th class="num">Published</th><th></th></tr></thead><tbody id="posts-host"></tbody>';
+    }
+    const host2 = document.getElementById('posts-host')!;
+    const set = (k: string, n: number) => { const el = document.querySelector(`[data-ct="${k}"]`); if (el) el.textContent = String(n); };
+    set('all', authorPosts.length);
+    set('published', authorPosts.filter((p) => p.status === 'published').length);
+    set('draft', authorPosts.filter((p) => p.status === 'draft').length);
+    set('scheduled', authorPosts.filter((p) => p.status === 'scheduled').length);
+
+    const q = qEl.value.trim().toLowerCase();
+    let rows = authorPosts.slice();
+    if (currentFilter === 'published') rows = rows.filter((p) => p.status === 'published');
+    else if (currentFilter === 'draft') rows = rows.filter((p) => p.status === 'draft');
+    else if (currentFilter === 'scheduled') rows = rows.filter((p) => p.status === 'scheduled');
+    if (q) rows = rows.filter((p) => (p.title || '').toLowerCase().includes(q) || (p.slug || '').includes(q));
+    rows.sort((a, b) => String(b.pub_date || b.updated_at || '').localeCompare(String(a.pub_date || a.updated_at || '')));
+
+    if (!authorPosts.length) { host2.innerHTML = '<tr><td colspan="4" class="empty-cell">No posts yet. <a href="/admin/write">Write your first →</a></td></tr>'; return; }
+    if (!rows.length) { host2.innerHTML = '<tr><td colspan="4" class="empty-cell">No posts match this filter.</td></tr>'; return; }
+    host2.innerHTML = rows.map((p) => {
+      const pub = p.status === 'published' ? esc(fmtDate(p.pub_date)) : p.status === 'scheduled' ? esc(fmtDate(p.publish_at)) : '<span class="pub-empty">—</span>';
+      const tags = p.tags && p.tags.length ? p.tags.slice(0, 3).map((t: string) => '#' + esc(t)).join(' ') : 'Standalone';
+      const viewBtn = p.status === 'published' ? `<a class="btn btn-sm btn-ghost" href="/@${esc(p.primary_handle)}/${encodeURIComponent(p.slug)}/" target="_blank" rel="noopener">View</a>` : '';
+      const endBtn = p.status === 'published'
+        ? `<button class="btn btn-sm btn-ghost" data-un="${esc(p.id)}">Unpublish</button>`
+        : `<button class="btn btn-sm btn-ghost" data-del="${esc(p.id)}">Delete</button>`;
+      return `<tr data-slug="${esc(p.slug)}">
+          <td><a class="ti" href="/admin/write?slug=${encodeURIComponent(p.slug)}">${esc(p.title)}</a><span class="sub">${tags}</span></td>
+          <td>${aPill(p)}</td>
+          <td class="num">${pub}</td>
+          <td class="num"><span style="display:inline-flex;gap:6px;justify-content:flex-end">${viewBtn}<a class="btn btn-sm btn-ghost" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Edit</a>${endBtn}</span></td>
+        </tr>`;
+    }).join('');
+  }
+
+  async function initAuthorPosts() {
+    try { const { data } = await supabase.rpc('my_posts'); authorPosts = data || []; } catch { authorPosts = []; }
+    const table = document.getElementById('posts-table')!;
+    table.addEventListener('click', async (e) => {
+      const un = (e.target as HTMLElement).closest('[data-un]') as HTMLElement | null;
+      const del = (e.target as HTMLElement).closest('[data-del]') as HTMLElement | null;
+      if (un) {
+        if (!confirm('Unpublish this post? It will no longer be public until you publish it again.')) return;
+        const r = await adminFetch('/api/author/publish', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ post_id: un.dataset.un, unpublish: 'unpublish' }) });
+        if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Unpublish failed'); return; }
+        authorPosts = authorPosts.map((p) => p.id === un.dataset.un ? { ...p, status: 'draft' } : p); authorDraw();
+      } else if (del) {
+        if (!confirm('Delete this draft? This cannot be undone.')) return;
+        const r = await adminFetch(`/api/author/post?id=${encodeURIComponent(del.dataset.del!)}`, { method: 'DELETE' });
+        if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Delete failed'); return; }
+        authorPosts = authorPosts.filter((p) => p.id !== del.dataset.del); authorDraw();
+      }
+    });
+    view();
+  }
+
+  onAdminReady(async () => {
+    const chk = await whenAdmin;
+    isOwnerView = !!(chk && chk.owner);
+    if (isOwnerView) { load(); loadConfirmedCount(); }
+    else initAuthorPosts();
+  });
 </script>

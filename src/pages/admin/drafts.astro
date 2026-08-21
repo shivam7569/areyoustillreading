@@ -35,11 +35,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
 <script>
   import { supabase } from '../../lib/supabase';
-  import { onAdminReady, adminFetch } from '../../lib/admin-gate';
+  import { onAdminReady, adminFetch, whenAdmin } from '../../lib/admin-gate';
   import { fmtDate, esc } from '../../lib/admin-format';
 
   const $ = (id: string) => document.getElementById(id)!;
   let all: any[] = [];
+  let isOwnerView = true;   // owner → file-based catalog; author → their own DB drafts (my_posts)
   let armedDelete: string | null = null;
   let armTimer: number | undefined;
   const host = $('drafts-host');
@@ -163,7 +164,15 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   host.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
     if (!btn) return;
-    const act = btn.dataset.act!, slug = btn.dataset.slug!;
+    const act = btn.dataset.act!, slug = btn.dataset.slug!, id = btn.dataset.id;
+    if (!isOwnerView) {
+      // Author view: only Delete is an inline action (Publish opens the editor).
+      if (act === 'delete') {
+        if (armedDelete === slug) authorDel(id!);
+        else { disarm(); armedDelete = slug; loadAuthorDrafts(); armTimer = window.setTimeout(() => { armedDelete = null; loadAuthorDrafts(); }, 3500); }
+      }
+      return;
+    }
     if (act === 'publish') publish(slug);
     else if (act === 'early') sendEarly(slug);
     else if (act === 'delete') {
@@ -240,6 +249,59 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     armedScratch = null; loadScratch();
   });
 
-  onAdminReady(() => { load(); loadScratch(); });
+  // ——— Author view: the caller's OWN DB drafts (my_posts), with safe actions only. Publishing
+  // renders the body, which only the editor can do, so "Publish" here opens the editor. ———
+  function authorCard(p: any): string {
+    const armed = armedDelete === p.slug;
+    const scheduled = p.status === 'scheduled' && p.publish_at && new Date(p.publish_at).getTime() > Date.now();
+    const bits = (p.tags && p.tags.length ? p.tags.slice(0, 4).map((t: string) => '#' + esc(t)).join(' ') : 'Standalone') + (scheduled ? ' · scheduled' : '');
+    const words = localWords(p.slug), target = localTarget(p.slug);
+    const prog = (words || target)
+      ? `<div class="dprog"><span>${words.toLocaleString()}</span><span class="bar"><i style="width:${target ? Math.min(100, Math.round((words / target) * 100)) : (words ? 100 : 0)}%"></i></span><span>${target ? target.toLocaleString() : '—'}</span></div>`
+      : '';
+    const when = scheduled ? `<div class="dnote"><b>Scheduled</b>Goes live ${esc(new Date(p.publish_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))} — publishes automatically.</div>` : '';
+    return `<article class="dcard" data-slug="${esc(p.slug)}">
+        <h3>${esc(p.title)}</h3>
+        <div class="ser">${bits}</div>
+        ${prog}${when}
+        <div class="dfoot"><span>Edited ${esc(fmtDate(p.updated_at || p.pub_date))}</span><a class="go" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Continue →</a></div>
+        <div class="row-actions" style="margin-top:2px;display:flex;gap:6px;flex-wrap:wrap">
+          <a class="btn btn-sm btn-primary" href="/admin/write?slug=${encodeURIComponent(p.slug)}">Open to publish</a>
+          <button class="btn btn-sm ${armed ? 'btn-danger' : 'btn-ghost'}" data-act="delete" data-slug="${esc(p.slug)}" data-id="${esc(p.id)}">${armed ? 'Confirm' : 'Delete'}</button>
+        </div>
+      </article>`;
+  }
+
+  async function loadAuthorDrafts() {
+    let posts: any[] = [];
+    try { const { data } = await supabase.rpc('my_posts'); posts = data || []; } catch { posts = []; }
+    const drafts = posts.filter((p) => p.status === 'draft' || p.status === 'scheduled');
+    $('d-count').textContent = String(drafts.filter((p) => p.status === 'draft').length);
+    $('d-series').textContent = '—';
+    const totalWords = drafts.reduce((s, p) => s + localWords(p.slug), 0);
+    $('d-words').textContent = totalWords ? totalWords.toLocaleString() : '—';
+    const oldest = drafts.map((p) => daysSince(p.updated_at || p.pub_date)).filter((n): n is number => n != null);
+    $('d-old').textContent = oldest.length ? Math.max(...oldest) + ' days' : '—';
+    if (!drafts.length) {
+      host.innerHTML = '<div class="panel"><div class="pb muted" style="text-align:center;padding:2.4rem 1rem">Everything you’ve written is published. <a href="/admin/write" style="color:var(--accent)">Start something new →</a></div></div>';
+      return;
+    }
+    drafts.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+    host.innerHTML = `<div style="margin-bottom:22px"><div class="dhead"><span>Drafts</span><em>${drafts.length}</em></div><div class="dgrid">${drafts.map(authorCard).join('')}</div></div>`;
+  }
+
+  async function authorDel(id: string) {
+    const r = await adminFetch(`/api/author/post?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) alert(d.error || 'Delete failed');
+    disarm(); loadAuthorDrafts();
+  }
+
+  onAdminReady(async () => {
+    const chk = await whenAdmin;
+    isOwnerView = !!(chk && chk.owner);
+    if (isOwnerView) load(); else loadAuthorDrafts();
+    loadScratch();
+  });
   renderSeeds();
 </script>
