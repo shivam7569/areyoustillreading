@@ -512,13 +512,8 @@ li { margin: 0.35rem 0; }
 .post:hover { background: var(--paper-2); }
 .post .idx { font-family: var(--serif-display); font-size: 15px; color: var(--ink-faint); padding-top: 6px; }
 .post h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(22px, 2.6vw, 27px); line-height: 1.18; letter-spacing: -0.01em; margin: 0 0 10px; }
-/* Title highlight: a soft marker-sweep — a warm accent band behind the lower third of the
-   text that wipes in on hover. Reads as a highlight, not a hairline border at the baseline. */
-.post h3 a { color: var(--ink); --hl: color-mix(in srgb, var(--accent) 20%, transparent);
-  background-image: linear-gradient(var(--hl), var(--hl)); background-size: 0 0.42em;
-  background-repeat: no-repeat; background-position: 0 90%; border-radius: 2px;
-  transition: background-size 0.42s cubic-bezier(0.22, 0.7, 0.2, 1); }
-.post:hover h3 a { background-size: 100% 0.42em; }
+.post h3 a { color: var(--ink); background-image: linear-gradient(var(--accent), var(--accent)); background-size: 0 1.5px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size 0.3s; }
+.post:hover h3 a { background-size: 100% 1.5px; }
 .post p { color: var(--ink-soft); margin: 0 0 14px; font-size: 17px; max-width: 60ch; }
 .post .aside { text-align: right; padding-top: 6px; }
 .post .date { font-family: var(--serif-display); font-style: italic; font-size: 17px; color: var(--ink); }

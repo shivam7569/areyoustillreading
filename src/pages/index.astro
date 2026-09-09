@@ -226,8 +226,8 @@ import SubscribeForm from '../components/SubscribeForm.astro';
   .post:hover .mono{color:var(--accent)}
   .post:hover .mono::after{background:var(--accent)}
   .post h3{font-family:var(--serif-display);font-weight:600;font-size:clamp(21px,2.5vw,26px);line-height:1.18;letter-spacing:-.012em;margin:0 0 9px;text-wrap:pretty}
-  .post h3 a{--hl:color-mix(in srgb,var(--accent) 20%,transparent);background-image:linear-gradient(var(--hl),var(--hl));background-size:0 .42em;background-repeat:no-repeat;background-position:0 90%;border-radius:2px;transition:background-size .42s cubic-bezier(.22,.7,.2,1)}
-  .post:hover h3 a{background-size:100% .42em}
+  .post h3 a{background-image:linear-gradient(var(--accent),var(--accent));background-size:0 1.5px;background-repeat:no-repeat;background-position:0 100%;transition:background-size .3s}
+  .post:hover h3 a{background-size:100% 1.5px}
   .post p{color:var(--ink-soft);margin:0 0 13px;font-size:16.5px;line-height:1.55;max-width:60ch}
   .tags{display:flex;flex-wrap:wrap;gap:7px}
   .tag{font-family:var(--sans);font-size:12px;letter-spacing:.03em;color:var(--ink-faint);border:1px solid var(--rule);border-radius:999px;padding:4px 11px;transition:border-color .2s,color .2s}
