@@ -35,7 +35,7 @@
       "eyebrow": "Deep dives & field notes",
       "title": "In-depth writing on LLM engineering — and the",
       "titleEm": "systems behind it.",
-      "lede": "Long-form notes on building, shipping, and speeding up language-model systems. Measured, first-person, and free of hype.",
+      "lede": "Short-form notes on building, shipping, and speeding up language-model systems. Measured, first-person, and free of hype.",
       "ctaPrimary": "Subscribe to the letter",
       "ctaSecondary": "Read the blog",
       "quote": "Most latency lives in the places nobody profiles. The essay is where I go looking.",
