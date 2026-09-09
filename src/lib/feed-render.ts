@@ -58,57 +58,149 @@ export function byline(p: any) {
   return `<span class="nm">${esc(p.primary_name)}</span>`;
 }
 
-// Pools of on-brand tooltip lines — a per-post seed picks one, so the feed reads varied, not
-// templated. Tier by where the curve ends; a notch clause (with {x}) appends on a sharp drop.
+// Pools of on-brand tooltip lines. A per-post seed picks one, so the feed reads varied, not templated.
+// A line is a BASE (chosen by how many finished) + an OPTIONAL trailing CLAUSE (chosen by the drop's
+// shape): a positioned cliff, or a slow steady thinning. Base lines speak to MAGNITUDE only (how many
+// stayed) and carry no baked-in position or speed, so ANY clause composes cleanly after them.
 const SHAPE_LINES = {
+  // finish >= 65 — most / nearly everyone reached the end
   hold: [
-    'Nearly everyone who started stayed to the end',
-    'The piece held its line to the bottom',
-    'Few slipped away before the final paragraph',
-    'Readers followed this one clean through',
-    'It carried them right to the last line',
-    'Attention never wavered, first word to last',
-    'Almost no one set it down early',
+    'The piece held its line to the end',
+    'Nearly everyone rode this one to the finish',
+    'It carried the room clean through',
+    'Most readers went the full distance',
+    'The room barely thinned before the end',
+    'Almost no one left before the last line',
+    'A full house saw this one out',
+    'The crowd stuck with it to the bottom',
+    'The light held steady all the way down',
+    'They stayed to the very last page',
+    'The piece never loosened its grip',
+    'A room that never emptied out',
+    'It held, warm and unbroken, to the end',
+    'This one held every hand it took',
+    'Readers followed it through without drifting',
+    'It kept its hold from start to finish',
   ],
+  // finish 44-64 — about half stayed; a committed core finished
   core: [
-    'A loyal few stayed the course; the rest slipped away',
-    'Held its true readers, lost the skimmers',
-    'The committed stayed on while the curious wandered off partway',
-    'Kept a devoted handful, let the crowd go',
-    'Thinned early to a faithful core that finished it',
-    'Only the invested made it to the last line',
-    'Not for everyone, and the right ones knew it',
+    'About half stayed to the end',
+    'It held a solid core, lost the rest',
+    'A committed half carried it home',
+    'It kept its true readers, let the skimmers go',
+    'Half stayed the course, the rest slipped out',
+    'It split the room near evenly',
+    'The faithful half made it to the bottom',
+    'Half went the distance, half turned back',
+    'A real core finished while the others drifted',
+    'The devoted stayed while the browsers left',
+    'A steady half saw it through',
+    'It kept a strong, loyal core',
+    'Lost the passing crowd, kept the faithful half',
+    'The casual left, the invested stayed',
+    'It kept the readers who meant to stay',
+    'Half the light stayed on to the finish',
   ],
+  // finish 24-43 — a real minority finished; most drifted away
   loses: [
-    'Readers drifted off well before the last line',
-    'Halfway in, the room began to thin',
-    'Held a crowd early, then quietly emptied out',
-    'Few readers reached the closing thought',
-    'Attention slipped its grip partway through',
-    'Most closed the tab long before the end',
-    'A slow leak from the first turn onward',
+    'Only a minority made it to the end',
+    'Most drifted off, a stubborn few finished',
+    'A core held on while the rest left',
+    'Most closed the tab unfinished',
+    'The crowd emptied out to a faithful few',
+    'A hard core saw it to the bottom',
+    'The audience fell away, a real core stayed',
+    'It thinned to a small, loyal knot',
+    'It kept only its most patient readers',
+    'The many left, the few held on',
+    'It lost the crowd but kept a true few',
+    'Most gave up, a faithful minority remained',
+    'It shed most readers but held a real core',
+    'The crowd peeled away, a loyal few reached the bottom',
+    'It lost the many, kept the devoted few',
+    'Most let this one go',
   ],
-  // Position-focused (the "where"), worded to avoid echoing the tier lines' verbs.
-  notch: [
-    ', with the sharp fall just past {x}%',
-    ', the steep drop landing near {x}%',
-    ' — the break lands around {x}%',
-    ' — a clean cliff at {x}%',
-    '; most who left did so near {x}%',
-    '; the floor gives way around {x}%',
+  // finish < 24 — almost no one finished
+  empty: [
+    'Almost no one reached the end',
+    'The room emptied out to a handful',
+    'It emptied out, barely a soul at the end',
+    'Only a stray reader saw the last line',
+    'Scarcely anyone made it to the bottom',
+    'It bled readers until almost none remained',
+    'It was all but deserted by the end',
+    'It thinned to almost nothing by the close',
+    'The crowd all but vanished before the end',
+    'Just a lonely few remained at the end',
+  ],
+  // Trailing clause for a single sharp fall; {where} is filled with a natural position phrase (WHERE).
+  // Subject-neutral (about the drop, not the room) so they never echo a base line's nouns.
+  cliff: [
+    ' — the floor gave way {where}',
+    ' — the drop came {where}',
+    ', with the sharp fall {where}',
+    ', losing them in a single drop {where}',
+    ' — dropping off a cliff {where}',
+    ', with a steep fall {where}',
+    ' — a sudden break {where}',
+    ', falling off sharply {where}',
+    '; the steep drop landed {where}',
+    ' — the sharp break came {where}',
+    ', the cliff coming {where}',
+    ' — giving way all at once {where}',
+  ],
+  // Trailing clause for a slow, even decline with no cliff. Standalone.
+  steady: [
+    ', thinning steadily the whole way down',
+    ', shedding readers at an even pace',
+    ' — a slow, even leak all the way through',
+    ', tapering off bit by bit',
+    '; no cliff, just a gradual drift',
+    ', easing out a little at every turn',
+    ' — easing out step by step',
+    ', growing quieter with every passage',
+    '; readers slipped away bit by bit',
+    ' — a slow tide going out the whole way',
   ],
 };
 
-// One short, engaging line for the hover tooltip — what the shape says about the reading,
-// never a number as a score. {x} is a position along the piece, not a retention figure.
+// Where a drop lands, as a spoken phrase (never a raw percentage). Keyed by position along the read.
+const WHERE: Record<string, string[]> = {
+  open: ['in the opening', 'right at the start', 'in the first few paragraphs'],
+  early: ['early on', 'in the first stretch', 'before it found its feet'],
+  mid: ['around the midpoint', 'halfway through', 'in the middle stretch'],
+  late: ['in the back half', 'deep into the piece', 'in the final third'],
+  end: ['near the very end', 'just before the close', 'at the last turn'],
+};
+const posKey = (ni: number, n: number) => {
+  const at = (ni + 0.5) / n; // reading position of the steepest drop, 0..1
+  return at <= 0.22 ? 'open' : at <= 0.42 ? 'early' : at <= 0.62 ? 'mid' : at <= 0.82 ? 'late' : 'end';
+};
+
+// One short, spoken line for the hover tooltip — the shape of the reading, never a number as a score.
+// A BASE line (by finish tier) + an optional CLAUSE (a positioned cliff, or a steady thinning). Seeds
+// are decorrelated by bit-shifts so the base, clause, and position each vary independently per post.
 export function shapeText(samples: number[], seed: number) {
-  const finish = samples[samples.length - 1] ?? 0;
+  const n = samples.length;
+  if (!n) return '';
+  const start = samples[0] ?? 100;
+  const finish = samples[n - 1] ?? 0;
+  const decline = Math.max(0, start - finish);
   let ni = -1, md = 0;
-  for (let i = 1; i < samples.length; i++) { const drop = samples[i - 1] - samples[i]; if (drop > md) { md = drop; ni = i; } }
-  const bucket = finish >= 70 ? 'hold' : finish >= 45 ? 'core' : 'loses';
-  const tier = pick(SHAPE_LINES[bucket], seed);
-  const notch = bucket !== 'hold' && md >= 14 && ni > 0 ? pick(SHAPE_LINES.notch, (seed >> 4) + 1).replace('{x}', String(ni * 10)) : '';
-  return `${tier}${notch}`;
+  for (let i = 1; i < n; i++) { const drop = samples[i - 1] - samples[i]; if (drop > md) { md = drop; ni = i; } }
+
+  const bucket = finish >= 65 ? 'hold' : finish >= 44 ? 'core' : finish >= 24 ? 'loses' : 'empty';
+  const base = pick(SHAPE_LINES[bucket], seed);
+  if (bucket === 'hold') return base; // a piece that held to the end needs no drop clause
+
+  let clause = '';
+  if (md >= 15 && ni > 0) {
+    const where = pick(WHERE[posKey(ni, n)], (seed >> 3) + 1);
+    clause = pick(SHAPE_LINES.cliff, (seed >> 5) + 1).replace('{where}', where);
+  } else if (decline >= 22 && md < 12) {
+    clause = pick(SHAPE_LINES.steady, (seed >> 4) + 1);
+  }
+  return `${base}${clause}`;
 }
 
 // Smooth curve through the decile points (Catmull-Rom → cubic bézier), clamped inside the
