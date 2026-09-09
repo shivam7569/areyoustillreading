@@ -402,6 +402,7 @@ import SubscribeForm from '../components/SubscribeForm.astro';
 <script>
   import { supabase } from '../lib/supabase';
   import { esc, initials, fmtShort, hashSeed, curveSvg, crumb } from '../lib/feed-render';
+  import { mountShapeTip } from '../lib/shape-tip';
   import { BASE, displayMin, getPace, setMeasured, adopt, unadopt, onPaceChange, isSanePace } from '../lib/reading-pace';
 
   const $ = (id: string) => document.getElementById(id);
@@ -733,7 +734,7 @@ import SubscribeForm from '../components/SubscribeForm.astro';
     const slugs = Array.from(new Set([...state.fortnight, ...state.popular].map((p) => p.slug)));
     if (slugs.length) { try { const { data } = await supabase.rpc('feed_retention', { p_slugs: slugs }); (data || []).forEach((r: any) => retention.set(r.slug, r.samples)); } catch { /* curves optional */ } }
 
-    renderStats(); renderFeed(); initMark(); initPace();
+    renderStats(); renderFeed(); initMark(); initPace(); mountShapeTip();
     loadRez(); loadComing();
 
     // adopting/dropping a pace re-prices every reading time on the page, live

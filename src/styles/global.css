@@ -526,6 +526,18 @@ li { margin: 0.35rem 0; }
 
 /* ---- Cards + image placeholders ---- */
 .card { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; box-shadow: var(--shadow); }
+
+/* The reading-shape hover tooltip (mounted by src/lib/shape-tip.ts on the home feed + /blog).
+   Global so it reaches the JS-created card, which carries no scoped-style hash. */
+.shape-tip { position: fixed; z-index: 80; pointer-events: none; max-width: 236px; padding: 8px 11px 8px 12px;
+  font-family: var(--sans); font-size: 12px; line-height: 1.42; letter-spacing: .004em; color: var(--ink-soft);
+  background: var(--card); border: 1px solid var(--rule); border-left: 2px solid var(--accent); border-radius: 6px;
+  box-shadow: 0 10px 26px -12px color-mix(in srgb, var(--ink) 42%, transparent), 0 1px 2px color-mix(in srgb, var(--ink) 8%, transparent);
+  opacity: 0; transform: translateY(3px); transition: opacity .12s ease, transform .12s ease; text-wrap: pretty; }
+.shape-tip.on { opacity: 1; transform: translateY(0); }
+.shape-tip::after { content: ""; position: absolute; left: var(--tip-arrow, 50%); top: 100%; transform: translateX(-50%) rotate(45deg);
+  width: 7px; height: 7px; background: var(--card); border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin-top: -4px; }
+.shape-tip.below::after { top: auto; bottom: 100%; margin-top: 0; margin-bottom: -4px; transform: translateX(-50%) rotate(225deg); }
 .ph { position: relative; background: repeating-linear-gradient(135deg, var(--paper-2), var(--paper-2) 9px, var(--card) 9px, var(--card) 18px); border-bottom: 1px solid var(--rule); display: grid; place-items: center; min-height: 180px; }
 .ph span { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); background: var(--paper); padding: 6px 11px; border: 1px solid var(--rule); border-radius: 2px; }
 

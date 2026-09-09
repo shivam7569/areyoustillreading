@@ -115,8 +115,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     </div>
   </div>
 
-  <!-- Fast, themed reading-shape tooltip (positioned by JS over the hovered curve). -->
-  <div class="shape-tip" id="shapeTip" role="tooltip" aria-hidden="true"></div>
 </BaseLayout>
 
 <style>
@@ -137,16 +135,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   .more { padding: 26px 0 0; display: flex; }
   .feed-foot { padding: clamp(40px, 5.5vw, 68px) 0 clamp(56px, 8vw, 96px); }
 
-  /* The reading-shape tooltip — themed to the site (paper card, hairline rule, accent whisker). */
-  .shape-tip { position: fixed; z-index: 80; pointer-events: none; max-width: 236px; padding: 8px 11px 8px 12px;
-    font-family: var(--sans); font-size: 12px; line-height: 1.42; letter-spacing: .004em; color: var(--ink-soft);
-    background: var(--card); border: 1px solid var(--rule); border-left: 2px solid var(--accent); border-radius: 6px;
-    box-shadow: 0 10px 26px -12px color-mix(in srgb, var(--ink) 42%, transparent), 0 1px 2px color-mix(in srgb, var(--ink) 8%, transparent);
-    opacity: 0; transform: translateY(3px); transition: opacity .12s ease, transform .12s ease; text-wrap: pretty; }
-  .shape-tip.on { opacity: 1; transform: translateY(0); }
-  .shape-tip::after { content: ""; position: absolute; left: var(--tip-arrow, 50%); top: 100%; transform: translateX(-50%) rotate(45deg);
-    width: 7px; height: 7px; background: var(--card); border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin-top: -4px; }
-  .shape-tip.below::after { top: auto; bottom: 100%; margin-top: 0; margin-bottom: -4px; transform: translateX(-50%) rotate(225deg); }
 </style>
 
 <!-- Rows are created by client JS (no Astro scope attribute) → style them globally,
@@ -342,6 +330,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   // Shared feed-row vocabulary (curve/crumb/byline/…) — the same module the homepage feed uses,
   // so the two streams render identical rows and never drift.
   import { esc, initials, monthKey, monthLabel, fmtDate, hashSeed, byline, curveSvg, crumb } from '../../lib/feed-render';
+  import { mountShapeTip } from '../../lib/shape-tip';
   import { repriceReadMins } from '../../lib/reading-pace';
 
   const stream = document.getElementById('stream')!;
@@ -542,34 +531,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
   document.getElementById('rezclear')?.addEventListener('click', () => { (document.getElementById('rez') as HTMLElement).hidden = true; });
 
-  // Reading-shape tooltip — a fast, themed hover box. The native <title> is too slow (~700ms)
-  // for readers to discover; this shows in 90ms and is styled to the site.
-  const tip = document.getElementById('shapeTip')!;
-  let tipTimer = 0;
-  function placeTip(curve: Element) {
-    const msg = curve.getAttribute('data-shape'); if (!msg) return;
-    tip.textContent = msg;
-    const cr = curve.getBoundingClientRect(), tr = tip.getBoundingClientRect();
-    let left = cr.left + cr.width / 2 - tr.width / 2;
-    left = Math.max(8, Math.min(window.innerWidth - tr.width - 8, left));
-    const above = cr.top - tr.height - 10, below = above < 8;
-    tip.classList.toggle('below', below);
-    tip.style.left = `${Math.round(left)}px`;
-    tip.style.top = `${Math.round(below ? cr.bottom + 10 : above)}px`;
-    tip.style.setProperty('--tip-arrow', `${Math.round(cr.left + cr.width / 2 - left)}px`);
-    tip.classList.add('on'); tip.setAttribute('aria-hidden', 'false');
-  }
-  function hideTip() { clearTimeout(tipTimer); tip.classList.remove('on'); tip.setAttribute('aria-hidden', 'true'); }
-  document.addEventListener('mouseover', (e) => {
-    const c = (e.target as HTMLElement).closest?.('.curve'); if (!c) return;
-    clearTimeout(tipTimer); tipTimer = window.setTimeout(() => placeTip(c), 90);
-  });
-  document.addEventListener('mouseout', (e) => {
-    const c = (e.target as HTMLElement).closest?.('.curve'); if (!c) return;
-    if (e.relatedTarget && c.contains(e.relatedTarget as Node)) return;  // still inside the same curve
-    hideTip();
-  });
-  window.addEventListener('scroll', hideTip, { passive: true });
+  // Reading-shape hover tooltip — shared with the home feed (src/lib/shape-tip.ts).
+  mountShapeTip();
 
   // Read them together: cross-author pairs on one subject (public.reading_pairs). Direction is
   // chronological — the earlier essay raised the subject, the later one returned to it.
