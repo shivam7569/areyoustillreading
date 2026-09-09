@@ -17,7 +17,9 @@
  *
  * HOW IT FITS THE ARCHITECTURE
  *   This is a build-time Astro component (frontmatter runs during the static
- *   build; the output is plain HTML — there is no client JS here). Layouts
+ *   build; the output is plain HTML, save for ONE tiny inline script that sets
+ *   manual scroll restoration so reloads open at the top, not a mis-restored
+ *   position — a universal head concern, hence it lives here). Layouts
  *   (e.g. the base/blog-post layouts) render `<BaseHead .../>` inside their
  *   own `<head>`. Because this ships to every crawler and social scraper, the
  *   values here directly drive Google/Bing indexing and OG previews.
@@ -91,6 +93,14 @@ const ogImage = new URL(image ?? '/favicon.svg', Astro.site);
     viewport enables responsive layout on mobile. */}
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+{/* Own the scroll position on load. The browser's default 'auto' restoration fights our
+    async-rendered content (the feed, comments, highlights render AFTER first paint, changing page
+    height) and can restore a reader to the BOTTOM instead of the top on reload. Manual restoration
+    makes every load open at the top; native #hash deep-links and in-page anchor scrolls still work.
+    Inline + early in <head> so it runs before the browser attempts its restore. */}
+<script is:inline>
+  try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
+</script>
 {/* Astro.generator resolves to a string like "Astro vX.Y.Z". This intentionally
     discloses the framework + version (Astro's default). Harmless here, but if
     version fingerprinting ever becomes a concern, this single line is the tag to
