@@ -215,9 +215,12 @@ import SubscribeForm from '../components/SubscribeForm.astro';
   .band .when{font-family:var(--sans);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
   .band .rule{flex:1;height:1px;background:var(--rule)}
   .post-list{border-top:1px solid var(--rule)}
-  .post{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:clamp(18px,3vw,40px);padding:26px 2px;border-bottom:1px solid var(--rule-soft);transition:background .25s}
+  .post{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:clamp(18px,3vw,40px);padding:26px 16px;margin:0 -16px;border-radius:12px;position:relative;transition:background .28s ease}
+  .post::after{content:"";position:absolute;left:16px;right:16px;bottom:0;height:1px;background:var(--rule-soft);pointer-events:none;transition:opacity .28s ease}
+  .post:last-child::after{display:none}
   .post:hover{background:var(--paper-2)}
-  @media(max-width:820px){.post{grid-template-columns:1fr;gap:13px;padding:24px 2px}}
+  .post:hover::after{opacity:0}
+  @media(max-width:820px){.post{grid-template-columns:1fr;gap:13px;padding:24px 16px}}
   .byline{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin:0 0 9px;font-family:var(--sans);font-size:12px;color:var(--ink-faint)}
   .byline .mono{align-self:center}
   .byline .with{font-size:12px;color:var(--ink-faint)}
