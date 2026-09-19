@@ -95,11 +95,60 @@ const ogImage = new URL(image ?? '/favicon.svg', Astro.site);
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 {/* Own the scroll position on load. The browser's default 'auto' restoration fights our
     async-rendered content (the feed, comments, highlights render AFTER first paint, changing page
-    height) and can restore a reader to the BOTTOM instead of the top on reload. Manual restoration
-    makes every load open at the top; native #hash deep-links and in-page anchor scrolls still work.
-    Inline + early in <head> so it runs before the browser attempts its restore. */}
+    height): it restores against a page that is still short, so it lands wrong — which is why
+    reloads were opening near the bottom. We take over and restore deliberately instead:
+
+      reload / fresh navigation -> top
+      back / forward            -> exactly where the reader was
+
+    Native #hash deep-links and in-page anchor scrolls are unaffected (fragment navigation is
+    independent of scrollRestoration). Inline + early in <head> so it runs before the browser
+    would have attempted its own restore. */}
 <script is:inline>
-  try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
+  (function () {
+    try {
+      if (!('scrollRestoration' in history)) return;
+      history.scrollRestoration = 'manual';
+
+      var key = 'ays:y:' + location.pathname + location.search;
+      var save = function () {
+        try { sessionStorage.setItem(key, String(Math.round(window.scrollY))); } catch (e) {}
+      };
+      addEventListener('pagehide', save);
+      addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') save();
+      });
+
+      var nav = (performance.getEntriesByType('navigation') || [])[0];
+      if (!nav || nav.type !== 'back_forward') return; // reload / fresh nav stay at the top
+
+      var y = 0;
+      try { y = parseInt(sessionStorage.getItem(key) || '0', 10) || 0; } catch (e) {}
+      if (y <= 0) return;
+
+      // The saved position is usually unreachable at first paint, because the feed/comments have
+      // not rendered yet. So WAIT for the page to grow tall enough and then scroll once — never
+      // scroll to a clamped intermediate position, which is what produced the original bug. Bail
+      // the moment the reader takes over, so we never fight their own scrolling.
+      var live = true, tries = 0;
+      var stop = function () { live = false; };
+      addEventListener('wheel', stop, { passive: true, once: true });
+      addEventListener('touchstart', stop, { passive: true, once: true });
+      addEventListener('keydown', stop, { once: true });
+
+      (function tick() {
+        if (!live) return;
+        var max = document.documentElement.scrollHeight - window.innerHeight;
+        if (max >= y - 2) {
+          // html has scroll-behavior:smooth, so force an instant jump rather than an animation.
+          window.scrollTo({ top: y, behavior: 'instant' });
+          return;
+        }
+        if (++tries > 60) return; // ~3s: content never came back to that height, stay put
+        setTimeout(tick, 50);
+      })();
+    } catch (e) { /* private mode / no sessionStorage — fall back to opening at the top */ }
+  })();
 </script>
 {/* Astro.generator resolves to a string like "Astro vX.Y.Z". This intentionally
     discloses the framework + version (Astro's default). Harmless here, but if
