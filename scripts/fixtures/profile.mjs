@@ -41,6 +41,11 @@ const LEAN_FEED = new Set([
   'sas-1',                   // mira, part 1 of 5  — series crumb + part ticks (medium)
   'sas-2',                   // mira, part 2 of 5  — gives the series a real run (medium)
   'no-description',          // daniel             — the empty-description row (light)
+  // Two more in-progress series, so the "Coming next" shelf has more than one card.
+  // (embeddings-from-scratch is status:complete, so it is excluded from that shelf by design.)
+  'rp-1',                    // owner, part 1 of 3  — Retrieval plumbing, in progress
+  'mm-1',                    // daniel, part 1 of 4 — Measuring models, in progress
+  'mm-2',                    // daniel, part 2 of 4 — 2 published is what its planned[] assumes
 ]);
 // Never visible in a feed → keep in BOTH profiles so these edges stay covered for free.
 const ALWAYS = new Set([

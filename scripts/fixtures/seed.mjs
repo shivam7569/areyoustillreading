@@ -190,6 +190,16 @@ async function main() {
     }
     console.log(`collaboration: ${collab.join(' + ')} (all pending)`);
 
+    // db/notify.sql puts AFTER INSERT triggers on comments / highlight_comments / highlights /
+    // notes / feedback / votes; each http_posts to the LIVE /api/notify, which emails the owner.
+    // Seeding fake engagement therefore mailed the owner once per row (~190 emails per run).
+    // Run only this section on a dedicated connection with session_replication_role=replica so
+    // those triggers don't fire. Scoped deliberately: it is session-state, so it resets itself if
+    // the seed dies, and the content inserts above keep full FK enforcement. Real reader activity
+    // is untouched — the triggers themselves are never altered.
+    const eng = await pool.connect();
+    await eng.query(`set session_replication_role = 'replica'`);
+
     // ── engagement (dense, deterministic) ───────────────────────────────────────
     let counters = { analytics: 0, feedback: 0, progress: 0, highlights: 0, hlComments: 0, comments: 0, votes: 0, notes: 0 };
     for (const post of posts) {
@@ -201,14 +211,14 @@ async function main() {
 
       // analytics: views + reads (drives reading-shape curves, completion, referrers, popularity).
       for (let i = 0; i < E.views; i++) {
-        await pool.query(`insert into public.analytics_events (ts, type, path, slug, ref_host, session) values ($1,'view',$2,$3,$4,$5)`,
+        await eng.query(`insert into public.analytics_events (ts, type, path, slug, ref_host, session) values ($1,'view',$2,$3,$4,$5)`,
           [iso(r() * 40), `/@${A[post.authorKey].handle}/${post.slug}`, post.slug, pick(r, REFERRERS), 's-' + Math.floor(r() * 1e9)]);
         counters.analytics++;
       }
       for (let i = 0; i < E.reads; i++) {
         const base = 30 + holdWell * 55;                      // retention centre
         const pct = Math.max(5, Math.min(100, Math.round(base + (r() - 0.5) * 70)));
-        await pool.query(`insert into public.analytics_events (ts, type, path, slug, ref_host, session, read_pct, dwell_ms) values ($1,'read',$2,$3,$4,$5,$6,$7)`,
+        await eng.query(`insert into public.analytics_events (ts, type, path, slug, ref_host, session, read_pct, dwell_ms) values ($1,'read',$2,$3,$4,$5,$6,$7)`,
           [iso(r() * 40), `/@${A[post.authorKey].handle}/${post.slug}`, post.slug, pick(r, REFERRERS), 's-' + Math.floor(r() * 1e9), pct, Math.round(20000 + r() * 400000)]);
         counters.analytics++;
       }
@@ -218,7 +228,7 @@ async function main() {
         const choice = x < holdWell * 0.8 + 0.15 ? 'held' : x < 0.85 ? 'skimmed' : 'lost';
         const readPct = choice === 'held' ? 80 + Math.floor(r() * 20) : choice === 'skimmed' ? 40 + Math.floor(r() * 40) : 10 + Math.floor(r() * 35);
         const lostPara = choice === 'lost' ? 1 + Math.floor(r() * 8) : null;
-        await pool.query(`insert into public.feedback (post_id, session, choice, read_pct, lost_para, dwell_ms) values ($1,$2,$3,$4,$5,$6) on conflict (post_id, session) do nothing`,
+        await eng.query(`insert into public.feedback (post_id, session, choice, read_pct, lost_para, dwell_ms) values ($1,$2,$3,$4,$5,$6) on conflict (post_id, session) do nothing`,
           [post.id, `fb-${post.slug}-${i}`, choice, readPct, lostPara, Math.round(20000 + r() * 300000)]);
         counters.feedback++;
       }
@@ -227,7 +237,7 @@ async function main() {
         const rd = readers[Math.floor(r() * readers.length)];
         const finished = r() < holdWell * 0.6;
         const pct = finished ? 100 : 20 + Math.floor(r() * 70);
-        await pool.query(`insert into public.reader_progress (user_id, post_slug, pct, read, anchor, heading, updated_at) values ($1,$2,$3,$4,$5,$6,$7)
+        await eng.query(`insert into public.reader_progress (user_id, post_slug, pct, read, anchor, heading, updated_at) values ($1,$2,$3,$4,$5,$6,$7)
           on conflict (user_id, post_slug) do update set pct=excluded.pct, read=excluded.read, updated_at=excluded.updated_at`,
           [rd.id, post.id, pct, finished, finished ? '' : anchor, finished ? '' : heading, iso(r() * 20)]);
         counters.progress++;
@@ -237,7 +247,7 @@ async function main() {
       if (quote && E.popularReaders >= 3) {
         for (let i = 0; i < E.popularReaders; i++) {
           const rd = readers[i % readers.length];
-          const { rows } = await pool.query(`insert into public.highlights (post_id, user_id, author_name, quote, note) values ($1,$2,$3,$4,$5) returning id`,
+          const { rows } = await eng.query(`insert into public.highlights (post_id, user_id, author_name, quote, note) values ($1,$2,$3,$4,$5) returning id`,
             [post.id, rd.id, rd.name, quote, i === 0 ? 'The line I keep coming back to.' : null]);
           hlIds.push({ id: rows[0].id, reader: rd });
           counters.highlights++;
@@ -247,7 +257,7 @@ async function main() {
         const rd = readers[(i * 5 + 2) % readers.length];
         const q = pickQuote(post.html.slice(1000 + i * 600)) || quote;
         if (!q) continue;
-        const { rows } = await pool.query(`insert into public.highlights (post_id, user_id, author_name, quote, note) values ($1,$2,$3,$4,$5) returning id`,
+        const { rows } = await eng.query(`insert into public.highlights (post_id, user_id, author_name, quote, note) values ($1,$2,$3,$4,$5) returning id`,
           [post.id, rd.id, rd.name, q, i === 0 ? 'Worth a second read.' : null]);
         hlIds.push({ id: rows[0].id, reader: rd });
         counters.highlights++;
@@ -255,9 +265,9 @@ async function main() {
       // a discussion thread on the first highlight, incl. an OWNER reply (author_is_admin → "Author" badge).
       if (hlIds.length) {
         const owner = readers.length; // placeholder
-        await pool.query(`insert into public.highlight_comments (highlight_id, user_id, author_name, body, author_is_admin) values ($1,$2,$3,$4,false)`,
+        await eng.query(`insert into public.highlight_comments (highlight_id, user_id, author_name, body, author_is_admin) values ($1,$2,$3,$4,false)`,
           [hlIds[0].id, hlIds[0].reader.id, hlIds[0].reader.name, 'Does this still hold at higher concurrency?']);
-        await pool.query(`insert into public.highlight_comments (highlight_id, user_id, author_name, body, author_is_admin) values ($1,$2,$3,$4,true)`,
+        await eng.query(`insert into public.highlight_comments (highlight_id, user_id, author_name, body, author_is_admin) values ($1,$2,$3,$4,true)`,
           [hlIds[0].id, ownerId, A.owner.pen, 'Good question — it does until the cache saturates; then re-measure.']);
         counters.hlComments += 2;
       }
@@ -265,29 +275,32 @@ async function main() {
       const cIds = [];
       for (let i = 0; i < E.comments; i++) {
         const rd = readers[(i * 3 + 1) % readers.length];
-        const { rows } = await pool.query(`insert into public.comments (post_id, user_id, author_name, body, author_is_admin) values ($1,$2,$3,$4,false) returning id`,
+        const { rows } = await eng.query(`insert into public.comments (post_id, user_id, author_name, body, author_is_admin) values ($1,$2,$3,$4,false) returning id`,
           [post.id, rd.id, rd.name, pick(r, ['This matched what we saw in production.', 'Great write-up — the diagram helped.', 'Curious how this holds for long-context models.', 'The table is the part I\'ll be quoting.', 'Bookmarking the code snippet.'])]);
         cIds.push(rows[0].id); counters.comments++;
       }
       if (cIds.length) {
-        const { rows } = await pool.query(`insert into public.comments (post_id, user_id, author_name, body, parent_id, author_is_admin) values ($1,$2,$3,$4,$5,true) returning id`,
+        const { rows } = await eng.query(`insert into public.comments (post_id, user_id, author_name, body, parent_id, author_is_admin) values ($1,$2,$3,$4,$5,true) returning id`,
           [post.id, ownerId, A.owner.pen, 'Thanks — reran it this morning and the numbers held.', cIds[0]]);
         cIds.push(rows[0].id); counters.comments++;
         // upvotes on the first comment from a few readers.
         for (let i = 0; i < Math.min(readers.length, 3 + Math.floor(r() * 6)); i++) {
-          await pool.query(`insert into public.votes (user_id, kind, target_id) values ($1,'comment',$2) on conflict do nothing`, [readers[i].id, cIds[0]]);
+          await eng.query(`insert into public.votes (user_id, kind, target_id) values ($1,'comment',$2) on conflict do nothing`, [readers[i].id, cIds[0]]);
           counters.votes++;
         }
       }
       // private notes.
       for (let i = 0; i < E.notes; i++) {
         const rd = readers[(i * 7 + 4) % readers.length];
-        await pool.query(`insert into public.notes (post_id, user_id, author_name, body) values ($1,$2,$3,$4) on conflict (post_id, user_id) do nothing`,
+        await eng.query(`insert into public.notes (post_id, user_id, author_name, body) values ($1,$2,$3,$4) on conflict (post_id, user_id) do nothing`,
           [post.id, rd.id, rd.name, pick(r, ['Follow up on the reranker claim.', 'Compare with our p99 numbers.', 'Ask about the cache eviction policy.', 'Try the batching trick next sprint.'])]);
         counters.notes++;
       }
     }
     console.log('engagement:', JSON.stringify(counters));
+
+    await eng.query(`set session_replication_role = 'origin'`).catch(() => {});
+    eng.release();
 
     // ── subscribers (audience panel) ────────────────────────────────────────────
     const mk = (i, status) => pool.query(
