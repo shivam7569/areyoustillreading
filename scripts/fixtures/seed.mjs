@@ -1,20 +1,24 @@
 /**
- * scripts/fixtures/seed.mjs — populate ONE dense, realistic dataset that exercises
- * EVERY feature (see scripts/fixtures/plan.mjs for the blueprint).
+ * scripts/fixtures/seed.mjs — populate a realistic dataset for testing.
  * ============================================================================
+ * The blueprint lives in scripts/fixtures/plan.mjs; scripts/fixtures/profile.mjs picks
+ * WHICH SLICE of it to seed. LEAN (the default) seeds a 6-post feed you can actually
+ * eyeball; --full seeds the dense every-feature/every-edge set.
+ *
  * Idempotent-ish: run scripts/fixtures/reset.mjs first for a clean slate. Fixture
  * authors/readers use @seed.invalid; the owner (public.admins) is reused. Post bodies
  * come from scripts/fixtures/posts/<slug>.md (committed → reproducible), rendered
  * through the real build pipeline (src/lib/render-post.mjs).
  *
- *   node scripts/fixtures/reset.mjs && node scripts/fixtures/seed.mjs
+ *   node scripts/fixtures/reset.mjs && node scripts/fixtures/seed.mjs           (lean)
+ *   node scripts/fixtures/reset.mjs && node scripts/fixtures/seed.mjs --full    (dense)
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getPool, getAdminSupabase, textAndReadingMin } from '../_shared.mjs';
 import { renderPostBody } from '../../src/lib/render-post.mjs';
-import { AUTHORS, READERS, SERIES, FIELDS, POSTS, REQUESTS, SUBSCRIBERS, DOMAIN } from './plan.mjs';
+import { AUTHORS, READERS, SERIES, FIELDS, POSTS, REQUESTS, SUBSCRIBERS, DOMAIN, PROFILE } from './profile.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PW = 'SeedData!2026';
@@ -51,6 +55,11 @@ const ENGAGE = {
 const REFERRERS = ['news.ycombinator.com', 'www.google.com', 'twitter.com', 'lobste.rs', null, null, null];
 
 async function main() {
+  console.log(
+    PROFILE === 'lean'
+      ? 'profile: LEAN — a small feed you can actually eyeball (npm run fixtures:reseed:full for every edge)'
+      : 'profile: FULL — the dense every-feature, every-edge dataset',
+  );
   const pool = getPool();
   const supa = getAdminSupabase();
   const t0 = Date.now();
@@ -158,7 +167,9 @@ async function main() {
       await pool.query(`insert into content.post_authors (post_id, user_id, position, accepted, invited_by) values ($1,$2,1,false,$3) on conflict do nothing`, [rows[0].id, A[rq.invitee].id, A[rq.primary].id]);
     }
     // A pending SERIES proposal: daniel proposes a post into mira's series → mira's inbox.
-    {
+    // Guarded: a lean profile only keeps this when its target series was seeded.
+    const collab = ['1 co-author invite'];
+    if (REQUESTS.seriesProposal && S[REQUESTS.seriesProposal.series]) {
       const rq = REQUESTS.seriesProposal;
       const html = await renderPostBody(bodyMd(rq.post));
       const { text, readingMin } = textAndReadingMin(html);
@@ -168,11 +179,16 @@ async function main() {
         [A[rq.proposer].id, rq.post, rq.title, rq.description, rq.tags, A[rq.proposer].pen, bodyMd(rq.post), html, text, readingMin, iso(2)]);
       await pool.query(`insert into content.post_authors (post_id, user_id, position, accepted) values ($1,$2,0,true) on conflict do nothing`, [rows[0].id, A[rq.proposer].id]);
       await pool.query(`insert into content.series_posts (series_id, post_id, position, accepted, invited_by) values ($1,$2,6,false,$3) on conflict do nothing`, [S[rq.series], rows[0].id, A[rq.proposer].id]);
+      collab.push('1 series proposal');
     }
     // A pending FIELD proposal: sofia proposes her series into the owner's field → owner's inbox.
-    await pool.query(`insert into content.field_series (field_id, series_id, position, accepted, invited_by) values ($1,$2,9,false,$3) on conflict do nothing`,
-      [F['systems-for-inference'], S['embeddings-from-scratch'], A['sofia'].id]);
-    console.log('collaboration: 1 co-author invite + 1 series proposal + 1 field proposal (all pending)');
+    // Guarded the same way — both the field and the series have to have been seeded.
+    if (F['systems-for-inference'] && S['embeddings-from-scratch']) {
+      await pool.query(`insert into content.field_series (field_id, series_id, position, accepted, invited_by) values ($1,$2,9,false,$3) on conflict do nothing`,
+        [F['systems-for-inference'], S['embeddings-from-scratch'], A['sofia'].id]);
+      collab.push('1 field proposal');
+    }
+    console.log(`collaboration: ${collab.join(' + ')} (all pending)`);
 
     // ── engagement (dense, deterministic) ───────────────────────────────────────
     let counters = { analytics: 0, feedback: 0, progress: 0, highlights: 0, hlComments: 0, comments: 0, votes: 0, notes: 0 };

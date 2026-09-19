@@ -22,6 +22,8 @@
     "fixtures:reset": "node scripts/fixtures/reset.mjs",
     "fixtures:seed": "node scripts/fixtures/seed.mjs",
     "fixtures:reseed": "node scripts/fixtures/reset.mjs && node scripts/fixtures/seed.mjs",
+    "fixtures:seed:full": "node scripts/fixtures/seed.mjs --full",
+    "fixtures:reseed:full": "node scripts/fixtures/reset.mjs && node scripts/fixtures/seed.mjs --full",
     "deploy": "npm run build && wrangler pages deploy dist --project-name=areyoustillreading",
     "deploy:preview": "npm run build && wrangler pages deploy dist --project-name=areyoustillreading --branch=preview"
   },
