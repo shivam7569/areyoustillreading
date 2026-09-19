@@ -29,8 +29,8 @@
   },
   "home": {
     "mast": {
-      "eyebrow": "A review, by salutation",
-      "ethos": "Long-form engineering writing on retrieval, inference and the systems underneath — measured, first-person, and published only when it holds together. Testing this",
+      "eyebrow": "A review, by invitation",
+      "ethos": "Long-form engineering writing on retrieval, inference and the systems underneath — measured, first-person, and published only when it holds together.",
       "headline": "Essays on machine learning, *written to be finished.*",
       "ctaPrimary": "Subscribe",
       "ctaSecondary": "Browse all posts",
@@ -90,7 +90,7 @@
       "go": "Start the clock"
     },
     "seo": {
-      "title": "areyoustillreading — short-form essays on machine learning & the systems underneath"
+      "title": "areyoustillreading — long-form essays on machine learning & the systems underneath"
     },
     "newsletter": {
       "heading": "One note when something lands",
