@@ -28,35 +28,73 @@
     }
   },
   "home": {
+    "mast": {
+      "eyebrow": "A review, by invitation",
+      "ethos": "Long-form engineering writing on retrieval, inference and the systems underneath — measured, first-person, and published only when it holds together.",
+      "headline": "Essays on machine learning, *written to be finished.*",
+      "ctaPrimary": "Subscribe",
+      "ctaSecondary": "Browse all posts",
+      "statPieces": "pieces this fortnight",
+      "statMins": "minutes of reading",
+      "statSince": "Writing since 2026"
+    },
+    "rez": {
+      "eyebrow": "Where you left off",
+      "clear": "Clear"
+    },
+    "feed": {
+      "eyebrow": "This fortnight",
+      "more": "Everyone →",
+      "loading": "Loading the fortnight…",
+      "legend": "Every piece carries the shape of its own reading — how many readers were still there, start to finish. The notch is where it loses most of them. No scores, no ranking.",
+      "footCta": "See everything",
+      "footAside": "Or start with a"
+    },
+    "coming": {
+      "eyebrow": "Coming next",
+      "more": "All series →",
+      "lede": "Series still running, and the part each one is waiting on. Nothing here has a date — it goes out when it holds."
+    },
+    "mark": {
+      "eyebrow": "The question",
+      "say": "Then the only thing worth asking is how long you've got. Below is what's here right now, laid end to end — every piece as wide as it is long. Move the dial and it will tell you exactly what your time buys, and hand you the reading order.",
+      "endAll": "the whole set",
+      "presetCoffee": "A coffee",
+      "presetCommute": "A commute",
+      "presetLunch": "A lunch hour",
+      "presetAll": "Everything",
+      "tapeFootA": "Shortest first, so a small budget still buys you something whole.",
+      "tapeFootB": "Tap a segment to make room for it.",
+      "readFits": "Fits in your time",
+      "readLeft": "Time you'd spend",
+      "readNext": "Just out of reach",
+      "headline": "So *are you still reading?*",
+      "start": "Start reading",
+      "you": "And you, on this page:"
+    },
+    "pace": {
+      "eyebrow": "A measurement",
+      "more": "One paragraph · nothing recorded but the number",
+      "lede": "Every reading time here assumes two hundred words a minute. Yours almost certainly is not that.",
+      "sampleFrom": "From “The retrieval step is lying to you”",
+      "why": "Read it the way you would read anything here. Press the button again when you reach the end.",
+      "again": "Measure again",
+      "consentQ": "Show reading times in your own minutes from now on?",
+      "adopt": "Use my pace",
+      "keep": "Keep the 200 default",
+      "outPace": "Your pace",
+      "outFort": "This fortnight",
+      "outLong": "The longest piece",
+      "outTyp": "A typical piece here",
+      "off": "Use the 200 default again",
+      "go": "Start the clock"
+    },
     "seo": {
-      "title": "areyoustillreading"
-    },
-    "hero": {
-      "eyebrow": "Deep dives & field notes",
-      "title": "In-depth writing on LLM engineering — and the",
-      "titleEm": "systems behind it.",
-      "lede": "Short-form notes on building, shipping, and speeding up language-model systems. Measured, first-person, and free of hype.",
-      "ctaPrimary": "Subscribe to the letter",
-      "ctaSecondary": "Read the blog",
-      "quote": "Most latency lives in the places nobody profiles. The essay is where I go looking.",
-      "attr": "From the field notes",
-      "statPieces": "Pieces",
-      "statTopics": "Topics",
-      "statSince": "Writing since"
-    },
-    "featured": {
-      "titleLatest": "Latest essay",
-      "titleSeries": "The current series",
-      "cta": "Read the essay",
-      "ctaSeries": "Continue the series"
-    },
-    "browse": "Browse the archive →",
-    "recent": {
-      "heading": "Recent writing"
+      "title": "areyoustillreading — long-form essays on machine learning & the systems underneath"
     },
     "newsletter": {
-      "heading": "Get the next essay by email.",
-      "blurb": "New posts on LLM engineering and the systems underneath — straight to your inbox. No spam, unsubscribe in one click."
+      "heading": "One note when something lands",
+      "blurb": "A short email whenever a piece is published, with the first paragraph and nothing else. No digests, no roundups, no recommendations."
     }
   },
   "projects": {

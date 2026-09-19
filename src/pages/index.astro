@@ -33,60 +33,72 @@
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
+import site from '../data/site.json';
+
+// Home copy, editable from Studio → Content. Prose lives in site.json (always committed) and
+// every string keeps its original as a fallback, so the page never renders blank. The data-cms
+// anchors let the edge overlay (functions/_middleware.js) swap copy with no rebuild.
+const h = (site as any).home || {};
+const mast = h.mast || {}, rez = h.rez || {}, feed = h.feed || {}, coming = h.coming || {},
+  mark = h.mark || {}, pace = h.pace || {}, news = h.newsletter || {};
+// Escape HTML, then turn *emphasis* into <em>. Copy is admin-authored + committed (trusted).
+const emph = (t = '') =>
+  String(t).replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] as string))
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
 ---
 
-<BaseLayout title="areyoustillreading — long-form essays on machine learning & the systems underneath" wide>
+<BaseLayout title={h.seo?.title || 'areyoustillreading — long-form essays on machine learning & the systems underneath'} wide>
   <div class="wrap">
 
     {/* ---------- MASTHEAD ---------- */}
     <header class="mast">
-      <div class="kicker"><span class="line"></span><span class="eyebrow">A review, by invitation</span></div>
-      <h1>Essays on machine learning, <em>written to be finished.</em></h1>
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="home.mast.eyebrow">{mast.eyebrow || "A review, by invitation"}</span></div>
+      <h1 data-cms="home.mast.headline" data-cms-rich="emph" set:html={emph(mast.headline || 'Essays on machine learning, *written to be finished.*')}></h1>
       <div class="mrow">
-        <p class="ethos">Long-form engineering writing on retrieval, inference and the systems underneath — measured, first-person, and published only when it holds together.</p>
+        <p class="ethos" data-cms="home.mast.ethos">{mast.ethos || "Long-form engineering writing on retrieval, inference and the systems underneath — measured, first-person, and published only when it holds together."}</p>
         <div class="acts">
-          <a class="btn btn-primary" href="#subscribe">Subscribe
+          <a class="btn btn-primary" href="#subscribe"><span data-cms="home.mast.ctaPrimary">{mast.ctaPrimary || 'Subscribe'}</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>
           </a>
-          <a class="btn btn-ghost" href="/blog">Browse all posts <span class="arrow">→</span></a>
+          <a class="btn btn-ghost" href="/blog"><span data-cms="home.mast.ctaSecondary">{mast.ctaSecondary || 'Browse all posts'}</span> <span class="arrow">→</span></a>
         </div>
       </div>
       <div class="stats" id="mastStats" hidden>
         <span><b id="stAuthors">—</b> <span id="stAuthorsL">authors</span></span><span class="dot">·</span>
-        <span><b id="stPieces">—</b> pieces this fortnight</span><span class="dot">·</span>
-        <span><b id="stMins">—</b> minutes of reading</span><span class="dot">·</span>
-        <span>Writing since 2026</span>
+        <span><b id="stPieces">—</b> <span data-cms="home.mast.statPieces">{mast.statPieces || 'pieces this fortnight'}</span></span><span class="dot">·</span>
+        <span><b id="stMins">—</b> <span data-cms="home.mast.statMins">{mast.statMins || 'minutes of reading'}</span></span><span class="dot">·</span>
+        <span data-cms="home.mast.statSince">{mast.statSince || 'Writing since 2026'}</span>
       </div>
     </header>
 
     {/* ---------- WHERE YOU LEFT OFF (returning reader only) ---------- */}
     <section class="rez" id="rez" hidden>
-      <div class="slab"><span class="eyebrow">Where you left off</span><span class="line"></span><button class="drop" type="button" id="rezClear">Clear</button></div>
+      <div class="slab"><span class="eyebrow" data-cms="home.rez.eyebrow">{rez.eyebrow || "Where you left off"}</span><span class="line"></span><button class="drop" type="button" id="rezClear" data-cms="home.rez.clear">{rez.clear || "Clear"}</button></div>
       <div class="rzgrid" id="rezGrid"></div>
     </section>
 
     {/* ---------- THIS FORTNIGHT — the centrepiece ---------- */}
     <section class="feed">
-      <div class="slab"><span class="eyebrow">This fortnight</span><span class="line"></span><a class="more-link" href="/blog">Everyone →</a></div>
+      <div class="slab"><span class="eyebrow" data-cms="home.feed.eyebrow">{feed.eyebrow || "This fortnight"}</span><span class="line"></span><a class="more-link" href="/blog" data-cms="home.feed.more">{feed.more || "Everyone →"}</a></div>
       <p class="feedlede" id="feedLede">Everything published in the last fourteen days, newest first.</p>
 
-      <div id="feedBands"><p class="feedlede" id="feedLoading" style="padding:24px 0">Loading the fortnight…</p></div>
+      <div id="feedBands"><p class="feedlede" id="feedLoading" style="padding:24px 0" data-cms="home.feed.loading">{feed.loading || "Loading the fortnight…"}</p></div>
 
       <div class="legend" id="feedLegend" hidden>
         <svg viewBox="0 0 50 16" aria-hidden="true"><path d="M0 2 C 11 3 21 8 31 9 S 44 11 50 12" fill="none" stroke="var(--accent)" stroke-width="1.4"/><circle cx="25" cy="7.5" r="2.2" fill="var(--paper)" stroke="var(--accent)" stroke-width="1.2"/></svg>
-        <span>Every piece carries the shape of its own reading — how many readers were still there, start to finish. The notch is where it loses most of them. No scores, no ranking.</span>
+        <span data-cms="home.feed.legend">{feed.legend || "Every piece carries the shape of its own reading — how many readers were still there, start to finish. The notch is where it loses most of them. No scores, no ranking."}</span>
       </div>
 
       <div class="feedfoot">
-        <a class="btn btn-ghost" href="/blog">See everything <span class="arrow">→</span></a>
-        <span class="meta-caps">Or start with a <a class="link" href="/fields" style="color:var(--accent)">field</a></span>
+        <a class="btn btn-ghost" href="/blog"><span data-cms="home.feed.footCta">{feed.footCta || 'See everything'}</span> <span class="arrow">→</span></a>
+        <span class="meta-caps"><span data-cms="home.feed.footAside">{feed.footAside || 'Or start with a'}</span> <a class="link" href="/fields" style="color:var(--accent)">field</a></span>
       </div>
     </section>
 
     {/* ---------- COMING NEXT (series still running) ---------- */}
     <section class="coming" id="coming" hidden>
-      <div class="slab"><span class="eyebrow">Coming next</span><span class="line"></span><a class="more-link" href="/series">All series →</a></div>
-      <p class="feedlede">Series still running, and the part each one is waiting on. Nothing here has a date — it goes out when it holds.</p>
+      <div class="slab"><span class="eyebrow" data-cms="home.coming.eyebrow">{coming.eyebrow || "Coming next"}</span><span class="line"></span><a class="more-link" href="/series" data-cms="home.coming.more">{coming.more || "All series →"}</a></div>
+      <p class="feedlede" data-cms="home.coming.lede">{coming.lede || "Series still running, and the part each one is waiting on. Nothing here has a date — it goes out when it holds."}</p>
       <div class="cmgrid" id="comingGrid"></div>
     </section>
 
@@ -96,39 +108,39 @@ import SubscribeForm from '../components/SubscribeForm.astro';
   <section class="markband" id="markband" hidden>
     <div class="wrap">
       <div class="mkhead">
-        <div class="kicker"><span class="line"></span><span class="eyebrow">The question</span></div>
-        <h2>So <em>are you still reading?</em></h2>
-        <p class="say">Then the only thing worth asking is how long you've got. Below is what's here right now, laid end to end — every piece as wide as it is long. Move the dial and it will tell you exactly what your time buys, and hand you the reading order.</p>
+        <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="home.mark.eyebrow">{mark.eyebrow || "The question"}</span></div>
+        <h2 data-cms="home.mark.headline" data-cms-rich="emph" set:html={emph(mark.headline || 'So *are you still reading?*')}></h2>
+        <p class="say" data-cms="home.mark.say">{mark.say || "Then the only thing worth asking is how long you've got. Below is what's here right now, laid end to end — every piece as wide as it is long. Move the dial and it will tell you exactly what your time buys, and hand you the reading order."}</p>
       </div>
 
       <div class="dial">
         <div class="amt" id="mkAmt">20<small>minutes</small></div>
         <div class="slot">
           <input type="range" id="mkRange" min="5" max="90" step="1" value="20" aria-label="Minutes you have to read">
-          <div class="ends"><span>5 min</span><span id="mkEndAll">the whole set</span></div>
+          <div class="ends"><span>5 min</span><span id="mkEndAll" data-cms="home.mark.endAll">{mark.endAll || "the whole set"}</span></div>
           <div class="presets" id="mkPresets">
-            <button type="button" data-min="10">A coffee</button>
-            <button type="button" data-min="20" class="on">A commute</button>
-            <button type="button" data-min="45">A lunch hour</button>
-            <button type="button" data-min="0" data-all="1">Everything</button>
+            <button type="button" data-min="10" data-cms="home.mark.presetCoffee">{mark.presetCoffee || "A coffee"}</button>
+            <button type="button" data-min="20" class="on" data-cms="home.mark.presetCommute">{mark.presetCommute || "A commute"}</button>
+            <button type="button" data-min="45" data-cms="home.mark.presetLunch">{mark.presetLunch || "A lunch hour"}</button>
+            <button type="button" data-min="0" data-all="1" data-cms="home.mark.presetAll">{mark.presetAll || "Everything"}</button>
           </div>
         </div>
       </div>
 
       <div class="tape" id="mkTape"></div>
-      <p class="tapefoot"><span>Shortest first, so a small budget still buys you something whole.</span><span>Tap a segment to make room for it.</span></p>
+      <p class="tapefoot"><span data-cms="home.mark.tapeFootA">{mark.tapeFootA || "Shortest first, so a small budget still buys you something whole."}</span><span data-cms="home.mark.tapeFootB">{mark.tapeFootB || "Tap a segment to make room for it."}</span></p>
 
       <div class="mkread">
-        <div><span class="k">Fits in your time</span><span class="v" id="mkFits">—</span><span class="sub" id="mkFitsSub">—</span></div>
-        <div><span class="k">Time you'd spend</span><span class="v" id="mkLeft">—</span><span class="sub" id="mkLeftSub">—</span></div>
-        <div><span class="k">Just out of reach</span><span class="v name" id="mkNext">—</span><span class="sub" id="mkNextSub">—</span></div>
+        <div><span class="k" data-cms="home.mark.readFits">{mark.readFits || "Fits in your time"}</span><span class="v" id="mkFits">—</span><span class="sub" id="mkFitsSub">—</span></div>
+        <div><span class="k" data-cms="home.mark.readLeft">{mark.readLeft || "Time you'd spend"}</span><span class="v" id="mkLeft">—</span><span class="sub" id="mkLeftSub">—</span></div>
+        <div><span class="k" data-cms="home.mark.readNext">{mark.readNext || "Just out of reach"}</span><span class="v name" id="mkNext">—</span><span class="sub" id="mkNextSub">—</span></div>
       </div>
 
       <ul class="plan" id="mkPlan"></ul>
 
       <div class="mkgo">
-        <a class="btn btn-primary" id="mkStart" href="/blog">Start reading <span class="arrow">→</span></a>
-        <span class="you">And you, on this page: <b id="mkYou">0%</b></span>
+        <a class="btn btn-primary" id="mkStart" href="/blog"><span data-cms="home.mark.start">{mark.start || 'Start reading'}</span> <span class="arrow">→</span></a>
+        <span class="you"><span data-cms="home.mark.you">{mark.you || 'And you, on this page:'}</span> <b id="mkYou">0%</b></span>
       </div>
     </div>
   </section>
@@ -137,42 +149,44 @@ import SubscribeForm from '../components/SubscribeForm.astro';
 
     {/* ---------- A MEASUREMENT — the reader's own reading pace ---------- */}
     <section class="pace" id="pace">
-      <div class="slab"><span class="eyebrow">A measurement</span><span class="line"></span><span class="more-link">One paragraph · nothing recorded but the number</span></div>
-      <p class="feedlede">Every reading time here assumes two hundred words a minute. Yours almost certainly is not that.</p>
+      <div class="slab"><span class="eyebrow" data-cms="home.pace.eyebrow">{pace.eyebrow || "A measurement"}</span><span class="line"></span><span class="more-link" data-cms="home.pace.more">{pace.more || "One paragraph · nothing recorded but the number"}</span></div>
+      <p class="feedlede" data-cms="home.pace.lede">{pace.lede || "Every reading time here assumes two hundred words a minute. Yours almost certainly is not that."}</p>
       <div class="pacecard">
-        <div class="pacetop"><span class="mono">DL</span><span>From “The retrieval step is lying to you”</span><span class="clock" id="pcClock">Ready</span></div>
+        <div class="pacetop"><span class="mono">DL</span><span data-cms="home.pace.sampleFrom">{pace.sampleFrom || "From “The retrieval step is lying to you”"}</span><span class="clock" id="pcClock">Ready</span></div>
         <div class="pacebody" id="pcBody">
           <p>We measure retrieval as if the model reads the way a librarian does — pull the right shelf, and the rest takes care of itself. But a language model does not read your top-<span class="inl">k</span> chunks. It <em>skims</em> them, weighted by position, phrasing, and a dozen biases we never put in the metric. The distance between “the right passage is in the context” and “the model used the right passage” is where most RAG systems quietly go to die.</p>
           <p>Consider two retrievers with identical recall. The first places the answer at rank 1 with two clean neighbours. The second buries it at rank 9 behind eight near-duplicates that all <em>look</em> relevant. Same recall, wildly different outcomes once the model starts spending attention. Our headline number can't tell them apart — but our readers can.</p>
         </div>
         <div class="paceact">
-          <button class="btn btn-primary" type="button" id="pcGo">Start the clock <span class="arrow">→</span></button>
-          <span class="why" id="pcWhy">Read it the way you would read anything here. Press the button again when you reach the end.</span>
-          <button class="again" type="button" id="pcAgain">Measure again</button>
+          <button class="btn btn-primary" type="button" id="pcGo"><span data-cms="home.pace.go">{pace.go || 'Start the clock'}</span> <span class="arrow">→</span></button>
+          <span class="why" id="pcWhy" data-cms="home.pace.why">{pace.why || "Read it the way you would read anything here. Press the button again when you reach the end."}</span>
+          <button class="again" type="button" id="pcAgain" data-cms="home.pace.again">{pace.again || "Measure again"}</button>
         </div>
         {/* Consent — shown only after a sane measurement. The pace is adopted (and re-prices every
             reading time on the page) only if the reader says so; the default stays 200 wpm otherwise. */}
         <div class="paceconsent" id="pcConsent" hidden>
-          <span class="q">Show reading times in your own minutes from now on?</span>
-          <button class="btn btn-sm btn-primary" type="button" id="pcAdopt">Use my pace</button>
-          <button class="pc-keep" type="button" id="pcKeep">Keep the 200 default</button>
+          <span class="q" data-cms="home.pace.consentQ">{pace.consentQ || "Show reading times in your own minutes from now on?"}</span>
+          <button class="btn btn-sm btn-primary" type="button" id="pcAdopt" data-cms="home.pace.adopt">{pace.adopt || "Use my pace"}</button>
+          <button class="pc-keep" type="button" id="pcKeep" data-cms="home.pace.keep">{pace.keep || "Keep the 200 default"}</button>
         </div>
         <div class="paceout">
-          <div><span class="k">Your pace</span><span class="v" id="pcWpm">—</span><span class="sub" id="pcWpmSub">—</span></div>
-          <div><span class="k">This fortnight</span><span class="v" id="pcFort">—</span><span class="sub" id="pcFortSub">—</span></div>
-          <div><span class="k">The longest piece</span><span class="v" id="pcLong">—</span><span class="sub" id="pcLongSub">—</span></div>
-          <div><span class="k">A typical piece here</span><span class="v" id="pcTyp">—</span><span class="sub" id="pcTypSub">—</span></div>
+          <div><span class="k" data-cms="home.pace.outPace">{pace.outPace || "Your pace"}</span><span class="v" id="pcWpm">—</span><span class="sub" id="pcWpmSub">—</span></div>
+          <div><span class="k" data-cms="home.pace.outFort">{pace.outFort || "This fortnight"}</span><span class="v" id="pcFort">—</span><span class="sub" id="pcFortSub">—</span></div>
+          <div><span class="k" data-cms="home.pace.outLong">{pace.outLong || "The longest piece"}</span><span class="v" id="pcLong">—</span><span class="sub" id="pcLongSub">—</span></div>
+          <div><span class="k" data-cms="home.pace.outTyp">{pace.outTyp || "A typical piece here"}</span><span class="v" id="pcTyp">—</span><span class="sub" id="pcTypSub">—</span></div>
         </div>
         <p class="paceflag" id="pcFlag"></p>
-        <p class="pacenote" id="pcNote">Measured only here, kept only on this device, and used only if you turn it on — it changes your reading times, nobody else's. <button type="button" class="pc-off" id="pcOff" hidden>Use the 200 default again</button></p>
+        <p class="pacenote" id="pcNote">Measured only here, kept only on this device, and used only if you turn it on — it changes your reading times, nobody else's. <button type="button" class="pc-off" id="pcOff" hidden data-cms="home.pace.off">{pace.off || "Use the 200 default again"}</button></p>
       </div>
     </section>
 
     {/* ---------- THE LETTER ---------- */}
     <section class="letter" id="subscribe">
       <SubscribeForm
-        heading="One note when something lands"
-        blurb="A short email whenever a piece is published, with the first paragraph and nothing else. No digests, no roundups, no recommendations."
+        heading={news.heading || 'One note when something lands'}
+        blurb={news.blurb || "A short email whenever a piece is published, with the first paragraph and nothing else. No digests, no roundups, no recommendations."}
+        headingKey="home.newsletter.heading"
+        blurbKey="home.newsletter.blurb"
       />
     </section>
 
