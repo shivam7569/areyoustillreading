@@ -182,3 +182,48 @@ RSS = frictionless/anonymous; email = owned relationship. Widens the funnel at ~
 ## Open questions
 1. ~~Email sending service~~ → **Resend** (verify live free-tier limits before launch).
 2. **Price per post** — deferred to phase 3.
+
+## Backlog (not scheduled)
+
+### Per-post retraction ("withdraw a post") — *not a priority*
+**Decided (2026-09-19): suspending an author does NOT retract their already-published
+posts.** Suspension is an *account* action (they can't publish any more); taking a piece
+off the site is a *content* action. Today's behaviour — a suspended author's published
+posts stay public — is therefore **correct**, not a bug. Don't "fix" it by joining
+visibility to `profiles.status`; two independent reasons why that's wrong:
+
+- **It can't be expressed correctly.** The feed joins only the *primary* author
+  (`db/content-feed.sql`, `pr.id = po.author_id`), so "suspended author" would silently
+  mean "suspended *primary* author" — wrong for every co-authored post, and unfair to an
+  innocent co-author. Doing it properly needs a correlated subquery over
+  `content.post_authors` in **50 places across 23 files** in `db/`; one missed join is a leak.
+- **It wouldn't be reversible.** Status-derived visibility can't record what was public *at
+  the moment of suspension*, so un-suspending would resurrect posts that were `draft` or
+  `archived` beforehand. A stamped flag makes un-retraction the exact inverse.
+
+**What's actually missing** is the second lever, whenever it's wanted:
+- `content.posts.retracted_at` + `retracted_by` + required non-empty `retracted_reason`.
+  Never mutate `status`/`visibility`/`body_html`, so restore is the identity function.
+- One `content.visible_posts` view (`published` + `public` + not deleted + not retracted) and
+  port all 50 predicates onto it, plus a `pg_get_functiondef` verify block (repo's
+  `VERIFY FAIL` style) that fails if any public RPC still reads `content.posts` directly.
+  **The filter must live in the RPCs** — they're SECURITY DEFINER granted to `anon` and the
+  anon key is public, so an app/edge-layer filter is bypassable and is not a fix.
+- Permalink for a retracted post: **200 tombstone** + `noindex` + out of RSS/sitemap — not
+  404 (the URL served a real essay and went out in a newsletter) and not 410 by default
+  (kills the document the highlights/notes/progress island needs). Reserve 410 for a
+  `legal` reason code, and make that path harder to pick.
+- Co-authored posts: excluded from any bulk "withdraw everything by X" helper by default;
+  retract only per-post, notify every co-author, and never reword the tombstone to imply the
+  innocent co-author withdrew their own work. Byline stays intact — removing a name from work
+  someone demonstrably co-wrote is falsified attribution.
+- Append-only audit row per retract/restore. With a single owner, the log *is* the
+  accountability mechanism.
+- **Do NOT** reuse `content.unpublish_post(..., 'unlist')` as a shortcut: `get_public_post`
+  requires `visibility = 'public'` (`db/content-permalink.sql:79`), so unlisting hides the post
+  **and** 404s the permalink — exactly the half-state this policy rejects.
+
+**Small outstanding item (also not urgent):** the fixtures assert the *losing* contract —
+`scripts/fixtures/plan.mjs` ("Edge: suspended author with a published post — the post must NOT
+surface publicly") and `scripts/fixtures/posts/hidden-by-suspension.md`. Reword them to assert
+the decision above, or they'll keep teaching the wrong rule.
