@@ -471,8 +471,15 @@ import SubscribeForm from '../components/SubscribeForm.astro';
       lede.textContent = n ? `${n} ${n === 1 ? 'piece' : 'pieces'} in the last fourteen days. A quiet one.` : 'Nothing new in the last fourteen days — a quiet fortnight.';
       let html = '';
       if (n) html += band('This fortnight', state.fortnight);
-      if (state.popular.length) {
-        html += `<div class="topup"><span>Worth going back for</span><em>Most read</em><span class="rule"></span></div>${postList(state.popular)}`;
+      // The top-up is "worth going back for" — a piece already listed in the fortnight band above is
+      // by definition not something to go back to, so never print it twice. (Keyed on handle+slug:
+      // a slug is only unique WITHIN an author.) Popularity can easily rank a recent piece highly,
+      // so this overlap is the normal case, not an edge one.
+      const shownKey = (p: any) => `${p.primary_handle}/${p.slug}`;
+      const shown = new Set(state.fortnight.map(shownKey));
+      const topup = state.popular.filter((p) => !shown.has(shownKey(p)));
+      if (topup.length) {
+        html += `<div class="topup"><span>Worth going back for</span><em>Most read</em><span class="rule"></span></div>${postList(topup)}`;
       }
       bands.innerHTML = html || '<p class="feedlede" style="padding:24px 0">The archive is just getting started.</p>';
     }
