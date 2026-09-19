@@ -46,6 +46,13 @@ const LEAN_FEED = new Set([
   'rp-1',                    // owner, part 1 of 3  — Retrieval plumbing, in progress
   'mm-1',                    // daniel, part 1 of 4 — Measuring models, in progress
   'mm-2',                    // daniel, part 2 of 4 — 2 published is what its planned[] assumes
+  // The 'Measuring models' card needs a field eyebrow, and its field
+  // (making-models-measurable) only seeds once BOTH its series survive — so bring in
+  // embeddings-from-scratch. All 3 parts, because that series is status:complete and
+  // seeding 1 of 3 would render a 'complete' series that plainly isn't.
+  'efs-1',                   // sofia, part 1 of 3 — Embeddings from scratch (complete)
+  'efs-2',                   // sofia, part 2 of 3
+  'efs-3',                   // sofia, part 3 of 3
 ]);
 // Never visible in a feed → keep in BOTH profiles so these edges stay covered for free.
 const ALWAYS = new Set([

@@ -112,7 +112,9 @@ const ogImage = new URL(image ?? '/favicon.svg', Astro.site);
 
       var key = 'ays:y:' + location.pathname + location.search;
       var save = function () {
-        try { sessionStorage.setItem(key, String(Math.round(window.scrollY))); } catch (e) {}
+        try {
+          sessionStorage.setItem(key, Math.round(window.scrollY) + ':' + document.documentElement.scrollHeight);
+        } catch (e) {}
       };
       addEventListener('pagehide', save);
       addEventListener('visibilitychange', function () {
@@ -122,30 +124,42 @@ const ogImage = new URL(image ?? '/favicon.svg', Astro.site);
       var nav = (performance.getEntriesByType('navigation') || [])[0];
       if (!nav || nav.type !== 'back_forward') return; // reload / fresh nav stay at the top
 
-      var y = 0;
-      try { y = parseInt(sessionStorage.getItem(key) || '0', 10) || 0; } catch (e) {}
+      var y = 0, h = 0;
+      try {
+        var parts = (sessionStorage.getItem(key) || '').split(':');
+        y = parseInt(parts[0], 10) || 0;
+        h = parseInt(parts[1], 10) || 0;
+      } catch (e) {}
       if (y <= 0) return;
 
-      // The saved position is usually unreachable at first paint, because the feed/comments have
-      // not rendered yet. So WAIT for the page to grow tall enough and then scroll once — never
-      // scroll to a clamped intermediate position, which is what produced the original bug. Bail
-      // the moment the reader takes over, so we never fight their own scrolling.
-      var live = true, tries = 0;
-      var stop = function () { live = false; };
+      // Restore WITHOUT the jump. The saved offset is unreachable at first paint (the feed and
+      // comments render later), so waiting for the content would show the top first and then
+      // lurch down. Instead reserve the page's previous height up front, which makes the offset
+      // immediately valid — we land at the right place and the content fills in around us, so
+      // the viewport never moves. The reservation is released once the real content is tall
+      // enough to hold the position on its own (so removing it can't cause a jump either).
+      var filler = document.createElement('style');
+      filler.textContent = 'html{min-height:' + Math.max(h, y + 2000) + 'px}';
+      document.head.appendChild(filler);
+
+      var live = true;
+      var drop = function () { if (filler.parentNode) filler.parentNode.removeChild(filler); };
+      var stop = function () { live = false; drop(); }; // reader took over: never fight them
       addEventListener('wheel', stop, { passive: true, once: true });
       addEventListener('touchstart', stop, { passive: true, once: true });
       addEventListener('keydown', stop, { once: true });
 
-      (function tick() {
+      var land = function () { if (live) window.scrollTo({ top: y, behavior: 'instant' }); };
+      if (document.readyState === 'loading') addEventListener('DOMContentLoaded', land);
+      else land();
+
+      // Hold the reservation until the real content can carry the offset, then let it go.
+      var tries = 0;
+      (function release() {
         if (!live) return;
-        var max = document.documentElement.scrollHeight - window.innerHeight;
-        if (max >= y - 2) {
-          // html has scroll-behavior:smooth, so force an instant jump rather than an animation.
-          window.scrollTo({ top: y, behavior: 'instant' });
-          return;
-        }
-        if (++tries > 60) return; // ~3s: content never came back to that height, stay put
-        setTimeout(tick, 50);
+        var real = document.body ? document.body.getBoundingClientRect().height : 0;
+        if (real >= y + window.innerHeight || ++tries > 60) { drop(); land(); return; }
+        setTimeout(release, 50);
       })();
     } catch (e) { /* private mode / no sessionStorage — fall back to opening at the top */ }
   })();
