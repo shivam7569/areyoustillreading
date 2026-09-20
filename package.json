@@ -35,6 +35,7 @@
     "@codemirror/language-data": "^6.5.2",
     "@codemirror/view": "^6.43.6",
     "@fontsource-variable/inter": "^5.3.0",
+    "@google/genai": "^2.23.0",
     "@milkdown/crepe": "^7.21.3",
     "@milkdown/kit": "^7.21.3",
     "@milkdown/plugin-collab": "^7.21.3",
