@@ -18,27 +18,40 @@
  * =============================================================================
  */
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import site from '../../data/site.json';
+
+// /blog copy, editable from Studio → Content. Prose lives in site.json (always committed) and
+// every string keeps its original as a fallback, so the page never renders blank. The data-cms
+// anchors let the edge overlay (functions/_middleware.js) swap copy with no rebuild.
+const copy = (site as any).blogIndex || {};
+const head = copy.head || {}, rez = copy.rez || {}, fields = copy.fields || {},
+  together = copy.together || {}, ways = copy.ways || {}, filters = copy.filters || {},
+  empty = copy.empty || {}, letter = copy.letter || {};
+// Escape HTML, then turn *emphasis* into <em>. Copy is admin-authored + committed (trusted).
+const emph = (t = '') =>
+  String(t).replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] as string))
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
 ---
 
-<BaseLayout title="Everyone — areyoustillreading" description="Every author's published work, in one feed — read live from the database." wide>
+<BaseLayout title={copy.seo?.title || "Everyone — areyoustillreading"} description={copy.seo?.description || "Every author's published work, in one feed — read live from the database."} wide>
   <div class="wrap">
     <header class="page-head">
-      <div class="kicker"><span class="line"></span><span class="eyebrow">Everyone</span></div>
-      <h1>Every author, <em>one feed.</em></h1>
-      <p class="lede">Nothing is ranked, promoted or trending. Work arrives in order, read live from the database — start something rather than scroll past it.</p>
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="blogIndex.head.eyebrow">{head.eyebrow || "Everyone"}</span></div>
+      <h1 data-cms="blogIndex.head.headline" data-cms-rich="emph" set:html={emph(head.headline || 'Every author, *one feed.*')}></h1>
+      <p class="lede" data-cms="blogIndex.head.lede">{head.lede || "Nothing is ranked, promoted or trending. Work arrives in order, read live from the database — start something rather than scroll past it."}</p>
     </header>
 
     <!-- Where you left off: the signed-in reader's own in-progress pieces (public.
          my_reading_continues). Hidden for anonymous readers and when nothing is mid-read. -->
     <section class="rez" id="rez" hidden>
-      <div class="slab"><span class="eyebrow">Where you left off</span><span class="line"></span><button class="drop" type="button" id="rezclear">Clear</button></div>
+      <div class="slab"><span class="eyebrow" data-cms="blogIndex.rez.eyebrow">{rez.eyebrow || "Where you left off"}</span><span class="line"></span><button class="drop" type="button" id="rezclear" data-cms="blogIndex.rez.clear">{rez.clear || "Clear"}</button></div>
       <div class="rezgrid" id="rezgrid"></div>
     </section>
 
     <!-- Fields shelf: the map. Client-rendered from public.list_public_fields, each tile a
          generative plate. Hidden until at least one field is public (>=2 series). -->
     <section class="fieldsec" id="fieldshelf" hidden>
-      <div class="slab"><span class="eyebrow">Fields</span><span class="line"></span><a class="more-link" href="/fields">All fields →</a></div>
+      <div class="slab"><span class="eyebrow" data-cms="blogIndex.fields.eyebrow">{fields.eyebrow || "Fields"}</span><span class="line"></span><a class="more-link" href="/fields" data-cms="blogIndex.fields.more">{fields.more || "All fields →"}</a></div>
       <div class="shelf" id="shelf"></div>
     </section>
 
@@ -49,22 +62,22 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <section class="tg" id="tg" hidden>
       <div class="tgin">
         <div class="tghead">
-          <div class="kicker"><span class="line"></span><span class="eyebrow">Read them together</span></div>
-          <h2>Two authors, <em>the same subject reached apart.</em></h2>
-          <p>Everyone writes here. These are pairs worth reading side by side — two essays that reach the same subject, written by two people who got there separately. Read them in the order given, and compare.</p>
+          <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="blogIndex.together.eyebrow">{together.eyebrow || "Read them together"}</span></div>
+          <h2 data-cms="blogIndex.together.headline" data-cms-rich="emph" set:html={emph(together.headline || 'Two authors, *the same subject reached apart.*')}></h2>
+          <p data-cms="blogIndex.together.lede">{together.lede || "Everyone writes here. These are pairs worth reading side by side — two essays that reach the same subject, written by two people who got there separately. Read them in the order given, and compare."}</p>
         </div>
         <div class="tgpick" id="tgPick"></div>
         <div class="tgpair">
           <article class="tgside">
-            <span class="tgord">Read first</span>
+            <span class="tgord" data-cms="blogIndex.together.first">{together.first || "Read first"}</span>
             <p class="tgwho" id="tgAWho"></p>
             <h3><a href="#" id="tgATitle"></a></h3>
             <p class="tgsays" id="tgASays"></p>
             <span class="tgnums" id="tgANums"></span>
           </article>
-          <div class="tgvs"><span class="ln"></span><small>Both take up</small><b id="tgVs"></b><span class="ln"></span></div>
+          <div class="tgvs"><span class="ln"></span><small data-cms="blogIndex.together.bothTake">{together.bothTake || "Both take up"}</small><b id="tgVs"></b><span class="ln"></span></div>
           <article class="tgside">
-            <span class="tgord">Then this</span>
+            <span class="tgord" data-cms="blogIndex.together.then">{together.then || "Then this"}</span>
             <p class="tgwho" id="tgBWho"></p>
             <h3><a href="#" id="tgBTitle"></a></h3>
             <p class="tgsays" id="tgBSays"></p>
@@ -75,7 +88,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <p class="tgfoot">
           <span class="tgmins" id="tgMins"></span>
           <span id="tgOrder"></span>
-          <a class="tgopen btn btn-ghost btn-sm" id="tgOpen" href="#">Start the pair <span class="arrow">→</span></a>
+          <a class="tgopen btn btn-ghost btn-sm" id="tgOpen" href="#"><span data-cms="blogIndex.together.open">{together.open || 'Start the pair'}</span> <span class="arrow">→</span></a>
         </p>
       </div>
     </section>
@@ -83,34 +96,34 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <!-- Ways in: three routes chosen by how pieces READ (public.ways_in), each on a
          reading shape, not a score. Hidden until three exemplars exist. -->
     <section class="waysec" id="waysin" hidden>
-      <div class="slab"><span class="eyebrow">Ways in</span><span class="line"></span><span class="more-link">Chosen by how they read, not when they arrived</span></div>
+      <div class="slab"><span class="eyebrow" data-cms="blogIndex.ways.eyebrow">{ways.eyebrow || "Ways in"}</span><span class="line"></span><span class="more-link" data-cms="blogIndex.ways.more">{ways.more || "Chosen by how they read, not when they arrived"}</span></div>
       <div class="wgrid" id="wgrid"></div>
     </section>
 
     <div class="filters">
       <label class="search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.6-3.6"></path></svg>
-        <input type="search" id="q" placeholder="Search titles, authors, subjects" aria-label="Search the stream" />
+        <input type="search" id="q" placeholder={filters.searchPlaceholder || "Search titles, authors, subjects"} data-cms-attr="placeholder=blogIndex.filters.searchPlaceholder" aria-label="Search the stream" />
       </label>
       <span class="count" id="count"></span>
-      <span class="sortwrap"><span>Sort</span><select id="sort" aria-label="Sort the stream"><option value="new">Newest first</option><option value="held">Best held</option><option value="short">Shortest read</option></select></span>
+      <span class="sortwrap"><span data-cms="blogIndex.filters.sortLabel">{filters.sortLabel || "Sort"}</span><select id="sort" aria-label="Sort the stream"><option value="new" data-cms="blogIndex.filters.sortNew">{filters.sortNew || "Newest first"}</option><option value="held" data-cms="blogIndex.filters.sortHeld">{filters.sortHeld || "Best held"}</option><option value="short" data-cms="blogIndex.filters.sortShort">{filters.sortShort || "Shortest read"}</option></select></span>
     </div>
 
     <div id="stream" aria-live="polite"></div>
-    <p class="empty" id="empty">Nothing matches that. Try a broader subject, or <a class="link" href="#" data-reset>clear the filters</a>.</p>
+    <p class="empty" id="empty"><span data-cms="blogIndex.empty.text">{empty.text || "Nothing matches that. Try a broader subject, or"}</span> <a class="link" href="#" data-reset data-cms="blogIndex.empty.resetLabel">{empty.resetLabel || "clear the filters"}</a>.</p>
 
     <div class="legend">
       <svg viewBox="0 0 50 16" aria-hidden="true"><path d="M0 2 C 11 3 21 8 31 9 S 44 11 50 12" fill="none" stroke="var(--accent)" stroke-width="1.4"></path><circle cx="25" cy="7.5" r="2.2" fill="var(--paper)" stroke="var(--accent)" stroke-width="1.2"></circle></svg>
-      <span>Every piece carries the shape of its own reading — how many readers were still there, start to finish. The notch is where it loses most of them. No scores, no ranking.</span>
+      <span data-cms="blogIndex.legend">{copy.legend || "Every piece carries the shape of its own reading — how many readers were still there, start to finish. The notch is where it loses most of them. No scores, no ranking."}</span>
     </div>
 
-    <div class="more"><button class="btn btn-ghost" type="button" id="morebtn" hidden>Keep going back</button></div>
+    <div class="more"><button class="btn btn-ghost" type="button" id="morebtn" hidden data-cms="blogIndex.more">{copy.more || "Keep going back"}</button></div>
 
     <div class="feed-foot">
       <section class="subscribe">
-        <span class="eyebrow">The letter</span>
-        <h3>One from every field, once a week</h3>
-        <p>A single email of pieces that held their readers to the end. No digests of digests, no engagement bait.</p>
+        <span class="eyebrow" data-cms="blogIndex.letter.eyebrow">{letter.eyebrow || "The letter"}</span>
+        <h3 data-cms="blogIndex.letter.heading">{letter.heading || "One from every field, once a week"}</h3>
+        <p data-cms="blogIndex.letter.blurb">{letter.blurb || "A single email of pieces that held their readers to the end. No digests of digests, no engagement bait."}</p>
       </section>
     </div>
   </div>

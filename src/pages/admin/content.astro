@@ -323,30 +323,55 @@ import site from '../../data/site.json';
     blogIndex: {
       label: 'Blog index', view: '/blog',
       groups: [
-        { label: 'SEO', fields: [
-          { path: 'seo.title', label: 'SEO title', type: 'text' },
-          { path: 'seo.description', label: 'SEO description', type: 'text' },
+        { label: "SEO", fields: [
+          { path: 'seo.title', label: "SEO title", type: 'text' },
+          { path: 'seo.description', label: "SEO description", type: 'area' },
         ] },
-        { label: 'Header', fields: [
-          { path: 'eyebrow', label: 'Eyebrow', type: 'text' },
-          { path: 'title', label: 'Headline', type: 'text' },
-          { path: 'titleEm', label: 'Headline — accent italic', type: 'text' },
-          { path: 'lede', label: 'Intro (use {series} for the series link)', type: 'area' },
-          { path: 'ledeSeriesLabel', label: 'Series link label', type: 'text' },
+        { label: "Header", fields: [
+          { path: 'head.eyebrow', label: "Eyebrow", type: 'text' },
+          { path: 'head.headline', label: "Headline (wrap *words* to italicise)", type: 'text' },
+          { path: 'head.lede', label: "Intro paragraph", type: 'area' },
         ] },
-        { label: 'Filter bar', fields: [
-          { path: 'searchPlaceholder', label: 'Search placeholder', type: 'text' },
-          { path: 'shownLabel', label: '“shown” word', type: 'text' },
-          { path: 'allChip', label: '“All” chip label', type: 'text' },
-          { path: 'essaySingular', label: 'Year count — one', type: 'text' },
-          { path: 'essayPlural', label: 'Year count — many', type: 'text' },
+        { label: "Where you left off", fields: [
+          { path: 'rez.eyebrow', label: "Eyebrow", type: 'text' },
+          { path: 'rez.clear', label: "Clear button", type: 'text' },
         ] },
-        { label: 'Empty states + newsletter', fields: [
-          { path: 'emptyFilter', label: 'No-results text (use {reset})', type: 'area' },
-          { path: 'emptyResetLabel', label: '“clear the filters” link', type: 'text' },
-          { path: 'emptyArchive', label: 'Empty-archive text', type: 'text' },
-          { path: 'newsletter.heading', label: 'Newsletter heading', type: 'text' },
-          { path: 'newsletter.blurb', label: 'Newsletter blurb', type: 'area' },
+        { label: "Fields shelf", fields: [
+          { path: 'fields.eyebrow', label: "Eyebrow", type: 'text' },
+          { path: 'fields.more', label: "Link — all fields", type: 'text' },
+        ] },
+        { label: "Read them together", fields: [
+          { path: 'together.eyebrow', label: "Eyebrow", type: 'text' },
+          { path: 'together.headline', label: "Headline (wrap *words* to italicise)", type: 'text' },
+          { path: 'together.lede', label: "Intro paragraph", type: 'area' },
+          { path: 'together.first', label: "Label — first essay", type: 'text' },
+          { path: 'together.then', label: "Label — second essay", type: 'text' },
+          { path: 'together.bothTake', label: "Label — shared subject", type: 'text' },
+          { path: 'together.open', label: "Open-the-pair button", type: 'text' },
+        ] },
+        { label: "Ways in", fields: [
+          { path: 'ways.eyebrow', label: "Eyebrow", type: 'text' },
+          { path: 'ways.more', label: "Eyebrow aside", type: 'text' },
+        ] },
+        { label: "Filter bar", fields: [
+          { path: 'filters.searchPlaceholder', label: "Search placeholder", type: 'text' },
+          { path: 'filters.sortLabel', label: "“Sort” label", type: 'text' },
+          { path: 'filters.sortNew', label: "Sort option — newest", type: 'text' },
+          { path: 'filters.sortHeld', label: "Sort option — best held", type: 'text' },
+          { path: 'filters.sortShort', label: "Sort option — shortest", type: 'text' },
+        ] },
+        { label: "Empty state", fields: [
+          { path: 'empty.text', label: "No-results text", type: 'area' },
+          { path: 'empty.resetLabel', label: "“clear the filters” link", type: 'text' },
+        ] },
+        { label: "Stream foot", fields: [
+          { path: 'legend', label: "Reading-shape legend", type: 'area' },
+          { path: 'more', label: "“Keep going back” button", type: 'text' },
+        ] },
+        { label: "The letter", fields: [
+          { path: 'letter.eyebrow', label: "Eyebrow", type: 'text' },
+          { path: 'letter.heading', label: "Heading", type: 'text' },
+          { path: 'letter.blurb', label: "Blurb", type: 'area' },
         ] },
       ],
     },

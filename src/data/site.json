@@ -211,26 +211,53 @@
     "home": "← Home"
   },
   "blogIndex": {
-    "seo": {
-      "title": "Blog — areyoustillreading",
-      "description": "Every essay on LLM engineering and the systems underneath, grouped by year."
+    "head": {
+      "eyebrow": "Everyone",
+      "lede": "Nothing is ranked, promoted or trending. Work arrives in order, read live from the database — start something rather than scroll past it.",
+      "headline": "Every author, *one feed.*"
     },
-    "eyebrow": "The blog",
-    "title": "Every essay,",
-    "titleEm": "in the order it arrived.",
-    "lede": "The complete archive — everything published here on LLM engineering and the systems underneath. Filter by subject or search the titles; for multi-part reads, see the {series}.",
-    "ledeSeriesLabel": "series",
-    "searchPlaceholder": "Search titles and summaries",
-    "shownLabel": "shown",
-    "allChip": "All",
-    "essaySingular": "essay",
-    "essayPlural": "essays",
-    "emptyFilter": "Nothing matches that. Try a broader subject, or {reset}.",
-    "emptyResetLabel": "clear the filters",
-    "emptyArchive": "No essays yet — the first one is on its way.",
-    "newsletter": {
-      "heading": "Read the next one first",
-      "blurb": "New essays on LLM engineering and the systems underneath, straight to your inbox. No noise — unsubscribe in one click."
+    "rez": {
+      "eyebrow": "Where you left off",
+      "clear": "Clear"
+    },
+    "fields": {
+      "eyebrow": "Fields",
+      "more": "All fields →"
+    },
+    "together": {
+      "eyebrow": "Read them together",
+      "lede": "Everyone writes here. These are pairs worth reading side by side — two essays that reach the same subject, written by two people who got there separately. Read them in the order given, and compare.",
+      "first": "Read first",
+      "then": "Then this",
+      "bothTake": "Both take up",
+      "headline": "Two authors, *the same subject reached apart.*",
+      "open": "Start the pair"
+    },
+    "ways": {
+      "eyebrow": "Ways in",
+      "more": "Chosen by how they read, not when they arrived"
+    },
+    "filters": {
+      "sortLabel": "Sort",
+      "sortNew": "Newest first",
+      "sortHeld": "Best held",
+      "sortShort": "Shortest read",
+      "searchPlaceholder": "Search titles, authors, subjects"
+    },
+    "legend": "Every piece carries the shape of its own reading — how many readers were still there, start to finish. The notch is where it loses most of them. No scores, no ranking.",
+    "more": "Keep going back",
+    "letter": {
+      "eyebrow": "The letter",
+      "heading": "One from every field, once a week",
+      "blurb": "A single email of pieces that held their readers to the end. No digests of digests, no engagement bait."
+    },
+    "seo": {
+      "title": "Everyone — areyoustillreading",
+      "description": "Every author's published work, in one feed — read live from the database."
+    },
+    "empty": {
+      "text": "Nothing matches that. Try a broader subject, or",
+      "resetLabel": "clear the filters"
     }
   },
   "blogTopics": {
