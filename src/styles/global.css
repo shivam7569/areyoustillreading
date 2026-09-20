@@ -143,6 +143,53 @@ select option {
   color: var(--ink);
 }
 
+/* ---- Editorial select menu (enhanced by src/lib/select-menu.ts) ----------------
+   A native select's POPUP is drawn by the OS: colour-scheme is all we can influence,
+   never its type, spacing, corners or selected row — so on this site it always reads as
+   a foreign control. Selects are enhanced into the listbox below instead. The markup is
+   built at RUNTIME, so these rules must live in the GLOBAL sheet; a page's scoped <style>
+   would never reach them (the documented Astro scoped-style footgun). The native select
+   stays in the DOM as the state holder and is only hidden once the menu is built. */
+.selmenu-native { display: none; }
+.selmenu { position: relative; display: inline-block; }
+.selmenu-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--sans); font-size: 13px; line-height: 1;
+  color: var(--ink); background: transparent;
+  border: 1px solid var(--rule); border-radius: 999px;
+  padding: 8px 12px; cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.selmenu-btn:hover { border-color: color-mix(in srgb, var(--accent) 52%, var(--rule)); }
+.selmenu-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.selmenu.open .selmenu-btn { border-color: var(--accent); }
+.selmenu-chev { width: 14px; height: 14px; color: var(--ink-faint); transition: transform 0.2s, color 0.2s; }
+.selmenu.open .selmenu-chev { transform: rotate(180deg); color: var(--accent); }
+
+.selmenu-list {
+  position: absolute; z-index: 60; top: calc(100% + 8px); right: 0;
+  min-width: 100%; margin: 0; padding: 6px; list-style: none;
+  background: var(--card); border: 1px solid var(--rule); border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.selmenu-opt {
+  display: flex; align-items: center; gap: 9px; white-space: nowrap; cursor: pointer;
+  font-family: var(--sans); font-size: 13px; line-height: 1.2; color: var(--ink-soft);
+  padding: 9px 12px; border-radius: 7px;
+  transition: background 0.15s, color 0.15s;
+}
+/* A quiet accent dot marks the current choice — no tick glyph, no system highlight bar. */
+.selmenu-opt::before {
+  content: ""; width: 5px; height: 5px; border-radius: 50%;
+  background: transparent; flex: none;
+}
+.selmenu-opt.on { color: var(--accent); }
+.selmenu-opt.on::before { background: var(--accent); }
+.selmenu-opt:hover, .selmenu-opt:focus-visible { background: var(--paper-2); color: var(--ink); outline: none; }
+@media (prefers-reduced-motion: reduce) {
+  .selmenu-btn, .selmenu-chev, .selmenu-opt { transition: none; }
+}
+
 body {
   margin: 0;
   font-family: var(--serif-body);   /* editorial: Charis SIL body serif */

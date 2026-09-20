@@ -345,10 +345,15 @@ const emph = (t = '') =>
   import { esc, initials, monthKey, monthLabel, fmtDate, hashSeed, byline, curveSvg, crumb } from '../../lib/feed-render';
   import { mountShapeTip } from '../../lib/shape-tip';
   import { repriceReadMins } from '../../lib/reading-pace';
+  import { enhanceSelect } from '../../lib/select-menu';
 
   const stream = document.getElementById('stream')!;
   const q = document.getElementById('q') as HTMLInputElement;
   const sortSel = document.getElementById('sort') as HTMLSelectElement;
+  // A native select's popup is OS-drawn and can't take the site's type/spacing/accent,
+  // so swap it for the editorial listbox. The select stays the state holder, so the
+  // .value reads and the 'change' listener below are untouched.
+  enhanceSelect(sortSel);
   const count = document.getElementById('count')!;
   const empty = document.getElementById('empty')!;
   const moreBtn = document.getElementById('morebtn') as HTMLButtonElement;
@@ -488,7 +493,7 @@ const emph = (t = '') =>
   q.addEventListener('input', () => { subject = null; apply(); });
   sortSel.addEventListener('change', render);
   moreBtn.addEventListener('click', load);
-  empty.querySelector('[data-reset]')?.addEventListener('click', (e) => { e.preventDefault(); q.value = ''; subject = null; sortSel.value = 'new'; render(); });
+  empty.querySelector('[data-reset]')?.addEventListener('click', (e) => { e.preventDefault(); q.value = ''; subject = null; sortSel.value = 'new'; sortSel.dispatchEvent(new Event('change', { bubbles: true })); });
 
   // The fields shelf (the map). Independent of the stream; stays hidden if no field is public yet.
   async function loadFields() {
