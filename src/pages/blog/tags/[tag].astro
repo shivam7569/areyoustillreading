@@ -11,6 +11,7 @@
  */
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import SubscribeForm from '../../../components/SubscribeForm.astro';
+import site from '../../../data/site.json';
 
 export async function getStaticPaths() {
   const url = import.meta.env.PUBLIC_SUPABASE_URL;
@@ -29,18 +30,25 @@ export async function getStaticPaths() {
 
 const { tag } = Astro.params;
 const { count } = Astro.props as { count?: number };
+
+// Tag-archive copy, editable from Studio → Content. The SEO strings are per-tag TEMPLATES:
+// they are filled at build time and carry NO data-cms anchor, because the edge overlay would
+// replace them with the raw, unsubstituted "{tag}".
+const c = (site as any).blogTag || {};
+const rail = c.rail || {}, letter = c.letter || {};
+const fill = (t = '') => String(t).replace(/\{tag\}/g, String(tag ?? ''));
 ---
 
-<BaseLayout title={`#${tag} — areyoustillreading`} description={`Every essay on ${tag}.`} wide>
+<BaseLayout title={fill(c.seoTitleTemplate || "#{tag} — areyoustillreading")} description={fill(c.seoDescTemplate || "Every essay on {tag}.")} wide>
   <div class="wrap">
     <header class="topic-head">
-      <div class="crumb"><a href="/">Home</a><span class="sep">/</span><a href="/blog">Archive</a><span class="sep">/</span><b>{tag}</b></div>
+      <div class="crumb"><a href="/" data-cms="blogTag.crumbHome">{c.crumbHome || "Home"}</a><span class="sep">/</span><a href="/blog" data-cms="blogTag.crumbArchive">{c.crumbArchive || "Archive"}</a><span class="sep">/</span><b>{tag}</b></div>
       <h1><span class="hash">#</span>{tag}<span class="ct" id="tp-count" data-count={count ?? ''}>{count ? `${count} ${count === 1 ? 'essay' : 'essays'}` : ''}</span></h1>
       <p id="tp-sub">Everything published here on <em>{tag}</em>, across every author — newest first.</p>
     </header>
 
     <div class="related" id="tp-related" hidden>
-      <span class="lbl">Related</span>
+      <span class="lbl" data-cms="blogTag.relatedLabel">{c.relatedLabel || "Related"}</span>
       <span class="tag on">{tag}</span>
       <span id="tp-related-tags"></span>
     </div>
@@ -51,22 +59,23 @@ const { count } = Astro.props as { count?: number };
       </div>
       <aside class="rail">
         <div class="card rail-card" id="tp-subjects" hidden>
-          <span class="eyebrow">More subjects</span>
-          <h3>Browse by subject</h3>
+          <span class="eyebrow" data-cms="blogTag.rail.subjectsEyebrow">{rail.subjectsEyebrow || "More subjects"}</span>
+          <h3 data-cms="blogTag.rail.subjectsHeading">{rail.subjectsHeading || "Browse by subject"}</h3>
           <ul class="rail-list" id="tp-subjects-list"></ul>
         </div>
         <div class="card rail-card">
-          <span class="eyebrow">The archive</span>
-          <h3>Everything, in order</h3>
-          <p>Every essay from every author, newest first — filter it by subject as you go.</p>
-          <a class="btn btn-ghost btn-sm" href="/blog">Open the archive <span class="arrow">→</span></a>
+          <span class="eyebrow" data-cms="blogTag.rail.archiveEyebrow">{rail.archiveEyebrow || "The archive"}</span>
+          <h3 data-cms="blogTag.rail.archiveHeading">{rail.archiveHeading || "Everything, in order"}</h3>
+          <p data-cms="blogTag.rail.archiveBlurb">{rail.archiveBlurb || "Every essay from every author, newest first — filter it by subject as you go."}</p>
+          <a class="btn btn-ghost btn-sm" href="/blog"><span data-cms="blogTag.rail.archiveCta">{rail.archiveCta || "Open the archive"}</span> <span class="arrow">→</span></a>
         </div>
       </aside>
     </div>
 
     <div class="topic-foot">
       <section class="letter" id="subscribe">
-        <SubscribeForm heading="Follow the writing" blurb="A short email whenever a piece is published. No noise — unsubscribe from any email in one click." />
+        <SubscribeForm heading={letter.heading || "Follow the writing"} blurb={letter.blurb || "A short email whenever a piece is published. No noise — unsubscribe from any email in one click."}
+          headingKey="blogTag.letter.heading" blurbKey="blogTag.letter.blurb" />
       </section>
     </div>
   </div>

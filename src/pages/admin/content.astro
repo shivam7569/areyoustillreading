@@ -378,33 +378,47 @@ import site from '../../data/site.json';
     blogTopics: {
       label: 'Topics page', view: '/blog/tags',
       groups: [
-        { label: 'SEO', fields: [
-          { path: 'seo.title', label: 'SEO title', type: 'text' },
-          { path: 'seo.description', label: 'SEO description', type: 'text' },
+        { label: "SEO", fields: [
+          { path: 'seo.title', label: "SEO title", type: 'text' },
+          { path: 'seo.description', label: "SEO description", type: 'area' },
         ] },
-        { label: 'Header', fields: [
-          { path: 'backlink', label: 'Back-link label', type: 'text' },
-          { path: 'eyebrow', label: 'Eyebrow', type: 'text' },
-          { path: 'title', label: 'Headline', type: 'text' },
-          { path: 'titleEm', label: 'Headline — accent italic', type: 'text' },
-          { path: 'lede', label: 'Intro paragraph', type: 'area' },
+        { label: "Header", fields: [
+          { path: 'eyebrow', label: "Eyebrow", type: 'text' },
+          { path: 'headline', label: "Headline (wrap *words* to italicise)", type: 'text' },
+          { path: 'lede', label: "Intro paragraph", type: 'area' },
+        ] },
+        { label: "While loading", fields: [
+          { path: 'loading', label: "Loading message", type: 'text' },
         ] },
       ],
     },
     blogTag: {
       label: 'Tag archive', view: '/blog/tags',
       groups: [
-        { label: 'SEO templates — {tag} is filled in', fields: [
-          { path: 'seoTitleTemplate', label: 'SEO title (use {tag})', type: 'text' },
-          { path: 'seoDescTemplate', label: 'SEO description (use {tag})', type: 'text' },
+        { label: "SEO templates — {tag} is filled in", fields: [
+          { path: 'seoTitleTemplate', label: "SEO title (use {tag})", type: 'text' },
+          { path: 'seoDescTemplate', label: "SEO description (use {tag})", type: 'text' },
         ] },
-        { label: 'Header', fields: [
-          { path: 'backlink', label: 'Back-link label', type: 'text' },
-          { path: 'eyebrow', label: 'Eyebrow', type: 'text' },
-          { path: 'headingPrefix', label: 'Heading prefix (before the tag)', type: 'text' },
-          { path: 'ledeTemplate', label: 'Lede (use {count} {word} {tag})', type: 'text' },
-          { path: 'essaySingular', label: 'Word for one post', type: 'text' },
-          { path: 'essayPlural', label: 'Word for many posts', type: 'text' },
+        { label: "Breadcrumb", fields: [
+          { path: 'crumbHome', label: "Home link", type: 'text' },
+          { path: 'crumbArchive', label: "Archive link", type: 'text' },
+        ] },
+        { label: "Related row", fields: [
+          { path: 'relatedLabel', label: "“Related” label", type: 'text' },
+        ] },
+        { label: "Sidebar — more subjects", fields: [
+          { path: 'rail.subjectsEyebrow', label: "Eyebrow", type: 'text' },
+          { path: 'rail.subjectsHeading', label: "Heading", type: 'text' },
+        ] },
+        { label: "Sidebar — the archive", fields: [
+          { path: 'rail.archiveEyebrow', label: "Eyebrow", type: 'text' },
+          { path: 'rail.archiveHeading', label: "Heading", type: 'text' },
+          { path: 'rail.archiveBlurb', label: "Blurb", type: 'area' },
+          { path: 'rail.archiveCta', label: "Button", type: 'text' },
+        ] },
+        { label: "The letter", fields: [
+          { path: 'letter.heading', label: "Heading", type: 'text' },
+          { path: 'letter.blurb', label: "Blurb", type: 'area' },
         ] },
       ],
     },

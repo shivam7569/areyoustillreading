@@ -5,17 +5,26 @@
  * newly-used subject appears without a rebuild. Replaces the old file-collection tag index.
  */
 import BaseLayout from '../../../layouts/BaseLayout.astro';
+import site from '../../../data/site.json';
+
+// Topics-page copy, editable from Studio → Content. Each string keeps its original as a
+// fallback; the data-cms anchors let the edge overlay swap copy with no rebuild.
+const c = (site as any).blogTopics || {};
+// Escape HTML, then turn *emphasis* into <em>. Copy is admin-authored + committed (trusted).
+const emph = (t = '') =>
+  String(t).replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] as string))
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
 ---
 
-<BaseLayout title="Subjects — areyoustillreading" description="Browse every essay by subject." wide>
+<BaseLayout title={c.seo?.title || "Subjects — areyoustillreading"} description={c.seo?.description || "Browse every essay by subject."} wide>
   <div class="wrap">
     <header class="page-head tp-ix-head">
-      <div class="kicker"><span class="line"></span><span class="eyebrow">Subjects</span></div>
-      <h1>Every essay, <em>by subject.</em></h1>
-      <p class="lede">The tags that run through the writing here — pick one to see everything published on it, across every author.</p>
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="blogTopics.eyebrow">{c.eyebrow || "Subjects"}</span></div>
+      <h1 data-cms="blogTopics.headline" data-cms-rich="emph" set:html={emph(c.headline || 'Every essay, *by subject.*')}></h1>
+      <p class="lede" data-cms="blogTopics.lede">{c.lede || "The tags that run through the writing here — pick one to see everything published on it, across every author."}</p>
     </header>
 
-    <div id="tp-ix"><p class="feedlede" style="padding:26px 0">Loading subjects…</p></div>
+    <div id="tp-ix"><p class="feedlede" style="padding:26px 0" data-cms="blogTopics.loading">{c.loading || "Loading subjects…"}</p></div>
   </div>
 </BaseLayout>
 

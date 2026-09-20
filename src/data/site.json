@@ -262,24 +262,32 @@
   },
   "blogTopics": {
     "seo": {
-      "title": "Topics — areyoustillreading",
-      "description": "Browse essays by topic."
+      "title": "Subjects — areyoustillreading",
+      "description": "Browse every essay by subject."
     },
-    "backlink": "All essays",
-    "eyebrow": "Topics",
-    "title": "Browse by",
-    "titleEm": "subject.",
-    "lede": "Every subject across the archive, most-written first."
+    "eyebrow": "Subjects",
+    "headline": "Every essay, *by subject.*",
+    "lede": "The tags that run through the writing here — pick one to see everything published on it, across every author.",
+    "loading": "Loading subjects…"
   },
   "blogTag": {
-    "seoTitleTemplate": "Posts tagged “{tag}” — areyoustillreading",
-    "seoDescTemplate": "Posts tagged {tag}.",
-    "backlink": "All topics",
-    "eyebrow": "Topic",
-    "headingPrefix": "Tagged",
-    "ledeTemplate": "{count} {word} on {tag}.",
-    "essaySingular": "essay",
-    "essayPlural": "essays"
+    "seoTitleTemplate": "#{tag} — areyoustillreading",
+    "seoDescTemplate": "Every essay on {tag}.",
+    "crumbHome": "Home",
+    "crumbArchive": "Archive",
+    "relatedLabel": "Related",
+    "rail": {
+      "subjectsEyebrow": "More subjects",
+      "subjectsHeading": "Browse by subject",
+      "archiveEyebrow": "The archive",
+      "archiveHeading": "Everything, in order",
+      "archiveBlurb": "Every essay from every author, newest first — filter it by subject as you go.",
+      "archiveCta": "Open the archive"
+    },
+    "letter": {
+      "heading": "Follow the writing",
+      "blurb": "A short email whenever a piece is published. No noise — unsubscribe from any email in one click."
+    }
   },
   "fields": {
     "indexSeo": {
