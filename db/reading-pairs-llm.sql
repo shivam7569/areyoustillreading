@@ -109,3 +109,47 @@ $$;
 -- VERIFY (optional):
 --   select count(*) from content.pairable_posts;
 --   select count(*) from content.reading_pair_candidates();
+
+-- ── serve ───────────────────────────────────────────────────────────────────
+-- Replaces the tag-matching public.reading_pairs() with a read of the judged table.
+-- Two properties worth noting:
+--   * It joins content.pairable_posts, not content.posts, so ELIGIBILITY IS RE-CHECKED AT
+--     READ TIME. If an author is later suspended, or a post is unpublished, their pairs
+--     disappear on the next request with no re-judging and no cleanup job.
+--   * `reason` is the judge's own sentence. The card shows it instead of the old generated
+--     "Two authors reached <tag> on their own" — that sentence asserted independence, which
+--     nothing in the data ever verified, and printed a raw tag as prose.
+-- Diversity: a post may win several pairs, which would fill the shelf with one essay. The
+-- per-side row_number below is the cheap guard (each post at most once per side); a truly
+-- exact "each post once anywhere" needs a greedy walk and is not worth it at this size.
+drop function if exists public.reading_pairs();
+create or replace function public.reading_pairs()
+returns table (subject text, reason text, a jsonb, b jsonb)
+language sql stable security definer set search_path = public, content, extensions as $$
+  with kept as (
+    select rp.a_id, rp.b_id, rp.subject, rp.reason, rp.score,
+           row_number() over (partition by rp.a_id order by rp.score desc, rp.b_id) ra,
+           row_number() over (partition by rp.b_id order by rp.score desc, rp.a_id) rb
+    from content.reading_pairs rp
+    where rp.related and rp.approved
+  ),
+  side as (
+    select k.subject, k.reason, k.score, pa, pb
+    from kept k
+    join content.pairable_posts pa on pa.id = k.a_id
+    join content.pairable_posts pb on pb.id = k.b_id
+    where k.ra = 1 and k.rb = 1
+  )
+  select subject, reason,
+    jsonb_build_object('title', (pa).title, 'slug', (pa).slug, 'handle', (pa).primary_handle,
+      'name', (pa).author_names[1], 'names', to_jsonb((pa).author_names),
+      'pub', (pa).pub_date, 'mins', (pa).reading_min, 'desc', (pa).description),
+    jsonb_build_object('title', (pb).title, 'slug', (pb).slug, 'handle', (pb).primary_handle,
+      'name', (pb).author_names[1], 'names', to_jsonb((pb).author_names),
+      'pub', (pb).pub_date, 'mins', (pb).reading_min, 'desc', (pb).description)
+  from side
+  order by score desc, greatest((pa).pub_date, (pb).pub_date) desc
+  limit 6;
+$$;
+grant execute on function public.reading_pairs() to anon, authenticated;
+notify pgrst, 'reload schema';

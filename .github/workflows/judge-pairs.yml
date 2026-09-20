@@ -1,0 +1,63 @@
+# Judge new "Read them together" candidate pairs.
+#
+# WHY A CRON AND NOT A CALL FROM /api/author/publish
+#   Judging is N model calls (a new post against every other eligible post). Hanging that
+#   off the publish request would make going live slow and would fail the publish when the
+#   model API is down — for a shelf on /blog that no reader is waiting on. It would also
+#   need a SECOND copy of the judge (Workers runtime can't use `pg`), and two copies of a
+#   prompt drift apart.
+#
+#   There is no queue table because there doesn't need to be one:
+#   content.reading_pair_candidates() already returns exactly the ELIGIBLE, NOT-YET-JUDGED
+#   pairs. Publishing a post creates candidate rows implicitly; this job drains them. That
+#   makes it self-healing — a failed run leaves the work outstanding and the next run picks
+#   it up, and re-running it costs nothing when there is nothing new.
+#
+#   The cost: a newly published post joins the section within ~30 min, not instantly. The
+#   POST itself is live immediately (the DB path serves it straight away) — only the pairing
+#   waits, which is the right thing to trade.
+#
+# REQUIRED REPO SECRETS
+#   DATABASE_URL                — the same Postgres URL as local .env
+#   GOOGLE_AI_STUDIO_API_KEY    — Google AI Studio key for the judge model
+# Until both are set the job no-ops (no red X).
+#
+# NOTE: GitHub only runs `schedule` from the DEFAULT branch, so this file does nothing
+# until it is merged to main. On dev it is inert — judging stays manual (`npm run judge:pairs`).
+name: Judge reading pairs
+
+on:
+  schedule:
+    - cron: "17,47 * * * *" # twice an hour, off the hour (cron is busiest at :00)
+  workflow_dispatch: {}
+
+# Two runs judging the same pair would just spend the API call twice (the write is an upsert).
+concurrency:
+  group: judge-pairs
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  judge:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GOOGLE_AI_STUDIO_API_KEY: ${{ secrets.GOOGLE_AI_STUDIO_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Judge outstanding pairs
+        if: ${{ env.DATABASE_URL != '' && env.GOOGLE_AI_STUDIO_API_KEY != '' }}
+        # --limit caps the blast radius: normal incremental work is a few dozen pairs, so a
+        # run asking for hundreds means something is wrong (e.g. the table was truncated).
+        # Cap it, let the next run take the rest, rather than spending unbounded API calls.
+        run: node scripts/judge-pairs.mjs --limit 120
+      - name: Not configured yet
+        if: ${{ env.DATABASE_URL == '' || env.GOOGLE_AI_STUDIO_API_KEY == '' }}
+        run: echo "::notice::DATABASE_URL / GOOGLE_AI_STUDIO_API_KEY not set — skipping."

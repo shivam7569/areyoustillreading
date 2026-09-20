@@ -56,6 +56,8 @@ Rules for what you write:
   what the given text actually shows. Never invent a claim, a quote, a finding, or a disagreement
   between the authors. If you cannot name the shared thing concretely, that means related=false.
 - "subject": 1-4 words a reader would recognise, in plain language. Never echo a raw tag like "meta".
+  Write it lowercase unless a word is a proper noun or an initialism (Postgres, RAG, D2): it is printed
+  mid-sentence as "Both take up <subject>", so a capitalised first word reads as a mistake there.
 - "score": 0-1 confidence that a thoughtful reader would find this pairing worthwhile. Below 0.55,
   set related=false.
 - Do not reward two pieces by the same team, a series and its own instalment, or a piece that merely

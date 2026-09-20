@@ -277,6 +277,7 @@ const emph = (t = '') =>
   .tghead h2 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(25px,3.2vw,36px); line-height: 1.06; letter-spacing: -.022em; margin: 12px 0 0; text-wrap: balance; }
   .tghead h2 em { font-style: italic; color: var(--accent); }
   .tghead p { margin: 13px 0 0; font-size: clamp(15.5px,1.9vw,17.5px); line-height: 1.58; color: var(--ink-soft); text-wrap: pretty; }
+  .tgpick[hidden] { display: none; }
   .tgpick { display: flex; gap: 8px; flex-wrap: wrap; margin: clamp(20px,2.6vw,28px) 0 clamp(16px,2.2vw,22px); }
   .tgpick button { font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); background: transparent; border: 1px solid var(--rule); border-radius: 999px; padding: 7px 14px; cursor: pointer; transition: border-color .18s, color .18s, background .18s; }
   .tgpick button:hover { border-color: var(--accent); color: var(--accent); }
@@ -301,7 +302,7 @@ const emph = (t = '') =>
   .tgvs small { font-family: var(--sans); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
   .tgwhy { display: flex; align-items: flex-start; gap: 13px; margin-top: clamp(16px,2.2vw,22px); padding: 15px 17px; border-left: 2px solid var(--accent); background: var(--card); }
   .tgwhy p { margin: 0; font-family: var(--serif-body); font-size: clamp(15.5px,1.9vw,17px); line-height: 1.55; color: var(--ink); max-width: 74ch; text-wrap: pretty; }
-  .tgwhy p b { font-weight: 600; color: var(--accent); }
+  .tgwhy p .tgwhen { display: block; margin-top: 7px; font-family: var(--sans); font-size: 12px; letter-spacing: .01em; color: var(--ink-faint); }
   .tgfoot { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-top: clamp(15px,2vw,20px); font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); }
   .tgfoot .tgmins { font-family: var(--serif-display); font-size: 17px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
   .tgfoot .tgopen { margin-left: auto; }
@@ -557,9 +558,13 @@ const emph = (t = '') =>
   const tgS: { pairs: any[]; i: number } = { pairs: [], i: 0 };
   const monShort = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const monLong = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  // First author plus a count — never a bare single name for a co-authored essay.
+  const who = (p: any) => { const ns = p.names || [p.name]; return ns.length > 1 ? `${ns[0]} & ${ns.length - 1} other${ns.length > 2 ? 's' : ''}` : ns[0]; };
+
   function tgSide(which: 'A' | 'B', p: any) {
     document.getElementById(`tg${which}Who`)!.innerHTML =
-      `<a href="/@${esc(p.handle)}" class="mono">${esc(initials(p.name))}</a><a href="/@${esc(p.handle)}">${esc(p.name)}</a>`;
+      ((ns) => `<a href="/@${esc(p.handle)}" class="mono">${esc(initials(ns[0]))}</a><a href="/@${esc(p.handle)}">${esc(ns[0])}</a>`
+        + (ns.length > 1 ? ` <span>&amp; ${ns.length - 1} other${ns.length > 2 ? 's' : ''}</span>` : ''))(p.names || [p.name]);
     const t = document.getElementById(`tg${which}Title`) as HTMLAnchorElement;
     t.textContent = p.title; t.href = `/@${esc(p.handle)}/${esc(p.slug)}`;
     const says = document.getElementById(`tg${which}Says`) as HTMLElement;
@@ -573,8 +578,11 @@ const emph = (t = '') =>
     const [first, then] = Date.parse(pr.a.pub) <= Date.parse(pr.b.pub) ? [pr.a, pr.b] : [pr.b, pr.a];
     tgSide('A', first); tgSide('B', then);
     document.getElementById('tgVs')!.textContent = pr.subject;
-    document.getElementById('tgWhy')!.innerHTML =
-      `Two authors reached <b>${esc(pr.subject)}</b> on their own — ${esc(first.name)} in ${esc(monLong(first.pub))}, ${esc(then.name)} in ${esc(monLong(then.pub))}. Read them side by side and compare.`;
+    const fm = monLong(first.pub), tm = monLong(then.pub);
+    const when = fm === tm
+      ? `${esc(who(first))} and ${esc(who(then))} both published in ${esc(fm)}.`
+      : `${esc(who(first))} raised it in ${esc(fm)}; ${esc(who(then))} returned to it in ${esc(tm)}.`;
+    document.getElementById('tgWhy')!.innerHTML = `${esc(pr.reason || '')} <span class="tgwhen">${when}</span>`;
     document.getElementById('tgMins')!.textContent = `${(first.mins || 1) + (then.mins || 1)} min together`;
     document.getElementById('tgOrder')!.textContent = 'In reading order, earliest first';
     (document.getElementById('tgOpen') as HTMLAnchorElement).href = `/@${esc(first.handle)}/${esc(first.slug)}`;
@@ -584,8 +592,13 @@ const emph = (t = '') =>
     const { data, error } = await supabase.rpc('reading_pairs');
     if (error || !data || !data.length) return;   // no cross-author pair on a shared subject yet
     tgS.pairs = data;
+    // The picker switches BETWEEN pairs, so with only one judged pair it would be a lone
+    // chip that selects what is already on screen. The judge is strict by design and one pair
+    // is a normal outcome, so hide the control rather than render a no-op.
     const pick = document.getElementById('tgPick')!;
-    pick.innerHTML = data.map((p: any, i: number) => `<button type="button" class="${i === 0 ? 'tgon' : ''}" data-i="${i}">${esc(p.subject)}</button>`).join('');
+    pick.hidden = data.length < 2;
+    pick.innerHTML = data.length < 2 ? ''
+      : data.map((p: any, i: number) => `<button type="button" class="${i === 0 ? 'tgon' : ''}" data-i="${i}">${esc(p.subject)}</button>`).join('');
     pick.querySelectorAll('button').forEach((b, i) => b.addEventListener('click', () => tgSelect(i)));
     tgSelect(0);
     (document.getElementById('tg') as HTMLElement).hidden = false;

@@ -25,7 +25,8 @@
     "fixtures:seed:full": "node scripts/fixtures/seed.mjs --full",
     "fixtures:reseed:full": "node scripts/fixtures/reset.mjs && node scripts/fixtures/seed.mjs --full",
     "deploy": "npm run build && wrangler pages deploy dist --project-name=areyoustillreading",
-    "deploy:preview": "npm run build && wrangler pages deploy dist --project-name=areyoustillreading --branch=preview"
+    "deploy:preview": "npm run build && wrangler pages deploy dist --project-name=areyoustillreading --branch=preview",
+    "judge:pairs": "node --env-file=.env scripts/judge-pairs.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.2.1",
