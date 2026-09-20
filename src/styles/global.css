@@ -28,6 +28,11 @@
   --rule: #d8cfbd; --rule-soft: #e6dfd0; --card: #fffdf8;
   --accent: #5e3560; --accent-soft: #764a78; --on-accent: #faf3fa;
   --code-fg: #33291b;   /* light theme: dark ink on a cream code card */
+  /* Native widgets (select popups, scrollbars, spinners) follow color-scheme, NOT our
+     tokens. The theme toggle can put a DARK page in front of a light-OS browser, which
+     is what made the /blog sort dropdown open white-on-dark. So color-scheme is declared
+     alongside the palette in all three states, and native UI tracks the SITE's theme. */
+  color-scheme: light;
   --plot-mat: #14110b;  /* the Plotly demo screen stays dark in BOTH themes */
 
   /* Serif faces are self-hosted (src/styles/fonts.css); names MUST match verbatim.
@@ -76,13 +81,16 @@
 }
 
 /* Dark palette. Defined under BOTH the OS preference AND a data-theme="dark"
-   attribute (the manual toggle ships next increment) so nothing renders half-dark.
-   Only the editorial SOURCE tokens flip here; every --bg/--fg/… alias follows
-   automatically through var(). data-theme is currently set by nothing, so these
-   attribute blocks are inert until the toggle lands. */
+   attribute so nothing renders half-dark. Only the editorial SOURCE tokens flip
+   here; every --bg/--fg/… alias follows automatically through var().
+   data-theme IS live — BaseLayout sets it on <html> before first paint from the
+   saved choice, and the header toggle flips it — so a reader can be on a dark page
+   with a light OS (and vice versa). That is exactly why each block also declares
+   color-scheme: native widgets must follow the SITE's theme, not the OS's. */
 @media (prefers-color-scheme: dark) {
   :root {
     --paper: #181510; --paper-2: #211c15;
+    color-scheme: dark;
     --ink: #ece3d1; --ink-soft: #c8bda6; --ink-faint: #94886f;
     --rule: #38301f; --rule-soft: #2a2318; --card: #211c14;
     --accent: #d6a75f; --accent-soft: #e3bd84; --on-accent: #221809;
@@ -93,6 +101,7 @@
 }
 :root[data-theme="dark"] {
   --paper: #181510; --paper-2: #211c15;
+  color-scheme: dark;
   --ink: #ece3d1; --ink-soft: #c8bda6; --ink-faint: #94886f;
   --rule: #38301f; --rule-soft: #2a2318; --card: #211c14;
   --accent: #d6a75f; --accent-soft: #e3bd84; --on-accent: #221809;
@@ -104,6 +113,7 @@
    light choice wins even when the OS prefers dark. */
 :root[data-theme="light"] {
   --paper: #faf7f1; --paper-2: #f3eee3;
+  color-scheme: light;
   --ink: #1c1813; --ink-soft: #443c30; --ink-faint: #726752;
   --rule: #d8cfbd; --rule-soft: #e6dfd0; --card: #fffdf8;
   --accent: #5e3560; --accent-soft: #764a78; --on-accent: #faf3fa;
@@ -122,6 +132,16 @@ html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
    data-hide-admin are hidden for them (N4). BaseLayout sets html[data-admin="1"]
    pre-paint for a cached admin (no flash) and reconciles it after revalidation. */
 :root[data-admin="1"] [data-hide-admin] { display: none !important; }
+
+/* Native form controls. color-scheme (declared with each palette above) is what makes the
+   OS draw a select's POPUP dark or light with the page — without it the list opens white on
+   a dark page whenever the reader's theme and their OS disagree. These rules then pull the
+   list onto the editorial palette where the engine allows it (Chrome/Firefox honour option
+   colours; Safari draws its own, and falls back to the correct scheme). */
+select option {
+  background: var(--paper-2);
+  color: var(--ink);
+}
 
 body {
   margin: 0;
