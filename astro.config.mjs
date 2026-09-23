@@ -103,7 +103,18 @@ export default defineConfig({
   //   public sitemap never advertises paywalled posts to crawlers. SECURITY: this
   //   is discoverability hygiene, not enforcement — the actual paywall is the
   //   token/entitlement middleware + Supabase RLS. See top doc block.
-  integrations: [sitemap({ filter: (page) => !page.includes('/gated/') && !page.includes('/post-shell') && !page.includes('/permalink-shell') && !page.includes('/admin') })],
+  //   We also omit the edge's donor shells. The previous test listed '/post-shell' and
+  //   '/permalink-shell' as substrings, which silently missed permalink-author-shell,
+  //   permalink-series-shell and permalink-field-shell — all three shipped in sitemap-0.xml,
+  //   offering crawlers pages of AYSRZZ* sentinel text. Matching a ROOT-LEVEL segment ending
+  //   in "-shell" catches every shell, including future ones, while leaving a real essay slug
+  //   like /blog/inside-the-shell/ alone. (robots.txt disallows the same paths.)
+  integrations: [sitemap({ filter: (page) => {
+    const path = new URL(page).pathname;
+    const segments = path.split('/').filter(Boolean);
+    const isDonorShell = segments.length === 1 && segments[0].endsWith('-shell');
+    return !path.startsWith('/gated/') && !path.startsWith('/admin') && !isDonorShell;
+  } })],
 
   // Markdown/MDX compilation pipeline (Shiki syntax highlighting with ```d2
   // excluded, remark-math → rehype-katex, then rehype-d2 → inline SVG). Defined in

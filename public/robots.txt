@@ -1,5 +1,15 @@
 User-agent: *
 Allow: /
 
+# Donor shells for the edge-rendered pages (/@handle, /@handle/slug, series, fields).
+# They MUST stay publicly served — the middleware fetches them through env.ASSETS — but on
+# their own they render sentinel placeholders (AYSRZZTITLE, AYSRZZNAME…), so they must never
+# be crawled or indexed. They are also excluded from the sitemap in astro.config.mjs.
+Disallow: /post-shell
+Disallow: /permalink-shell
+Disallow: /permalink-author-shell
+Disallow: /permalink-series-shell
+Disallow: /permalink-field-shell
+
 Sitemap: https://areyoustillreading.dev/sitemap-index.xml
 Sitemap: https://areyoustillreading.dev/sitemap-posts.xml

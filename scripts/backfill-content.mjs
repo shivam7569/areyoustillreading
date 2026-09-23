@@ -52,13 +52,31 @@ async function main() {
     );
     console.log(`Owner profile @${ownerHandle}`);
 
-    // Clean reload of the owner's content (idempotent). Joins cascade from posts/series/fields.
+    // ── posts ────────────────────────────────────────────────────────────────
+    const files = fs.existsSync(BLOG_DIR) ? fs.readdirSync(BLOG_DIR).filter((f) => f.endsWith('.md')) : [];
+
+    // REFUSE A WIPE. The reload below is destructive first and restorative second, so with an
+    // empty source directory it deletes the owner's entire archive and puts nothing back. That
+    // is now the NORMAL state of this repo: posts live in content.posts and src/content/blog
+    // holds only .gitkeep, so an accidental `npm run backfill` would be unrecoverable. The
+    // header calls this script idempotent — that was only ever true while the .md files existed.
+    if (!files.length) {
+      console.error(`
+  Refusing to run: no .md files in ${BLOG_DIR}.
+` +
+        '  This script DELETES the owner's posts, series and fields before reloading them from
+' +
+        '  those files, so running it now would wipe the archive and restore nothing.
+' +
+        '  Posts live in the database; this files->DB migration has already been done.
+');
+      process.exit(1);
+    }
+
+    // Clean reload of the owner's content (idempotent GIVEN the guard above). Joins cascade.
     await pool.query('delete from content.posts  where author_id = $1', [ownerId]);
     await pool.query('delete from content.series where owner_id  = $1', [ownerId]);
     await pool.query('delete from content.fields where owner_id  = $1', [ownerId]);
-
-    // ── posts ────────────────────────────────────────────────────────────────
-    const files = fs.existsSync(BLOG_DIR) ? fs.readdirSync(BLOG_DIR).filter((f) => f.endsWith('.md')) : [];
     const postIdBySlug = new Map();
     for (const file of files) {
       const slug = file.replace(/\.md$/, '');
