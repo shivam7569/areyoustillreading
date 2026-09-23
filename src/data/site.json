@@ -212,9 +212,9 @@
   },
   "blogIndex": {
     "head": {
-      "eyebrow": "Everyone",
+      "eyebrow": "Writing",
       "lede": "Nothing is ranked, promoted or trending. Work arrives in order, read live from the database — start something rather than scroll past it.",
-      "headline": "Every author, *one feed.*"
+      "headline": "Everything, *in the order it arrived.*"
     },
     "rez": {
       "eyebrow": "Where you left off",
@@ -242,7 +242,7 @@
       "sortNew": "Newest first",
       "sortHeld": "Best held",
       "sortShort": "Shortest read",
-      "searchPlaceholder": "Search titles, authors, subjects"
+      "searchPlaceholder": "Search titles and subjects"
     },
     "legend": "Every piece carries the shape of its own reading — how many readers were still there, start to finish. The notch is where it loses most of them. No scores, no ranking.",
     "more": "Keep going back",
@@ -252,8 +252,8 @@
       "blurb": "A single email of pieces that held their readers to the end. No digests of digests, no engagement bait."
     },
     "seo": {
-      "title": "Everyone — areyoustillreading",
-      "description": "Every author's published work, in one feed — read live from the database."
+      "title": "Writing — areyoustillreading",
+      "description": "Everything I have published, in one feed — read live from the database."
     },
     "empty": {
       "text": "Nothing matches that. Try a broader subject, or",

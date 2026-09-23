@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getPool, getAdminSupabase, textAndReadingMin } from '../_shared.mjs';
 import { renderPostBody } from '../../src/lib/render-post.mjs';
-import { AUTHORS, READERS, SERIES, FIELDS, POSTS, REQUESTS, SUBSCRIBERS, DOMAIN, PROFILE } from './profile.mjs';
+import { AUTHORS, READERS, SERIES, FIELDS, POSTS, SUBSCRIBERS, DOMAIN, PROFILE } from './profile.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PW = 'SeedData!2026';
@@ -144,51 +144,11 @@ async function main() {
       const id = rows[0].id;
       // primary author (position 0) — belt for the seed_primary_author trigger.
       await pool.query(`insert into content.post_authors (post_id, user_id, position, accepted) values ($1,$2,0,true) on conflict do nothing`, [id, author.id]);
-      // co-authors (accepted).
-      let cpos = 1;
-      for (const co of (p.co || [])) await pool.query(`insert into content.post_authors (post_id, user_id, position, accepted, invited_by) values ($1,$2,$3,true,$4) on conflict do nothing`, [id, A[co].id, cpos++, author.id]);
       // series membership (accepted).
       if (p.series) await pool.query(`insert into content.series_posts (series_id, post_id, position, accepted) values ($1,$2,$3,true) on conflict do nothing`, [S[p.series[0]], id, p.series[1]]);
       posts.push({ slug: p.slug, id, authorKey: p.author, engage: p.engage, html, status, visibility });
     }
     console.log(`posts: ${posts.length}`);
-
-    // ── collaboration / pending requests (accepted = false) ────────────────────
-    // A pending co-author invite → the invitee's Requests inbox ("needs you").
-    {
-      const rq = REQUESTS.coAuthorInvite;
-      const html = await renderPostBody(bodyMd(rq.post));
-      const { text, readingMin } = textAndReadingMin(html);
-      const { rows } = await pool.query(
-        `insert into content.posts (author_id, slug, title, description, tags, author_byline, status, visibility, body_md, body_html, body_text, reading_min, current_version)
-         values ($1,$2,$3,$4,$5,$6,'draft','public',$7,$8,$9,$10,1) returning id`,
-        [A[rq.primary].id, rq.post, rq.title, rq.description, rq.tags, A[rq.primary].pen, bodyMd(rq.post), html, text, readingMin]);
-      await pool.query(`insert into content.post_authors (post_id, user_id, position, accepted) values ($1,$2,0,true) on conflict do nothing`, [rows[0].id, A[rq.primary].id]);
-      await pool.query(`insert into content.post_authors (post_id, user_id, position, accepted, invited_by) values ($1,$2,1,false,$3) on conflict do nothing`, [rows[0].id, A[rq.invitee].id, A[rq.primary].id]);
-    }
-    // A pending SERIES proposal: daniel proposes a post into mira's series → mira's inbox.
-    // Guarded: a lean profile only keeps this when its target series was seeded.
-    const collab = ['1 co-author invite'];
-    if (REQUESTS.seriesProposal && S[REQUESTS.seriesProposal.series]) {
-      const rq = REQUESTS.seriesProposal;
-      const html = await renderPostBody(bodyMd(rq.post));
-      const { text, readingMin } = textAndReadingMin(html);
-      const { rows } = await pool.query(
-        `insert into content.posts (author_id, slug, title, description, tags, author_byline, status, visibility, body_md, body_html, body_text, reading_min, current_version, pub_date, published_at)
-         values ($1,$2,$3,$4,$5,$6,'published','public',$7,$8,$9,$10,1,$11,$11) returning id`,
-        [A[rq.proposer].id, rq.post, rq.title, rq.description, rq.tags, A[rq.proposer].pen, bodyMd(rq.post), html, text, readingMin, iso(2)]);
-      await pool.query(`insert into content.post_authors (post_id, user_id, position, accepted) values ($1,$2,0,true) on conflict do nothing`, [rows[0].id, A[rq.proposer].id]);
-      await pool.query(`insert into content.series_posts (series_id, post_id, position, accepted, invited_by) values ($1,$2,6,false,$3) on conflict do nothing`, [S[rq.series], rows[0].id, A[rq.proposer].id]);
-      collab.push('1 series proposal');
-    }
-    // A pending FIELD proposal: sofia proposes her series into the owner's field → owner's inbox.
-    // Guarded the same way — both the field and the series have to have been seeded.
-    if (F['systems-for-inference'] && S['embeddings-from-scratch']) {
-      await pool.query(`insert into content.field_series (field_id, series_id, position, accepted, invited_by) values ($1,$2,9,false,$3) on conflict do nothing`,
-        [F['systems-for-inference'], S['embeddings-from-scratch'], A['sofia'].id]);
-      collab.push('1 field proposal');
-    }
-    console.log(`collaboration: ${collab.join(' + ')} (all pending)`);
 
     // db/notify.sql puts AFTER INSERT triggers on comments / highlight_comments / highlights /
     // notes / feedback / votes; each http_posts to the LIVE /api/notify, which emails the owner.

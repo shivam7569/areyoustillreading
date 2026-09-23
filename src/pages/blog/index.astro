@@ -1,15 +1,14 @@
 ---
 /*
  * =============================================================================
- * src/pages/blog/index.astro  ·  ROUTE: "/blog"  (the "Everyone" multi-author feed)
+ * src/pages/blog/index.astro  ·  ROUTE: "/blog"  (the full archive)
  * =============================================================================
- * Phase 2 build to the Claude Design "explore.html" (Everyone): every author's
- * published work in one stream, read LIVE from the content.* tables via the public
- * read RPCs (public.list_feed_posts + public.feed_retention) over the anon client.
- * Author identity is a monogram, consecutive posts by one author collapse into a
- * single spine, each row carries its reading-shape curve (retention as a shape, not
- * a score), and its field + series crumb. Tags are a real subject filter (token
- * match, not substring); there are no aggregate totals.
+ * Every published post in one stream, read LIVE from the content.* tables via the
+ * public read RPCs (public.list_feed_posts + public.feed_retention) over the anon
+ * client. There is ONE author, so no row carries a byline or a monogram — what varies
+ * is the piece: its reading-shape curve (retention as a shape, not a score) and its
+ * field + series crumb. Tags are a real subject filter (token match, not substring);
+ * there are no aggregate totals.
  *
  * Above the stream: the fields shelf (the map), "Read them together" (cross-author
  * pairs on one shared subject, public.reading_pairs), "Ways in" (routes by reading
@@ -33,11 +32,11 @@ const emph = (t = '') =>
     .replace(/\*([^*]+)\*/g, '<em>$1</em>');
 ---
 
-<BaseLayout title={copy.seo?.title || "Everyone — areyoustillreading"} description={copy.seo?.description || "Every author's published work, in one feed — read live from the database."} wide>
+<BaseLayout title={copy.seo?.title || "Writing — areyoustillreading"} description={copy.seo?.description || "Everything I have published, in one feed — read live from the database."} wide>
   <div class="wrap">
     <header class="page-head">
-      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="blogIndex.head.eyebrow">{head.eyebrow || "Everyone"}</span></div>
-      <h1 data-cms="blogIndex.head.headline" data-cms-rich="emph" set:html={emph(head.headline || 'Every author, *one feed.*')}></h1>
+      <div class="kicker"><span class="line"></span><span class="eyebrow" data-cms="blogIndex.head.eyebrow">{head.eyebrow || "Writing"}</span></div>
+      <h1 data-cms="blogIndex.head.headline" data-cms-rich="emph" set:html={emph(head.headline || 'Everything, *in the order it arrived.*')}></h1>
       <p class="lede" data-cms="blogIndex.head.lede">{head.lede || "Nothing is ranked, promoted or trending. Work arrives in order, read live from the database — start something rather than scroll past it."}</p>
     </header>
 
@@ -103,7 +102,7 @@ const emph = (t = '') =>
     <div class="filters">
       <label class="search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.6-3.6"></path></svg>
-        <input type="search" id="q" placeholder={filters.searchPlaceholder || "Search titles, authors, subjects"} data-cms-attr="placeholder=blogIndex.filters.searchPlaceholder" aria-label="Search the stream" />
+        <input type="search" id="q" placeholder={filters.searchPlaceholder || "Search titles and subjects"} data-cms-attr="placeholder=blogIndex.filters.searchPlaceholder" aria-label="Search the stream" />
       </label>
       <span class="count" id="count"></span>
       <span class="sortwrap"><span data-cms="blogIndex.filters.sortLabel">{filters.sortLabel || "Sort"}</span><select id="sort" aria-label="Sort the stream"><option value="new" data-cms="blogIndex.filters.sortNew">{filters.sortNew || "Newest first"}</option><option value="held" data-cms="blogIndex.filters.sortHeld">{filters.sortHeld || "Best held"}</option><option value="short" data-cms="blogIndex.filters.sortShort">{filters.sortShort || "Shortest read"}</option></select></span>
@@ -160,40 +159,14 @@ const emph = (t = '') =>
      it breathing room + rounded corners: 14px horizontal padding with a matching negative margin
      keeps the row content aligned with the section while the fill extends 14px past it — so the
      round monogram sits INSIDE the fill instead of tangent to its sharp edge. */
-  #stream .post { position: relative; display: grid; grid-template-columns: 36px auto minmax(0, 1fr) auto; column-gap: clamp(12px, 1.6vw, 16px); padding: 22px 14px; margin: 0 -14px; border-radius: 10px; align-items: start; transition: background .18s ease; }
+  #stream .post { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: clamp(12px, 1.6vw, 16px); padding: 22px 14px; margin: 0 -14px; border-radius: 10px; align-items: start; transition: background .18s ease; }
   /* Each cell is pinned to row 1 (mark · picon · text · date-curve, top-aligned) — without it the
      auto-placer split them across two rows (aside alone up top, the rest pushed ~125px down). Set
      per-item so the mobile media queries below still override cleanly. */
-  #stream .post .rail { grid-column: 1; grid-row: 1; align-self: start; width: 36px; display: flex; flex-direction: column; align-items: center; padding-top: 3px; }
-  /* The author's mark: initials set in the display serif with a hairline beneath — type is
-     people, the square icon slot is the artwork. Not a filled avatar disc. */
-  #stream .mono { position: relative; z-index: 1; flex: none; font-family: var(--serif-display); font-weight: 600; font-size: 13.5px; line-height: 1; letter-spacing: .12em; color: var(--ink-soft); padding: 0 1px 7px; transition: color .2s; }
-  #stream .mono::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--rule); transition: background .2s; }
-  #stream .post:hover .mono { color: var(--accent); }
-  #stream .post:hover .mono::after { background: var(--accent); }
-  #stream .post.cont .mono { display: none; }
-  /* One continuous spine per author run: real line elements with OVERLAPPING offsets
-     (padding is 22px, so -24 overlaps ~2px each side — no sub-pixel breaks). The run
-     never crosses a month header because collapse() resets per group. */
-  /* The spine is anchored to .post (full-height, zero gap between rows), not the rail —
-     so it never depends on grid-cell height. Offsets are from .post's box (22px padding);
-     consecutive rows touch, so cont segments overlap 4px → continuous. */
-  #stream .post .spine { position: absolute; left: 32px; transform: translateX(-50%); width: 1px; background: var(--rule-soft); display: none; }
-  #stream .post.runstart .spine { display: block; top: 48px; bottom: -4px; }
-  #stream .post.cont .spine { display: block; top: -4px; bottom: -4px; }
-  #stream .post.cont.runend .spine { bottom: auto; height: 34px; }
-  #stream .post .bead { position: absolute; left: 32px; top: 26px; width: 6px; height: 6px; margin-left: -3px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 55%, transparent); display: none; transition: background .2s, transform .2s; }
-  #stream .post.cont .bead { display: block; }
-  #stream .post.cont:hover .bead { background: var(--accent); transform: scale(1.3); }
-  #stream .picon { grid-column: 2; grid-row: 1; align-self: start; position: relative; width: 108px; height: 108px; border: 1px solid var(--rule-soft); border-radius: 3px; background: var(--paper-2); overflow: hidden; transition: border-color .25s; }
-  #stream .ptext { grid-column: 3; grid-row: 1; min-width: 0; }
+  #stream .picon { grid-column: 1; grid-row: 1; align-self: start; position: relative; width: 108px; height: 108px; border: 1px solid var(--rule-soft); border-radius: 3px; background: var(--paper-2); overflow: hidden; transition: border-color .25s; }
+  #stream .ptext { grid-column: 2; grid-row: 1; min-width: 0; }
   #stream .picon::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 110% at 22% 14%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 68%); }
   #stream .post:hover .picon { border-color: color-mix(in srgb, var(--accent) 32%, var(--rule)); }
-  #stream .byline { display: flex; align-items: baseline; gap: 9px; margin: 0 0 7px; font-family: var(--sans); font-size: 12.5px; flex-wrap: wrap; }
-  #stream .byline .nm { font-family: var(--serif-display); font-size: 15px; font-weight: 600; letter-spacing: -.01em; color: var(--ink); }
-  #stream .byline .hd { color: var(--ink-faint); }
-  #stream .byline .co { color: var(--ink-faint); }
-  #stream .post.cont .byline { display: none; }
   #stream .post h3 { font-family: var(--serif-display); font-weight: 600; font-size: clamp(18px, 2vw, 21px); line-height: 1.28; letter-spacing: -.01em; margin: 0; color: var(--ink); text-wrap: pretty; }
   #stream .post h3 a { color: inherit; text-decoration: none; transition: color .2s; }
   #stream .post:hover h3 a, #stream .post h3 a:hover { color: var(--accent); }
@@ -214,7 +187,7 @@ const emph = (t = '') =>
   #stream .pcrumb .ticks i { width: 11px; height: 3px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 60%, transparent); }
   #stream .pcrumb .ticks i.todo { background: color-mix(in srgb, var(--ink) 16%, transparent); }
   #stream .pcrumb .ticks i.here { background: var(--accent); height: 6px; }
-  #stream .aside { grid-column: 4; grid-row: 1; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 2px; text-align: right; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+  #stream .aside { grid-column: 3; grid-row: 1; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 2px; text-align: right; font-family: var(--sans); font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
   .curve { display: block; overflow: hidden; cursor: default; }
   #stream .aside .curve { width: 86px; height: 28px; margin-top: 6px; }
   .curve path.fill { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
@@ -326,14 +299,10 @@ const emph = (t = '') =>
   @media (max-width: 820px) { #waysin .wgrid { grid-template-columns: 1fr; } }
 
   @media (max-width: 620px) {
-    #stream .post { grid-template-columns: auto minmax(0, 1fr); }
-    #stream .post .rail { grid-column: 1; grid-row: 1 / span 2; align-self: start; }
-    #stream .post.cont .mono { display: block; opacity: .4; }
-    #stream .post.cont .byline { display: flex; }
-    #stream .post .spine, #stream .post .bead { display: none !important; }
+    #stream .post { grid-template-columns: minmax(0, 1fr); }
     #stream .picon { display: none; }
-    #stream .ptext { grid-column: 2; grid-row: 1; }
-    #stream .aside { grid-column: 2; grid-row: 2; flex-direction: row; align-items: baseline; text-align: left; margin-top: 8px; }
+    #stream .ptext { grid-column: 1; grid-row: 1; }
+    #stream .aside { grid-column: 1; grid-row: 2; flex-direction: row; align-items: baseline; text-align: left; margin-top: 8px; }
     #stream .aside .curve { margin-top: 0; margin-left: auto; }
   }
 </style>
@@ -343,7 +312,7 @@ const emph = (t = '') =>
   import { initFieldPlates } from '../../lib/field-plates.js';
   // Shared feed-row vocabulary (curve/crumb/byline/…) — the same module the homepage feed uses,
   // so the two streams render identical rows and never drift.
-  import { esc, initials, monthKey, monthLabel, fmtDate, hashSeed, byline, curveSvg, crumb } from '../../lib/feed-render';
+  import { esc, monthKey, monthLabel, fmtDate, hashSeed, curveSvg, crumb } from '../../lib/feed-render';
   import { mountShapeTip } from '../../lib/shape-tip';
   import { repriceReadMins } from '../../lib/reading-pace';
   import { enhanceSelect } from '../../lib/select-menu';
@@ -369,17 +338,13 @@ const emph = (t = '') =>
   function rowEl(p: any) {
     const el = document.createElement('article');
     el.className = 'post';
-    el.dataset.author = p.primary_handle || '';
-    el.dataset.text = `${p.title} ${p.primary_name} ${(p.author_names || []).join(' ')} ${(p.tags || []).join(' ')} ${p.description || ''}`.toLowerCase();
+    el.dataset.text = `${p.title} ${(p.tags || []).join(' ')} ${p.description || ''}`.toLowerCase();
     el.dataset.tags = (p.tags || []).join(' ');
     el.dataset.rt = String(p.reading_min || 1);
     const tags = (p.tags || []).slice(0, 4).map((t: string) => `<button class="tag" type="button" data-tag="${esc(t)}">${esc(t)}</button>`).join('');
     el.innerHTML =
-      `<div class="rail"><span class="mono">${esc(initials(p.primary_name))}</span></div>` +
-      `<span class="spine"></span><span class="bead"></span>` +
       `<span class="picon" aria-hidden="true"></span>` +
       `<div class="ptext">` +
-        `<p class="byline">${byline(p)}</p>` +
         `<h3><a href="/@${esc(p.primary_handle)}/${esc(p.slug)}">${esc(p.title)}</a></h3>` +
         (p.description ? `<p class="sum">${esc(p.description)}</p>` : '') +
         (tags ? `<div class="tags">${tags}</div>` : '') +
@@ -415,21 +380,13 @@ const emph = (t = '') =>
     apply();
   }
 
-  // Consecutive posts by one author collapse into a single spine — computed PER month
-  // group so a run never crosses a header (recomputed after every filter/sort).
-  function collapse() {
-    stream.querySelectorAll('.post').forEach((p) => p.classList.remove('runstart', 'runend', 'cont', 'lead'));
+  // The first still-visible post in each month group is set larger. Recomputed after every
+  // filter/sort, because filtering changes which row is first.
+  // (This also used to group consecutive same-author rows into one spine — with a single
+  // writer every row is the same author, so that grouping described nothing.)
+  function markLead() {
+    stream.querySelectorAll('.post').forEach((p) => p.classList.remove('lead'));
     stream.querySelectorAll('.post-list').forEach((list) => {
-      let prev: string | null = null, run: HTMLElement[] = [];
-      const close = () => { if (run.length > 1) { run[0].classList.add('runstart'); run[run.length - 1].classList.add('runend'); } run = []; };
-      (list.querySelectorAll('.post') as NodeListOf<HTMLElement>).forEach((p) => {
-        if (p.classList.contains('is-hidden')) return;
-        const same = p.dataset.author === prev;
-        p.classList.toggle('cont', same);
-        if (!same) close();
-        run.push(p); prev = p.dataset.author!;
-      });
-      close();
       const f = list.querySelector('.post:not(.is-hidden)'); if (f) f.classList.add('lead');
     });
   }
@@ -457,7 +414,7 @@ const emph = (t = '') =>
       const head = stream.querySelector(`.grp[data-grp="${(l as HTMLElement).dataset.grp}"]`);
       if (head) head.classList.toggle('is-hidden', !any);
     });
-    collapse();
+    markLead();
     count.classList.toggle('on', filtered);
     count.textContent = filtered ? (shown === 1 ? 'One match' : `${shown} matches`) : '';
     empty.classList.toggle('on', shown === 0);
@@ -542,7 +499,7 @@ const emph = (t = '') =>
       const TICKS = 15, filled = Math.max(1, Math.min(TICKS, Math.round((r.pct / 100) * TICKS)));
       let bar = ''; for (let i = 1; i <= TICKS; i++) bar += `<i class="${i <= filled ? '' : 'todo'}"></i>`;
       const minLeft = Math.max(1, Math.round((r.reading_min || 1) * (1 - (r.pct || 0) / 100)));
-      return `<div class="rzc"><div class="top"><span class="mono">${esc(initials(r.author_name))}</span><h3>${esc(r.title)}</h3></div>`
+      return `<div class="rzc"><div class="top"><h3>${esc(r.title)}</h3></div>`
         + `<div class="bar">${bar}</div>`
         + `<div class="st"><span><em>${r.pct}%</em> read</span><span class="sep">·</span><span><em>${minLeft} min</em> left</span></div></div>`;
     }).join('');

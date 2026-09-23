@@ -2,30 +2,28 @@
  * scripts/fixtures/profile.mjs — WHICH SLICE of the fixture blueprint to seed.
  * ============================================================================
  * plan.mjs is the FULL, dense dataset: every feature and every edge. That is the
- * right thing to seed when you are testing coverage — but 23 published posts is far
+ * right thing to seed when you are testing coverage — but 22 published posts is far
  * too much to eyeball when you are checking a layout, a hover state, or a feed row.
  *
- * So the seed runs LEAN by default (a 6-post feed) and the dense set is one flag away:
+ * So the seed runs LEAN by default (a small feed) and the dense set is one flag away:
  *
- *     npm run fixtures:reseed            → lean  (6 posts in the feed)
- *     npm run fixtures:reseed:full       → full  (23 posts, every edge)
+ *     npm run fixtures:reseed            → lean
+ *     npm run fixtures:reseed:full       → full  (every post, every edge)
  *     npm run fixtures:reseed -- --full  → same as :full
  *     FIXTURES=full node scripts/fixtures/seed.mjs
  *
- * WHAT LEAN KEEPS. One post per feed-row state worth looking at: a solo byline, a
- * two-author byline, an "& 2 others" byline, a series crumb (two real parts), an
- * empty-description row, and heavy/medium/light engagement so the retention curves —
- * and therefore the hover tooltips — still vary. Two posts sit inside the fortnight
- * window and two are older, so the homepage exercises BOTH bands (this-fortnight and
- * the most-read fallback).
+ * WHAT LEAN KEEPS. One post per feed-row state worth looking at. With a single author
+ * every byline is the same, so what varies is the REST of the row: a series crumb with
+ * real parts, an empty-description row, and heavy/medium/light engagement so the
+ * retention curves — and therefore the hover tooltips — still differ. Two posts sit
+ * inside the fortnight window and several are older, so the homepage exercises BOTH
+ * bands (this-fortnight and the most-read fallback).
  *
- * WHAT LEAN NEVER DROPS. The hidden-state posts (draft / scheduled / unlisted /
- * suspended-author) and the pending collaboration requests: none of them appear in a
- * feed, so they cost nothing to eyeball while keeping those edges seeded.
+ * WHAT LEAN NEVER DROPS. The hidden-state posts (draft / scheduled / unlisted): none of
+ * them appear in a feed, so they cost nothing to eyeball while keeping those edges seeded.
  *
  * Series and fields are DERIVED from the surviving posts, never hand-listed, so the
- * seed can't produce a post pointing at a missing series or a field rendering an empty
- * page. Same for the pending requests — a request whose target didn't survive is dropped.
+ * seed can't produce a post pointing at a missing series or a field rendering an empty page.
  */
 import * as plan from './plan.mjs';
 
@@ -35,37 +33,34 @@ const lean = PROFILE === 'lean';
 
 // The lean feed — one post per row-state worth looking at.
 const LEAN_FEED = new Set([
-  'every-knob',              // owner, solo byline — the kitchen-sink renderer post (heavy)
-  'retrieval-meets-serving', // mira + owner       — two-author byline (heavy)
-  'a-field-guide-to-evals',  // daniel + 2 others  — the "& 2 others" byline (medium)
-  'sas-1',                   // mira, part 1 of 5  — series crumb + part ticks (medium)
-  'sas-2',                   // mira, part 2 of 5  — gives the series a real run (medium)
-  'no-description',          // daniel             — the empty-description row (light)
+  'every-knob',              // the kitchen-sink renderer post (heavy, recent)
+  'retrieval-meets-serving', // a standalone essay across two subjects (heavy, recent)
+  'sas-1',                   // part 1 of 5 — series crumb + part ticks (medium)
+  'sas-2',                   // part 2 of 5 — gives that series a real run (medium)
+  'no-description',          // the empty-description row (light)
   // Two more in-progress series, so the "Coming next" shelf has more than one card.
   // (embeddings-from-scratch is status:complete, so it is excluded from that shelf by design.)
-  'rp-1',                    // owner, part 1 of 3  — Retrieval plumbing, in progress
-  'mm-1',                    // daniel, part 1 of 4 — Measuring models, in progress
-  'mm-2',                    // daniel, part 2 of 4 — 2 published is what its planned[] assumes
+  'rp-1',                    // part 1 of 3 — Retrieval plumbing, in progress
+  'mm-1',                    // part 1 of 4 — Measuring models, in progress
+  'mm-2',                    // part 2 of 4 — 2 published is what its planned[] assumes
   // The 'Measuring models' card needs a field eyebrow, and its field
   // (making-models-measurable) only seeds once BOTH its series survive — so bring in
   // embeddings-from-scratch. All 3 parts, because that series is status:complete and
   // seeding 1 of 3 would render a 'complete' series that plainly isn't.
-  'efs-1',                   // sofia, part 1 of 3 — Embeddings from scratch (complete)
-  'efs-2',                   // sofia, part 2 of 3
-  'efs-3',                   // sofia, part 3 of 3
+  'efs-1',                   // part 1 of 3 — Embeddings from scratch (complete)
+  'efs-2',                   // part 2 of 3
+  'efs-3',                   // part 3 of 3
 ]);
 // Never visible in a feed → keep in BOTH profiles so these edges stay covered for free.
 const ALWAYS = new Set([
-  'work-in-progress',     // draft
-  'coming-next-week',     // scheduled
-  'retired-thoughts',     // unlisted
-  'hidden-by-suspension', // published, but its author is suspended
+  'work-in-progress', // draft
+  'coming-next-week', // scheduled
+  'retired-thoughts', // unlisted
 ]);
 
 export const DOMAIN = plan.DOMAIN;
 
-// Authors cost nothing in a feed, and carry the onboarding / suspension / can-publish
-// edges, so every profile seeds all of them.
+// One author, always — there is no roster to slice.
 export const AUTHORS = plan.AUTHORS;
 
 export const POSTS = lean
@@ -87,17 +82,3 @@ export const SERIES = lean ? plan.SERIES.filter((s) => keptSeries.has(s.slug)) :
 export const FIELDS = lean
   ? plan.FIELDS.filter((f) => f.series.length >= 2 && f.series.every((s) => keptSeries.has(s)))
   : plan.FIELDS;
-
-// Drop any pending request whose target didn't survive the filter.
-const keptFields = new Set(FIELDS.map((f) => f.slug));
-export const REQUESTS = lean
-  ? {
-      coAuthorInvite: plan.REQUESTS.coAuthorInvite, // owner + mira, both always seeded
-      ...(keptSeries.has(plan.REQUESTS.seriesProposal.series)
-        ? { seriesProposal: plan.REQUESTS.seriesProposal }
-        : {}),
-      ...(keptFields.has(plan.REQUESTS.fieldProposal.field)
-        ? { fieldProposal: plan.REQUESTS.fieldProposal }
-        : {}),
-    }
-  : plan.REQUESTS;

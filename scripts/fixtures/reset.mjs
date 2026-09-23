@@ -38,11 +38,15 @@ async function main() {
     // 3) Non-owner profiles → reset everyone else to "plain reader" (keeps the owner's @handle).
     await pool.query('delete from content.profiles where id <> $1', [ownerId]);
 
-    // 4) Delete every @loadtest.invalid auth user (cascades any remaining own-rows). Real users stay.
-    const lt = (await pool.query("select id, email from auth.users where email like '%@loadtest.invalid'")).rows;
+    // 4) Delete every FIXTURE auth user (cascades any remaining own-rows). Real users stay.
+    // Both domains, not just loadtest: step 3 deletes non-owner PROFILES, but the matching
+    // auth.users rows outlived it, so every reseed left the previous run's logins behind —
+    // including the six other writers from the multi-author fixtures, who must not come back.
+    const lt = (await pool.query(
+      "select id, email from auth.users where email like '%@loadtest.invalid' or email like '%@seed.invalid'")).rows;
     let removed = 0;
     for (const u of lt) { const { error } = await supa.auth.admin.deleteUser(u.id); if (!error) removed++; else console.warn(`  could not delete ${u.email}: ${error.message}`); }
-    console.log(`\nloadtest auth users removed: ${removed}/${lt.rows?.length ?? lt.length}`);
+    console.log(`\nfixture auth users removed: ${removed}/${lt.length}`);
 
     const after = await counts(pool);
     console.log('AFTER: ', JSON.stringify(after));
