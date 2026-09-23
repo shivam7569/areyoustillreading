@@ -1,12 +1,11 @@
 /**
  * GET /api/admin/overview — the at-a-glance KPIs for the dashboard Home.
  * Admin-gated. Aggregates the three data planes a solo owner checks first:
- * posts (total / published / drafts / paywalled), audience (subscriber counts),
+ * posts (total / published / drafts / scheduled / paywalled), audience (subscriber counts),
  * and revenue (sales + estimated gross). Each plane degrades independently — a
  * failure in one still returns the others.
  */
 import { requireAdmin, json } from '../../../lib/require-admin.js';
-import { listPosts } from '../../../lib/list-posts.js';
 
 export async function onRequestGet({ request, env }) {
   const gate = await requireAdmin(request, env);
@@ -17,17 +16,37 @@ export async function onRequestGet({ request, env }) {
   const auth = { Authorization: `Bearer ${service}`, apikey: service };
 
   const result = {
-    posts: { total: 0, published: 0, drafts: 0, paywalled: 0 },
+    posts: { total: 0, published: 0, drafts: 0, scheduled: 0, paywalled: 0 },
     subscribers: { total: 0, confirmed: 0, pending: 0 },
     revenue: { sales: 0, grossCents: 0, currency: 'usd', estimated: false },
   };
 
-  // Posts (git content collection).
+  // Posts (content.posts, the database).
+  //
+  // This used to call listPosts(env), which reads the MARKDOWN COLLECTION out of the git
+  // repo. Publishing moved to the database, src/content/blog is empty, and so every count
+  // here — the sidebar Posts/Drafts badges and the dashboard KPIs — silently read zero
+  // while the Posts screen (which also queries owner_all_posts) listed real work.
+  //
+  // owner_all_posts() is SECURITY DEFINER but gated on content.is_owner(auth.uid()), so it
+  // must be called with the CALLER's token: a service-role request has no auth.uid() and
+  // would come back empty — the same silent zero in a new disguise. requireAdmin has
+  // already validated this token above.
   try {
-    const posts = await listPosts(env);
+    const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    const anon = env.PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || service;
+    const pr = await fetch(`${sb}/rest/v1/rpc/owner_all_posts`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, apikey: anon, 'content-type': 'application/json' },
+      body: '{}',
+    });
+    if (!pr.ok) throw new Error(`owner_all_posts ${pr.status}`);
+    const posts = await pr.json();
+    if (!Array.isArray(posts)) throw new Error('owner_all_posts: unexpected shape');
     result.posts.total = posts.length;
-    result.posts.drafts = posts.filter((p) => p.draft).length;
-    result.posts.published = result.posts.total - result.posts.drafts;
+    result.posts.drafts = posts.filter((p) => p.status === 'draft').length;
+    result.posts.published = posts.filter((p) => p.status === 'published').length;
+    result.posts.scheduled = posts.filter((p) => p.status === 'scheduled').length;
     // "Paywalled" = posts actually behind the paywall now (post_paywall.is_paid) — the
     // same definition the Posts manager badge and Revenue page use — NOT merely the
     // `gateable` frontmatter intent flag, so the three views agree.
