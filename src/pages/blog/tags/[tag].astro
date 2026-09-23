@@ -143,13 +143,6 @@ const fill = (t = '') => String(t).replace(/\{tag\}/g, String(tag ?? ''));
 
   const $ = (id: string) => document.getElementById(id)!;
   const tag = decodeURIComponent(location.pathname.replace(/\/+$/, '').split('/').pop() || '');
-  const initials = (n: string) => { const w = String(n || '').trim().split(/\s+/).filter(Boolean); return ((w.length >= 2 ? w[0][0] + w[1][0] : (w[0] || '?').slice(0, 2)) || '?').toUpperCase(); };
-
-  function byline(p: any) {
-    const nm = esc(p.primary_name || p.primary_handle);
-    const extra = (p.author_count || 1) > 1 ? ` & ${p.author_count - 1} other${p.author_count - 1 === 1 ? '' : 's'}` : '';
-    return `by <a href="/@${esc(p.primary_handle)}">${nm}</a>${extra}`;
-  }
 
   async function boot() {
     let posts: any[] = [];
@@ -157,10 +150,9 @@ const fill = (t = '') => String(t).replace(/\{tag\}/g, String(tag ?? ''));
     catch { $('tp-list').innerHTML = '<p class="feedlede" style="padding:24px 0">Couldn’t load this subject.</p>'; return; }
 
     // header count + subline (real)
-    const authors = new Set(posts.map((p) => String(p.primary_handle)));
     $('tp-count').textContent = `${posts.length} ${posts.length === 1 ? 'essay' : 'essays'}`;
     $('tp-sub').innerHTML = posts.length
-      ? `Everything published here on <em>${esc(tag)}</em> — ${posts.length} ${posts.length === 1 ? 'essay' : 'essays'}${authors.size > 1 ? ` from ${authors.size} authors` : ''}, newest first.`
+      ? `Everything published here on <em>${esc(tag)}</em> — ${posts.length} ${posts.length === 1 ? 'essay' : 'essays'}, newest first.`
       : `No essays on <em>${esc(tag)}</em> yet.`;
 
     if (!posts.length) { $('tp-list').innerHTML = '<p class="feedlede" style="padding:24px 0">Nothing here yet — this subject has no published essays.</p>'; return; }
@@ -172,7 +164,6 @@ const fill = (t = '') => String(t).replace(/\{tag\}/g, String(tag ?? ''));
         <div class="tpidx">${String(i + 1).padStart(2, '0')}</div>
         <div>
           <h3><a href="/@${esc(p.primary_handle)}/${esc(p.slug)}">${esc(p.title)}</a></h3>
-          <span class="by">${byline(p)}</span>
           ${p.description ? `<p>${esc(p.description)}</p>` : ''}
           ${tags ? `<div class="tags">${tags}</div>` : ''}
         </div>

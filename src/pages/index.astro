@@ -152,7 +152,7 @@ const emph = (t = '') =>
       <div class="slab"><span class="eyebrow" data-cms="home.pace.eyebrow">{pace.eyebrow || "A measurement"}</span><span class="line"></span><span class="more-link" data-cms="home.pace.more">{pace.more || "One paragraph · nothing recorded but the number"}</span></div>
       <p class="feedlede" data-cms="home.pace.lede">{pace.lede || "Every reading time here assumes two hundred words a minute. Yours almost certainly is not that."}</p>
       <div class="pacecard">
-        <div class="pacetop"><span class="mono">DL</span><span data-cms="home.pace.sampleFrom">{pace.sampleFrom || "From “The retrieval step is lying to you”"}</span><span class="clock" id="pcClock">Ready</span></div>
+        <div class="pacetop"><span data-cms="home.pace.sampleFrom">{pace.sampleFrom || "From “The retrieval step is lying to you”"}</span><span class="clock" id="pcClock">Ready</span></div>
         <div class="pacebody" id="pcBody">
           <p>We measure retrieval as if the model reads the way a librarian does — pull the right shelf, and the rest takes care of itself. But a language model does not read your top-<span class="inl">k</span> chunks. It <em>skims</em> them, weighted by position, phrasing, and a dozen biases we never put in the metric. The distance between “the right passage is in the context” and “the model used the right passage” is where most RAG systems quietly go to die.</p>
           <p>Consider two retrievers with identical recall. The first places the answer at rank 1 with two clean neighbours. The second buries it at rank 9 behind eight near-duplicates that all <em>look</em> relevant. Same recall, wildly different outcomes once the model starts spending attention. Our headline number can't tell them apart — but our readers can.</p>
@@ -214,8 +214,6 @@ const emph = (t = '') =>
   .stats .dot{color:var(--rule)}
 
   /* ——— the author's mark (initials over a hairline) ——— */
-  .mono{position:relative;flex:none;font-family:var(--serif-display);font-weight:600;font-size:12px;line-height:1;letter-spacing:.1em;color:var(--ink-soft);padding:0 1px 6px;transition:color .2s}
-  .mono::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--rule);transition:background .2s}
 
   /* ——— the feed ——— */
   .feed{padding:0 0 clamp(30px,4vw,44px)}
@@ -235,13 +233,6 @@ const emph = (t = '') =>
   .post:hover{background:var(--paper-2)}
   .post:hover::after{opacity:0}
   @media(max-width:820px){.post{grid-template-columns:1fr;gap:13px;padding:24px 16px}}
-  .byline{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin:0 0 9px;font-family:var(--sans);font-size:12px;color:var(--ink-faint)}
-  .byline .mono{align-self:center}
-  .byline .with{font-size:12px;color:var(--ink-faint)}
-  .byline a{color:var(--ink-soft)}
-  .byline a:hover{color:var(--accent)}
-  .post:hover .mono{color:var(--accent)}
-  .post:hover .mono::after{background:var(--accent)}
   .post h3{font-family:var(--serif-display);font-weight:600;font-size:clamp(21px,2.5vw,26px);line-height:1.18;letter-spacing:-.012em;margin:0 0 9px;text-wrap:pretty}
   .post h3 a{background-image:linear-gradient(var(--accent),var(--accent));background-size:0 1.5px;background-repeat:no-repeat;background-position:0 100%;transition:background-size .3s}
   .post:hover h3 a{background-size:100% 1.5px}
@@ -415,7 +406,7 @@ const emph = (t = '') =>
 
 <script>
   import { supabase } from '../lib/supabase';
-  import { esc, initials, fmtShort, hashSeed, curveSvg, crumb } from '../lib/feed-render';
+  import { esc, fmtShort, hashSeed, curveSvg, crumb } from '../lib/feed-render';
   import { mountShapeTip } from '../lib/shape-tip';
   import { BASE, displayMin, getPace, setMeasured, adopt, unadopt, onPaceChange, isSanePace } from '../lib/reading-pace';
 
@@ -426,25 +417,11 @@ const emph = (t = '') =>
   const state: { fortnight: any[]; popular: any[]; quiet: boolean; tape: any[] } =
     { fortnight: [], popular: [], quiet: false, tape: [] };
 
-  // ——— feed rows (shared curve/crumb vocabulary; byline is home-specific) ———
-  function homeByline(p: any) {
-    const mono = `<span class="mono">${esc(initials(p.primary_name))}</span>`;
-    let s = `${mono}By <a href="/@${esc(p.primary_handle)}">${esc(p.primary_name)}</a>`;
-    if (p.author_count > 1 && Array.isArray(p.author_names)) {
-      const co = p.author_names.filter(Boolean).filter((n: string) => n !== p.primary_name);
-      if (co.length) {
-        s += `<span class="with">with</span><span class="mono">${esc(initials(co[0]))}</span><span>${esc(co[0])}</span>`;
-        if (co.length > 1) s += `<span class="with">&amp; ${co.length - 1} more</span>`;
-      }
-    }
-    return s;
-  }
-
+  // ——— feed rows (shared curve/crumb vocabulary) ———
   function rowEl(p: any) {
     const tags = (p.tags || []).slice(0, 4).map((t: string) => `<a class="tag" href="/blog?subject=${encodeURIComponent(t)}">${esc(t)}</a>`).join('');
     return `<article class="post">
       <div>
-        <p class="byline">${homeByline(p)}</p>
         <h3><a href="/@${esc(p.primary_handle)}/${esc(p.slug)}">${esc(p.title)}</a></h3>
         ${p.description ? `<p>${esc(p.description)}</p>` : ''}
         ${tags ? `<div class="tags">${tags}</div>` : ''}
@@ -529,7 +506,7 @@ const emph = (t = '') =>
       // A card only links when we know the author's handle (canonical /@handle/slug).
       const href = r.handle ? `/@${esc(r.handle)}/${esc(r.slug)}` : `/blog/${esc(r.slug)}`;
       return `<a class="rzc" href="${href}">
-        <span class="top"><span class="mono">${esc(initials(r.author_name))}</span><h3>${esc(r.title)}</h3></span>
+        <span class="top"><h3>${esc(r.title)}</h3></span>
         <span class="pos"><span>${pct}% in · ${left} min left</span><span class="bar"><i style="width:${pct}%"></i></span><span class="go">Resume →</span></span>
       </a>`;
     }).join('');
@@ -564,7 +541,7 @@ const emph = (t = '') =>
   // ——— the mark (tape / dial) ———
   function initMark() {
     const tape = $('mkTape'); if (!tape) return;
-    const P = state.tape.map((p) => ({ t: p.title, by: p.primary_name, base: Math.max(1, p.reading_min || 1), handle: p.primary_handle, slug: p.slug }));
+    const P = state.tape.map((p) => ({ t: p.title, base: Math.max(1, p.reading_min || 1), handle: p.primary_handle, slug: p.slug }));
     if (!P.length) return;
     ($('markband') as HTMLElement).hidden = false;
     const rt = (p: any) => displayMin(p.base);
@@ -623,11 +600,11 @@ const emph = (t = '') =>
       if (n < P.length) {
         nxt.textContent = P[n].t;
         const gap = rt(P[n]) - (budget - spent);
-        nxtSub.textContent = gap + ' more minute' + (gap === 1 ? '' : 's') + ' would reach it · ' + P[n].by;
+        nxtSub.textContent = gap + ' more minute' + (gap === 1 ? '' : 's') + ' would reach it';
       } else { nxt.textContent = 'Nothing left'; nxtSub.textContent = 'You have the whole set in hand'; }
 
       plan.innerHTML = taken.map((i, k) => { const p = P[i];
-        return `<li><span class="n">${k + 1}</span><a class="t" href="/@${esc(p.handle)}/${esc(p.slug)}">${esc(p.t)}</a><span class="by">${esc(p.by)}</span><span class="mn">${rt(p)} min</span></li>`; }).join('')
+        return `<li><span class="n">${k + 1}</span><a class="t" href="/@${esc(p.handle)}/${esc(p.slug)}">${esc(p.t)}</a><span class="mn">${rt(p)} min</span></li>`; }).join('')
         || `<li><span class="n">—</span><span class="by">${budget} minutes is under the shortest piece here — nudge it up to ${rt(P[0])}.</span></li>`;
       const first = taken.length ? P[taken[0]] : null;
       start.innerHTML = first ? `Start with “${esc(first.t)}” <span class="arrow">→</span>` : 'Browse the archive <span class="arrow">→</span>';

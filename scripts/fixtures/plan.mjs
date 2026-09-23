@@ -23,7 +23,7 @@ export const DOMAIN = 'seed.invalid';
 // second writer. Kept as an array because seed.mjs iterates it and the downstream code
 // still expects a byline list — it is simply always a list of one.
 export const AUTHORS = [
-  { key: 'owner', reuseOwner: true, handle: 'gradghost', pen: 'Shivam Prakash', role: 'author',
+  { key: 'owner', reuseOwner: true, handle: 'gradghost', pen: 'gradghost', role: 'author',
     bio: 'I write about the systems under machine learning — retrieval, inference, and the plumbing that decides whether any of it holds up in production.',
     avatar: null, colophon: 'Written in plain text, rendered at the edge. Diagrams in D2, plots in Plotly, math in KaTeX. No trackers.' },
 ];

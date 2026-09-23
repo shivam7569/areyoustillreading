@@ -100,15 +100,8 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
   .fdcount b { font-family:var(--serif-display); font-size:18px; font-weight:600; letter-spacing:-.01em; text-transform:none; color:var(--accent); }
   .fdcount .dot { color:var(--rule); } .fdcount .fdplain { letter-spacing:0; text-transform:none; font-size:12.5px; }
 
-  .fdahead { display:flex; align-items:flex-end; gap:clamp(14px,2.2vw,24px); flex-wrap:wrap; padding:clamp(34px,4.4vw,54px) 0 clamp(16px,2vw,20px); }
-  .fdahead h2 { display:flex; align-items:center; gap:12px; font-family:var(--serif-display); font-weight:600; font-size:clamp(23px,2.9vw,31px); line-height:1; letter-spacing:-.02em; margin:0; }
-  .fdahead h2 a { color:var(--ink); } .fdahead h2 a:hover { color:var(--accent); }
-  .fdahead .fdnote { margin:0 0 3px; font-family:var(--sans); font-size:12.5px; line-height:1.5; color:var(--ink-faint); max-width:34ch; }
-  .fdahead .fdtop { margin-left:auto; display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding-bottom:3px; }
-  .fdahead .fdtop .fdlb { font-family:var(--sans); font-size:9.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
   .tag { font-family:var(--sans); font-size:11.5px; letter-spacing:.03em; color:var(--ink-faint); border:1px solid var(--rule); border-radius:999px; padding:3px 10px; }
   a.tag:hover { border-color:var(--accent); color:var(--accent); }
-  @media(max-width:800px){ .fdahead .fdtop { margin-left:0; } }
 
   .fband { display:grid; grid-template-columns:300px minmax(0,1fr); gap:clamp(26px,4vw,56px); padding:clamp(28px,3.6vw,42px) 0 clamp(32px,4.2vw,48px); border-top:1px solid var(--rule); }
   @media(max-width:900px){ .fband { grid-template-columns:1fr; gap:22px; } }
@@ -122,20 +115,10 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
   .fledger .fdv { margin-left:auto; font-family:var(--serif-display); font-size:15.5px; font-weight:600; letter-spacing:-.01em; color:var(--ink); font-variant-numeric:tabular-nums; }
   .fledger .fdv.fdq { font-family:var(--sans); font-size:12px; font-weight:400; color:var(--ink-soft); letter-spacing:0; }
 
-  .fdrole { display:flex; align-items:center; gap:9px; flex-wrap:wrap; font-family:var(--sans); font-size:9.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:12px; }
-  .fdrole .fdsh { color:var(--accent); }
   .fband h3 { font-family:var(--serif-display); font-weight:600; font-size:clamp(28px,3.5vw,40px); line-height:1.06; letter-spacing:-.022em; margin:0 0 14px; text-wrap:pretty; }
   .fband h3 a { color:var(--ink); } .fband:hover h3 a { color:var(--accent); }
   .fband .fdsum { margin:0 0 18px; font-size:clamp(16.5px,2vw,18.5px); line-height:1.58; color:var(--ink-soft); max-width:60ch; text-wrap:pretty; }
   .fband .fdsum em { font-style:italic; color:var(--ink); }
-  .fdwho { display:flex; align-items:baseline; flex-wrap:wrap; row-gap:8px; padding:0 0 18px; font-family:var(--sans); font-size:11.5px; color:var(--ink-faint); }
-  .fdwho .fdlb { letter-spacing:.14em; text-transform:uppercase; font-size:9.5px; margin-right:15px; }
-  .fdwho .fdpair { display:inline-flex; align-items:baseline; gap:9px; padding-right:17px; margin-right:17px; border-right:1px solid var(--rule); }
-  .fdwho .fdpair:last-child { padding-right:0; margin-right:0; border-right:0; }
-  .fdwho .fdpair .mono { font-size:10.5px; letter-spacing:.13em; padding:0; color:var(--accent); }
-  .fdwho .fdpair .mono::after { display:none; }
-  .fdwho a { font-family:var(--serif-display); font-size:15.5px; letter-spacing:-.005em; color:var(--ink-soft); }
-  .fdwho a:hover { color:var(--accent); }
 
   .flist { list-style:none; margin:0; padding:0; border-top:1px solid var(--rule); }
   .flist li { border-bottom:1px solid var(--rule-soft); }
@@ -249,21 +232,14 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
     const stCls = ms.status === 'complete' || ms.status === 'paused' ? ' fdq' : '';
     return `<li><a href="/@${esc(ms.owner_handle)}/s/${esc(ms.slug)}">
       <span class="fdord">${String(i + 1).padStart(2, '0')}</span>
-      <span class="fdt"><b>${esc(ms.title)}</b><span><span class="mono">${esc(initials(ms.owner_name))}</span>${esc(ms.owner_name)}</span></span>
+      <span class="fdt"><b>${esc(ms.title)}</b></span>
       <span class="fdspine">${spine}</span>
       <span class="fdst${stCls}">${ms.published} of ${total} · ${esc(st)}</span>
       <span class="fdmins">${ms.mins || 0} min</span>
     </a></li>`;
   }
 
-  function bandHtml(f: any, viewer: string) {
-    const involved = (f.involved_handles || []).map(String);
-    const names = (f.involved_names || []).map(String);
-    const isOwner = viewer === String(f.owner_handle);
-    let role;
-    if (isOwner) role = `<span>Runs this field</span>${involved.length > 1 ? '<span class="fdsh">· shared</span>' : ''}`;
-    else role = `<span class="fdsh">Shared</span><span>· run by</span><span class="mono">${esc(initials(f.owner_name))}</span><a href="/@${esc(f.owner_handle)}" style="color:var(--ink-soft);text-transform:none;letter-spacing:0;font-weight:400;font-size:11.5px">${esc(f.owner_name)}</a>`;
-    const who = involved.map((h: string, i: number) => `<span class="fdpair"><span class="mono">${esc(initials(names[i] || h))}</span><a href="/@${esc(h)}">${esc(names[i] || h)}</a></span>`).join('');
+  function bandHtml(f: any) {
     const members = (f.member_series || []).map((ms: any, i: number) => memberHtml(f, ms, i)).join('');
     return `<article class="fband">
       <div class="frail">
@@ -277,10 +253,8 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
         </div>
       </div>
       <div>
-        <div class="fdrole">${role}</div>
         <h3><a href="${fieldUrl(f)}">${esc(f.title)}</a></h3>
         ${f.summary ? `<p class="fdsum">${esc(f.summary)}</p>` : ''}
-        ${who ? `<p class="fdwho"><span class="fdlb">Written by</span>${who}</p>` : ''}
         <ol class="flist">${members}</ol>
       </div>
     </article>`;
@@ -291,7 +265,7 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
   const SVGNS = 'http://www.w3.org/2000/svg';
   const clip = (s: string, n: number) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
   const pageUrl = (handle: string, slug: string) => `/@${esc(handle)}/${esc(slug)}`;
-  const cx: { rows: any[]; fi: number; ci: number; nameBy: Map<string, string> } = { rows: [], fi: 0, ci: 0, nameBy: new Map() };
+  const cx: { rows: any[]; fi: number; ci: number } = { rows: [], fi: 0, ci: 0 };
 
   function drawMap(row: any) {
     const map = row.series_map || [], cxs = row.crossings || [];
@@ -334,8 +308,7 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
     // earlier-published part RAISED the subject; later one TOOK IT UP (real, from pub_date)
     const [rz, tu] = (Date.parse(c.a.pub) <= Date.parse(c.b.pub)) ? [c.a, c.b] : [c.b, c.a];
     const side = (which: 'a' | 'b', p: any) => {
-      const nm = cx.nameBy.get(String(p.handle)) || p.handle;
-      $(`cx${which}Where`).innerHTML = `<a href="/@${esc(p.handle)}" class="mono">${esc(initials(nm))}</a><span class="srs">${esc(p.series)}</span>`;
+      $(`cx${which}Where`).innerHTML = `<span class="srs">${esc(p.series)}</span>`;
       const t = $(`cx${which}Title`) as HTMLAnchorElement; t.textContent = p.title; t.href = pageUrl(p.handle, p.slug);
       ($(`cx${which}Go`) as HTMLAnchorElement).href = pageUrl(p.handle, p.slug);
     };
@@ -355,11 +328,11 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
     selectCrossing(0);
   }
 
-  async function initCrossings(nameBy: Map<string, string>) {
+  async function initCrossings() {
     let rows: any[] = [];
     try { const { data } = await supabase.rpc('all_field_crossings'); rows = data || []; } catch { return; }
     if (!rows.length) return;               // no field has a real crossing yet → section stays hidden
-    cx.rows = rows; cx.nameBy = nameBy;
+    cx.rows = rows;
     $('cxpick').innerHTML = rows.map((r, i) =>
       `<button type="button" class="${i === 0 ? 'cxon' : ''}" data-f="${i}">${esc(clip(r.field_title, 26))}</button>`).join('');
     $('cxpick').querySelectorAll('button').forEach((b, i) => b.addEventListener('click', () => selectField(i)));
@@ -391,27 +364,12 @@ import SubscribeForm from '../../components/SubscribeForm.astro';
     $('fdcount').hidden = false;
 
     // group each field under every involved author
-    const byAuthor = new Map<string, { handle: string; name: string; items: any[] }>();
-    for (const f of fields) {
-      const involved = (f.involved_handles || []).map(String);
-      const names = (f.involved_names || []).map(String);
-      involved.forEach((h: string, i: number) => {
-        if (!h) return;
-        if (!byAuthor.has(h)) byAuthor.set(h, { handle: h, name: names[i] || h, items: [] });
-        byAuthor.get(h)!.items.push(f);
-      });
-    }
-    const blocks = [...byAuthor.values()].sort((a, b) => b.items.length - a.items.length);
-    $('fddir').innerHTML = blocks.map((b) =>
-      `<div class="fdahead"><h2><span class="mono lg">${esc(initials(b.name))}</span><a href="/@${esc(b.handle)}">${esc(b.name)}</a></h2></div>${b.items.map((f: any) => bandHtml(f, b.handle)).join('')}`
-    ).join('');
+    // Fields list straight out — they used to be grouped into a band per author, under an
+    // author heading. With one writer that is one band headed by your own name.
+    $('fddir').innerHTML = fields.map((f: any) => bandHtml(f)).join('');
     initFieldMarks($('fddir'));
     $('fdlegend').hidden = false;
-
-    // author handle → display name, so the crossings panels can show a real byline
-    const nameBy = new Map<string, string>();
-    for (const [h, b] of byAuthor) nameBy.set(h, b.name);
-    initCrossings(nameBy);
+    initCrossings();
   }
   boot();
 </script>
